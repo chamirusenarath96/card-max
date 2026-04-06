@@ -1,0 +1,219 @@
+openapi: 3.0.3
+info:
+  title: card-max API
+  description: Credit card offers aggregator API for Sri Lanka
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Next.js API routes
+
+paths:
+  /offers:
+    get:
+      summary: List credit card offers
+      description: Returns paginated list of offers, optionally filtered by bank, category, or keyword
+      parameters:
+        - name: bank
+          in: query
+          schema:
+            $ref: '#/components/schemas/Bank'
+          description: Filter by bank
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/Category'
+          description: Filter by category
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Full-text search query
+        - name: includeExpired
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Include expired offers
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OffersResponse'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /offers/{id}:
+    get:
+      summary: Get a single offer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Offer found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '404':
+          description: Offer not found
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  db:
+                    type: string
+                    example: connected
+
+components:
+  schemas:
+    Bank:
+      type: string
+      enum:
+        - commercial_bank
+        - sampath_bank
+        - hnb
+        - nations_trust_bank
+
+    Category:
+      type: string
+      enum:
+        - dining
+        - shopping
+        - travel
+        - fuel
+        - groceries
+        - entertainment
+        - health
+        - online
+        - other
+
+    Offer:
+      type: object
+      required:
+        - _id
+        - bank
+        - bankDisplayName
+        - title
+        - category
+        - merchant
+        - sourceUrl
+        - scrapedAt
+        - isExpired
+      properties:
+        _id:
+          type: string
+        bank:
+          $ref: '#/components/schemas/Bank'
+        bankDisplayName:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        discountValue:
+          type: string
+        category:
+          $ref: '#/components/schemas/Category'
+        merchant:
+          type: string
+        merchantLogoUrl:
+          type: string
+          format: uri
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        isExpired:
+          type: boolean
+        sourceUrl:
+          type: string
+          format: uri
+        scrapedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OffersResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Offer'
+        pagination:
+          type: object
+          required:
+            - page
+            - limit
+            - total
+            - totalPages
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        details:
+          type: object
