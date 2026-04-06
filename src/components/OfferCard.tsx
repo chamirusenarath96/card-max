@@ -1,4 +1,4 @@
-import type { Offer } from "../../specs/data/offer.schema";
+import type { Offer, OfferType } from "../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../specs/data/offer.schema";
 
 interface Props {
@@ -17,6 +17,17 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+const OFFER_TYPE_CONFIG: Record<OfferType, { label: string; className: string }> = {
+  percentage: { label: "% Off", className: "bg-emerald-50 text-emerald-700 ring-emerald-600/20" },
+  cashback: { label: "Cashback", className: "bg-blue-50 text-blue-700 ring-blue-600/20" },
+  bogo: { label: "BOGO", className: "bg-purple-50 text-purple-700 ring-purple-600/20" },
+  installment: { label: "0% Plans", className: "bg-amber-50 text-amber-700 ring-amber-600/20" },
+  fixed_amount: { label: "Fixed Off", className: "bg-rose-50 text-rose-700 ring-rose-600/20" },
+  points: { label: "Points", className: "bg-indigo-50 text-indigo-700 ring-indigo-600/20" },
+  free_item: { label: "Freebie", className: "bg-teal-50 text-teal-700 ring-teal-600/20" },
+  other: { label: "Offer", className: "bg-gray-50 text-gray-700 ring-gray-600/20" },
+};
+
 function getExpiryBadge(
   validUntil?: Date | string
 ): { label: string; className: string } | null {
@@ -24,15 +35,20 @@ function getExpiryBadge(
   const date = validUntil instanceof Date ? validUntil : new Date(validUntil);
   if (isNaN(date.getTime())) return null;
   const now = new Date();
-  const daysUntil = Math.floor((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntil < 0) return { label: "Expired", className: "bg-red-100 text-red-700" };
-  if (daysUntil <= 7) return { label: "Expires soon", className: "bg-orange-100 text-orange-700" };
+  const daysUntil = Math.floor(
+    (date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (daysUntil < 0)
+    return { label: "Expired", className: "bg-red-100 text-red-700" };
+  if (daysUntil <= 7)
+    return { label: "Expires soon", className: "bg-orange-100 text-orange-700" };
   return null;
 }
 
 export function OfferCard({ offer }: Props) {
   const bankMeta = BANK_METADATA[offer.bank];
   const expiry = getExpiryBadge(offer.validUntil);
+  const offerType = OFFER_TYPE_CONFIG[offer.offerType];
 
   return (
     <a
@@ -40,13 +56,15 @@ export function OfferCard({ offer }: Props) {
       target="_blank"
       rel="noopener noreferrer"
       data-testid="offer-card"
-      className="group flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+      className="group flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-lg hover:border-gray-300 transition-all duration-200 overflow-hidden"
     >
-      {/* Bank brand colour bar */}
-      <div className="h-1.5 flex-shrink-0" style={{ backgroundColor: bankMeta.color }} />
+      <div
+        className="h-1.5 flex-shrink-0 transition-all duration-200 group-hover:h-2"
+        style={{ backgroundColor: bankMeta.color }}
+      />
 
       <div className="p-4 flex flex-col gap-3 flex-1">
-        {/* Bank label + expiry badge */}
+        {/* Top row: bank + badges */}
         <div className="flex items-center justify-between gap-2">
           <span
             className="text-xs font-semibold uppercase tracking-wide"
@@ -55,17 +73,27 @@ export function OfferCard({ offer }: Props) {
           >
             {offer.bankDisplayName}
           </span>
-          {expiry && (
-            <span
-              data-testid="offer-expiry-badge"
-              className={`text-xs font-medium px-2 py-0.5 rounded-full ${expiry.className}`}
-            >
-              {expiry.label}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {offerType && offer.offerType !== "other" && (
+              <span
+                data-testid="offer-type-badge"
+                className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 ring-inset ${offerType.className}`}
+              >
+                {offerType.label}
+              </span>
+            )}
+            {expiry && (
+              <span
+                data-testid="offer-expiry-badge"
+                className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${expiry.className}`}
+              >
+                {expiry.label}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Merchant logo / initial + discount */}
+        {/* Merchant + discount */}
         <div className="flex items-center gap-3">
           {offer.merchantLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -95,7 +123,7 @@ export function OfferCard({ offer }: Props) {
             </p>
             {offer.discountLabel && (
               <p
-                className="text-sm font-medium text-green-700"
+                className="text-sm font-medium text-emerald-600"
                 data-testid="offer-discount"
               >
                 {offer.discountLabel}
@@ -121,7 +149,10 @@ export function OfferCard({ offer }: Props) {
             {CATEGORY_LABELS[offer.category] ?? offer.category}
           </span>
           {offer.validUntil && (
-            <span className="text-xs text-gray-400" data-testid="offer-expiry">
+            <span
+              className="text-xs text-gray-400"
+              data-testid="offer-expiry"
+            >
               Until{" "}
               {new Date(offer.validUntil).toLocaleDateString("en-GB", {
                 day: "numeric",

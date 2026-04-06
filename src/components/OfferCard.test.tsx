@@ -81,7 +81,27 @@ describe("OfferCard", () => {
 
   it("shows merchant initial avatar when no logo URL", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    // The avatar div contains the first letter of the merchant
     expect(screen.getByText("K")).toBeInTheDocument();
+  });
+
+  it("shows offer type badge for non-other types", () => {
+    render(<OfferCard offer={BASE_OFFER} />);
+    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("% Off");
+  });
+
+  it("hides offer type badge for 'other' type", () => {
+    const offer: Offer = { ...BASE_OFFER, offerType: "other" };
+    render(<OfferCard offer={offer} />);
+    expect(screen.queryByTestId("offer-type-badge")).not.toBeInTheDocument();
+  });
+
+  it("shows BOGO badge for bogo offers", () => {
+    const offer: Offer = {
+      ...BASE_OFFER,
+      offerType: "bogo",
+      discountLabel: "Buy 1 Get 1 Free",
+    };
+    render(<OfferCard offer={offer} />);
+    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("BOGO");
   });
 });

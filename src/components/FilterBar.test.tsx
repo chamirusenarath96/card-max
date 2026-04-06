@@ -2,7 +2,6 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FilterBar } from "./FilterBar";
 
-// Mock next/navigation
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -23,9 +22,19 @@ describe("FilterBar", () => {
     expect(screen.getByTestId("bank-filter-nations_trust_bank")).toBeInTheDocument();
   });
 
+  it("renders the 'All Banks' chip", () => {
+    render(<FilterBar />);
+    expect(screen.getByTestId("bank-filter-all")).toBeInTheDocument();
+  });
+
   it("renders the category dropdown", () => {
     render(<FilterBar />);
     expect(screen.getByTestId("category-filter")).toBeInTheDocument();
+  });
+
+  it("renders the offer type dropdown", () => {
+    render(<FilterBar />);
+    expect(screen.getByTestId("offer-type-filter")).toBeInTheDocument();
   });
 
   it("clicking a bank chip calls router.push with bank param", () => {
@@ -37,7 +46,6 @@ describe("FilterBar", () => {
   it("clicking active bank chip deselects it (removes param)", () => {
     render(<FilterBar activeBank="commercial_bank" />);
     fireEvent.click(screen.getByTestId("bank-filter-commercial_bank"));
-    // Should navigate without bank param
     expect(mockPush).toHaveBeenCalledWith("/");
   });
 
@@ -64,5 +72,13 @@ describe("FilterBar", () => {
       target: { value: "" },
     });
     expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
+  it("changing offer type dropdown calls router.push with offerType param", () => {
+    render(<FilterBar />);
+    fireEvent.change(screen.getByTestId("offer-type-filter"), {
+      target: { value: "cashback" },
+    });
+    expect(mockPush).toHaveBeenCalledWith("/?offerType=cashback");
   });
 });
