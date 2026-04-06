@@ -20,9 +20,15 @@ describe("OfferCardSkeleton", () => {
     expect(container.children).toHaveLength(3);
   });
 
-  it("uses the grid layout class", () => {
-    render(<OfferCardSkeleton />);
+  it("renders compact skeleton variant", () => {
+    render(<OfferCardSkeleton size="compact" count={2} />);
     const container = screen.getByTestId("offer-skeleton");
-    expect(container.className).toContain("grid");
+    expect(container.children).toHaveLength(2);
+  });
+
+  it("renders expanded skeleton variant", () => {
+    render(<OfferCardSkeleton size="expanded" count={2} />);
+    const container = screen.getByTestId("offer-skeleton");
+    expect(container.children).toHaveLength(2);
   });
 });
