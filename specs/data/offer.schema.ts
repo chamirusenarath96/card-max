@@ -123,6 +123,8 @@ export type OfferInput = z.infer<typeof OfferInputSchema>;
  *   q                         – full-text search on title, description, merchant
  *   page / limit              – pagination
  */
+export const SortSchema = z.enum(["latest", "expiringSoon"]);
+
 export const OfferQuerySchema = z.object({
   bank: BankSchema.optional(),
   category: CategorySchema.optional(),
@@ -138,6 +140,7 @@ export const OfferQuerySchema = z.object({
     .transform((v) => v === "true")
     .optional(),
   q: z.string().optional(),
+  sort: SortSchema.default("latest"),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });

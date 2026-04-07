@@ -196,6 +196,56 @@ describe("GET /api/offers", () => {
     expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
   });
 
+  it("builds combined overlap filter for activeFrom + activeTo", async () => {
+    await GET(makeRequest({ activeFrom: "2026-03-01", activeTo: "2026-06-30" }));
+    const filterArg = lastFindFilter();
+    expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
+    expect(filterArg.$or).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ validUntil: { $gte: expect.any(Date) } }),
+      ])
+    );
+  });
+
+  it("returns 200 when activeFrom and activeTo are valid ISO dates", async () => {
+    const res = await GET(makeRequest({ activeFrom: "2026-01-01", activeTo: "2026-12-31" }));
+    expect(res.status).toBe(200);
+  });
+
+  // ── Sort: latest (default) ───────────────────────────────────────────
+
+  it("sorts by createdAt descending by default (latest)", async () => {
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    expect(body).toHaveBeenCalledWith({ createdAt: -1 });
+  });
+
+  it("sorts by createdAt descending when sort=latest", async () => {
+    const res = await GET(makeRequest({ sort: "latest" }));
+    const body = await res.json();
+    expect(body).toHaveBeenCalledWith({ createdAt: -1 });
+  });
+
+  // ── Sort: expiringSoon ──────────────────────────────────────────────
+
+  it("sorts by validUntil ascending when sort=expiringSoon", async () => {
+    const res = await GET(makeRequest({ sort: "expiringSoon" }));
+    const body = await res.json();
+    expect(body).toHaveBeenCalledWith({ validUntil: 1 });
+  });
+
+  it("filters validUntil within 3 days when sort=expiringSoon", async () => {
+    await GET(makeRequest({ sort: "expiringSoon" }));
+    const filterArg = lastFindFilter();
+    expect(filterArg.validUntil).toBeDefined();
+    expect(filterArg.validUntil.$gte).toBeInstanceOf(Date);
+    expect(filterArg.validUntil.$lte).toBeInstanceOf(Date);
+    const diffMs = filterArg.validUntil.$lte.getTime() - filterArg.validUntil.$gte.getTime();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    expect(diffMs).toBeLessThanOrEqual(threeDaysMs + 1000);
+    expect(diffMs).toBeGreaterThan(0);
+  });
+
   // ── Filter: includeExpired ────────────────────────────────────────────────
 
   it("hides expired offers by default", async () => {
