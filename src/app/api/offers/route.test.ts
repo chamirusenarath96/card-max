@@ -17,6 +17,7 @@ import { NextRequest } from "next/server";
 const {
   mockLean,
   mockSkip,
+  mockSort,
   mockFind,
   mockCount,
 } = vi.hoisted(() => {
@@ -27,7 +28,7 @@ const {
   const mockSort = vi.fn(() => ({ skip: mockSkip }));
   const mockFind = vi.fn((/* filter */) => ({ sort: mockSort }));
   const mockCount = vi.fn();
-  return { mockLean, mockSkip, mockFind, mockCount };
+  return { mockLean, mockSkip, mockSort, mockFind, mockCount };
 });
 
 vi.mock("@/lib/db/connect", () => ({
@@ -215,23 +216,20 @@ describe("GET /api/offers", () => {
   // ── Sort: latest (default) ───────────────────────────────────────────
 
   it("sorts by createdAt descending by default (latest)", async () => {
-    const res = await GET(makeRequest());
-    const body = await res.json();
-    expect(body).toHaveBeenCalledWith({ createdAt: -1 });
+    await GET(makeRequest());
+    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1 });
   });
 
   it("sorts by createdAt descending when sort=latest", async () => {
-    const res = await GET(makeRequest({ sort: "latest" }));
-    const body = await res.json();
-    expect(body).toHaveBeenCalledWith({ createdAt: -1 });
+    await GET(makeRequest({ sort: "latest" }));
+    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1 });
   });
 
   // ── Sort: expiringSoon ──────────────────────────────────────────────
 
   it("sorts by validUntil ascending when sort=expiringSoon", async () => {
-    const res = await GET(makeRequest({ sort: "expiringSoon" }));
-    const body = await res.json();
-    expect(body).toHaveBeenCalledWith({ validUntil: 1 });
+    await GET(makeRequest({ sort: "expiringSoon" }));
+    expect(mockSort).toHaveBeenCalledWith({ validUntil: 1 });
   });
 
   it("filters validUntil within 3 days when sort=expiringSoon", async () => {
