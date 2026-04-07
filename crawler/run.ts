@@ -51,8 +51,8 @@ async function main(): Promise<void> {
   const summaries: RunSummary[] = [];
   let hasError = false;
 
-  // Run all scrapers in parallel
-  const results = await Promise.allSettled(
+  // Run all scrapers in parallel — results are collected via summaries.push()
+  await Promise.allSettled(
     SCRAPERS.map(async ({ name, module }) => {
       const start = Date.now();
       try {

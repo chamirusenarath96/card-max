@@ -4,12 +4,6 @@
  */
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-
-if (!MONGODB_URI) {
-  throw new Error("MONGODB_URI environment variable is not defined");
-}
-
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -17,7 +11,6 @@ interface MongooseCache {
 
 // Use global to preserve connection across Next.js hot reloads in dev
 declare global {
-  // eslint-disable-next-line no-var
   var _mongooseCache: MongooseCache;
 }
 
@@ -25,12 +18,17 @@ const cache: MongooseCache = global._mongooseCache ?? { conn: null, promise: nul
 global._mongooseCache = cache;
 
 export async function dbConnect(): Promise<typeof mongoose> {
+  // Check at call-time, not module-load time — Next.js evaluates modules
+  // during `next build` when env vars may not be present yet.
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("MONGODB_URI environment variable is not defined");
+  }
+
   if (cache.conn) return cache.conn;
 
   if (!cache.promise) {
-    cache.promise = mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-    });
+    cache.promise = mongoose.connect(uri, { bufferCommands: false });
   }
 
   cache.conn = await cache.promise;

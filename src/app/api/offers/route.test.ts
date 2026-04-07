@@ -16,20 +16,18 @@ import { NextRequest } from "next/server";
 
 const {
   mockLean,
-  mockLimit,
   mockSkip,
-  mockSort,
   mockFind,
   mockCount,
 } = vi.hoisted(() => {
   const mockLean = vi.fn();
-  const mockLimit = vi.fn(() => ({ lean: mockLean }));
+  const mockSelect = vi.fn(() => ({ lean: mockLean }));
+  const mockLimit = vi.fn(() => ({ select: mockSelect }));
   const mockSkip = vi.fn(() => ({ limit: mockLimit }));
   const mockSort = vi.fn(() => ({ skip: mockSkip }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mockFind = vi.fn((_filter?: any) => ({ sort: mockSort }));
+  const mockFind = vi.fn((/* filter */) => ({ sort: mockSort }));
   const mockCount = vi.fn();
-  return { mockLean, mockLimit, mockSkip, mockSort, mockFind, mockCount };
+  return { mockLean, mockSkip, mockFind, mockCount };
 });
 
 vi.mock("@/lib/db/connect", () => ({
@@ -46,7 +44,7 @@ vi.mock("@/lib/models/offer.model", () => ({
 /** Get the filter argument passed to the most recent OfferModel.find() call */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lastFindFilter(): any {
-  const calls = mockFind.mock.calls;
+  const calls = mockFind.mock.calls as unknown[][];
   if (!calls.length) throw new Error("mockFind was not called");
   return calls[calls.length - 1]![0];
 }
