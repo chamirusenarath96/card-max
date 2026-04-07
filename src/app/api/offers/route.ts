@@ -13,6 +13,7 @@
  *   activeTo       – ISO date; end of validity overlap window
  *   includeExpired – "true" to include expired offers
  *   q              – full-text search
+ *   sort           – "latest" (default, createdAt desc) | "expiringSoon" (validUntil asc, within 3 days)
  *   page / limit   – pagination (default 1 / 20)
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
       activeTo,
       includeExpired,
       q,
+      sort,
       page,
       limit,
     } = parsed.data;
@@ -93,27 +95,40 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // "Expiring Soon" sort: restrict to offers expiring within 3 days
+    if (sort === "expiringSoon") {
+      const now = new Date();
+      const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      filter.validUntil = {
+        ...(filter.validUntil ?? {}),
+        $gte: now,
+        $lte: threeDaysFromNow,
+      };
+    }
+
     // Full-text search
     if (q && q.trim()) {
       filter.$text = { $search: q.trim() };
     }
+
+    // Sort order: "expiringSoon" = validUntil asc, "latest" = createdAt desc
+    const sortOrder: Record<string, 1 | -1> = sort === "expiringSoon"
+      ? { validUntil: 1 }
+      : { createdAt: -1 };
 
     const skip = (page - 1) * limit;
 
     const tQuery = Date.now();
     const [raw, total] = await Promise.all([
       OfferModel.find(filter)
-        .sort({ scrapedAt: -1 })
+        .sort(sortOrder)
         .skip(skip)
         .limit(limit)
-        .select("-__v") // strip internal Mongoose field
+        .select("-__v")
         .lean(),
       OfferModel.countDocuments(filter),
     ]);
 
-    // Explicitly serialize BSON types → plain JSON-safe values.
-    // MongoDB ObjectId and Date instances cause Next.js serialization errors
-    // when passed as props in Server Components.
     const data = raw.map((doc) => ({
       ...doc,
       _id: String(doc._id),
@@ -127,7 +142,6 @@ export async function GET(request: NextRequest) {
     const tQueryMs = Date.now() - tQuery;
     const tTotalMs = Date.now() - t0;
 
-    // Log timing on slow requests (>500ms) so we can track and optimise
     if (tTotalMs > 500) {
       console.warn(
         `[api/offers] SLOW ${tTotalMs}ms — connect:${tConnect}ms query:${tQueryMs}ms` +

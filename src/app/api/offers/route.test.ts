@@ -16,6 +16,7 @@ import { NextRequest } from "next/server";
 
 const {
   mockLean,
+  mockSelect,
   mockLimit,
   mockSkip,
   mockSort,
@@ -23,13 +24,14 @@ const {
   mockCount,
 } = vi.hoisted(() => {
   const mockLean = vi.fn();
-  const mockLimit = vi.fn(() => ({ lean: mockLean }));
+  const mockSelect = vi.fn(() => ({ lean: mockLean }));
+  const mockLimit = vi.fn(() => ({ select: mockSelect }));
   const mockSkip = vi.fn(() => ({ limit: mockLimit }));
   const mockSort = vi.fn(() => ({ skip: mockSkip }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mockFind = vi.fn((_filter?: any) => ({ sort: mockSort }));
   const mockCount = vi.fn();
-  return { mockLean, mockLimit, mockSkip, mockSort, mockFind, mockCount };
+  return { mockLean, mockSelect, mockLimit, mockSkip, mockSort, mockFind, mockCount };
 });
 
 vi.mock("@/lib/db/connect", () => ({
@@ -196,6 +198,53 @@ describe("GET /api/offers", () => {
     await GET(makeRequest({ activeTo: "2026-12-31" }));
     const filterArg = lastFindFilter();
     expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
+  });
+
+  it("builds combined overlap filter for activeFrom + activeTo", async () => {
+    await GET(makeRequest({ activeFrom: "2026-03-01", activeTo: "2026-06-30" }));
+    const filterArg = lastFindFilter();
+    expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
+    expect(filterArg.$or).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ validUntil: { $gte: expect.any(Date) } }),
+      ])
+    );
+  });
+
+  it("returns 200 when activeFrom and activeTo are valid ISO dates", async () => {
+    const res = await GET(makeRequest({ activeFrom: "2026-01-01", activeTo: "2026-12-31" }));
+    expect(res.status).toBe(200);
+  });
+
+  // ── Sort: latest (default) ───────────────────────────────────────────
+
+  it("sorts by createdAt descending by default (latest)", async () => {
+    await GET(makeRequest());
+    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1 });
+  });
+
+  it("sorts by createdAt descending when sort=latest", async () => {
+    await GET(makeRequest({ sort: "latest" }));
+    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1 });
+  });
+
+  // ── Sort: expiringSoon ──────────────────────────────────────────────
+
+  it("sorts by validUntil ascending when sort=expiringSoon", async () => {
+    await GET(makeRequest({ sort: "expiringSoon" }));
+    expect(mockSort).toHaveBeenCalledWith({ validUntil: 1 });
+  });
+
+  it("filters validUntil within 3 days when sort=expiringSoon", async () => {
+    await GET(makeRequest({ sort: "expiringSoon" }));
+    const filterArg = lastFindFilter();
+    expect(filterArg.validUntil).toBeDefined();
+    expect(filterArg.validUntil.$gte).toBeInstanceOf(Date);
+    expect(filterArg.validUntil.$lte).toBeInstanceOf(Date);
+    const diffMs = filterArg.validUntil.$lte.getTime() - filterArg.validUntil.$gte.getTime();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    expect(diffMs).toBeLessThanOrEqual(threeDaysMs + 1000);
+    expect(diffMs).toBeGreaterThan(0);
   });
 
   // ── Filter: includeExpired ────────────────────────────────────────────────
