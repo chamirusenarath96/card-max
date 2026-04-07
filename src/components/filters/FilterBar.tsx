@@ -4,6 +4,10 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import type { Bank } from "../../../specs/data/offer.schema";
 import { DateFilter } from "./DateFilter";
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 const BANKS = Object.entries(BANK_METADATA) as [
   Bank,
@@ -63,10 +67,6 @@ export function FilterBar({ activeBank, activeCategory, activeOfferType, activeF
     setParam("bank", activeBank === bank ? null : bank);
   }
 
-  function handleCategoryClick(cat: string) {
-    setParam("category", activeCategory === cat ? null : cat);
-  }
-
   function handleOfferTypeClick(type: string) {
     setParam("offerType", activeOfferType === type ? null : type);
   }
@@ -75,174 +75,155 @@ export function FilterBar({ activeBank, activeCategory, activeOfferType, activeF
     setParam("sort", activeSort === sort ? null : sort);
   }
 
+  function onCategoryChange(v: string) {
+    if (!v) return;
+    setParam("category", v === "all" ? null : v);
+  }
+
   const currentSort = activeSort ?? "latest";
 
   return (
     <div className="space-y-8" data-testid="filter-bar">
-      {/* Quick filters: Latest / Expiring Soon */}
       <div>
-        <h2 className="font-[family-name:var(--font-space-grotesk)] text-sm uppercase tracking-widest text-primary font-bold mb-4">
+        <Label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Quick Filters
-        </h2>
+        </Label>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" role="group" aria-label="Quick filters">
-          <button
+          <Button
             data-testid="sort-latest"
+            type="button"
+            variant={currentSort === "latest" ? "default" : "outline"}
+            className={cn(
+              "h-auto min-h-11 shrink-0 rounded-md px-5 py-3 text-sm font-medium whitespace-nowrap",
+              currentSort === "latest" && "bg-primary text-primary-foreground",
+            )}
             onClick={() => handleSortClick("latest")}
-            className={[
-              "px-5 py-3 rounded-xl font-medium text-sm transition-colors whitespace-nowrap flex-shrink-0",
-              currentSort === "latest"
-                ? "bg-primary text-on-primary"
-                : "bg-surface-highest text-on-surface-variant hover:bg-surface-high",
-            ].join(" ")}
           >
             Latest
-          </button>
-          <button
+          </Button>
+          <Button
             data-testid="sort-expiringSoon"
+            type="button"
+            variant={currentSort === "expiringSoon" ? "secondary" : "outline"}
+            className="h-auto min-h-11 shrink-0 rounded-md px-5 py-3 text-sm font-medium whitespace-nowrap"
             onClick={() => handleSortClick("expiringSoon")}
-            className={[
-              "px-5 py-3 rounded-xl font-medium text-sm transition-colors whitespace-nowrap flex-shrink-0",
-              currentSort === "expiringSoon"
-                ? "bg-tertiary text-on-tertiary"
-                : "bg-surface-highest text-on-surface-variant hover:bg-surface-high",
-            ].join(" ")}
           >
             Expiring Soon
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Bank filter */}
       <div>
-        <h2 className="font-[family-name:var(--font-space-grotesk)] text-sm uppercase tracking-widest text-primary font-bold mb-4">
+        <Label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Filter by Bank
-        </h2>
+        </Label>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" role="group" aria-label="Filter by bank">
-          <button
+          <Button
             data-testid="bank-filter-all"
+            type="button"
+            variant={!activeBank ? "default" : "outline"}
+            className={cn("h-auto min-h-11 shrink-0 rounded-full px-6 py-3 text-sm font-semibold", !activeBank && "shadow-sm")}
             onClick={() => setParam("bank", null)}
-            className={[
-              "px-6 py-3 rounded-full font-[family-name:var(--font-space-grotesk)] font-bold text-sm transition-all shadow-sm whitespace-nowrap flex-shrink-0",
-              !activeBank
-                ? "bg-primary text-on-primary shadow-md"
-                : "bg-surface-lowest text-on-surface hover:bg-primary-container hover:text-on-primary-container",
-            ].join(" ")}
           >
             All Banks
-          </button>
+          </Button>
           {BANKS.map(([bank, meta]) => {
             const isActive = activeBank === bank;
             return (
-              <button
+              <Button
                 key={bank}
                 data-testid={`bank-filter-${bank}`}
-                onClick={() => handleBankClick(bank)}
+                type="button"
+                variant={isActive ? "default" : "outline"}
                 aria-pressed={isActive}
-                className={[
-                  "px-6 py-3 rounded-full font-[family-name:var(--font-space-grotesk)] font-bold text-sm transition-all shadow-sm whitespace-nowrap flex-shrink-0",
-                  isActive
-                    ? "text-white shadow-md"
-                    : "bg-surface-lowest text-on-surface hover:bg-primary-container hover:text-on-primary-container",
-                ].join(" ")}
+                className={cn(
+                  "h-auto min-h-11 shrink-0 rounded-full px-6 py-3 text-sm font-semibold shadow-sm",
+                  isActive ? "border-transparent text-primary-foreground hover:opacity-95" : "bg-background text-foreground hover:bg-accent",
+                )}
                 style={isActive ? { backgroundColor: meta.color } : undefined}
+                onClick={() => handleBankClick(bank)}
               >
                 {meta.displayName}
-              </button>
+              </Button>
             );
           })}
         </div>
       </div>
 
-      {/* Date filter */}
       <DateFilter activeFrom={activeFrom} activeTo={activeTo} />
 
-      {/* Category chips */}
       <div>
-        <h2 className="font-[family-name:var(--font-space-grotesk)] text-sm uppercase tracking-widest text-primary font-bold mb-4">
+        <Label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Category
-        </h2>
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" role="group" aria-label="Filter by category">
-          <button
+        </Label>
+        <ToggleGroup
+          type="single"
+          value={activeCategory ?? "all"}
+          onValueChange={onCategoryChange}
+          variant="outline"
+          spacing={0}
+          className="max-w-full justify-start gap-3 overflow-x-auto pb-2 scrollbar-hide"
+          role="group"
+          aria-label="Filter by category"
+        >
+          <ToggleGroupItem
+            value="all"
             data-testid="category-chip-all"
-            onClick={() => setParam("category", null)}
-            className={[
-              "px-5 py-3 rounded-xl font-medium text-sm transition-colors whitespace-nowrap flex-shrink-0",
-              !activeCategory
-                ? "bg-primary text-on-primary"
-                : "bg-surface-highest text-on-surface-variant hover:bg-surface-high",
-            ].join(" ")}
+            className="h-auto min-h-11 shrink-0 rounded-md px-5 py-3 text-sm font-medium data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
           >
             All
-          </button>
-          {CATEGORIES.map((cat) => {
-            const isActive = activeCategory === cat.value;
-            return (
-              <button
-                key={cat.value}
-                data-testid={`category-chip-${cat.value}`}
-                onClick={() => handleCategoryClick(cat.value)}
-                aria-pressed={isActive}
-                className={[
-                  "px-5 py-3 rounded-xl font-medium text-sm transition-colors whitespace-nowrap flex-shrink-0",
-                  isActive
-                    ? "bg-primary text-on-primary"
-                    : "bg-surface-highest text-on-surface-variant hover:bg-surface-high",
-                ].join(" ")}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
+          </ToggleGroupItem>
+          {CATEGORIES.map((cat) => (
+            <ToggleGroupItem
+              key={cat.value}
+              value={cat.value}
+              data-testid={`category-chip-${cat.value}`}
+              className="h-auto min-h-11 shrink-0 rounded-md px-5 py-3 text-sm font-medium data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+            >
+              {cat.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </div>
 
-      {/* Hidden select for category (backwards compat with tests) */}
       <select id="category-filter" value={activeCategory ?? ""} onChange={(e) => setParam("category", e.target.value || null)} data-testid="category-filter" className="sr-only" tabIndex={-1} aria-hidden="true">
         <option value="">All Categories</option>
         {CATEGORIES.map((cat) => (<option key={cat.value} value={cat.value}>{cat.label}</option>))}
       </select>
 
-      {/* Offer type chips */}
       <div>
-        <h2 className="font-[family-name:var(--font-space-grotesk)] text-sm uppercase tracking-widest text-primary font-bold mb-4">
+        <Label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Offer Type
-        </h2>
+        </Label>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" role="group" aria-label="Filter by offer type">
-          <button
+          <Button
             data-testid="offer-type-all"
+            type="button"
+            variant={!activeOfferType ? "default" : "outline"}
+            className="h-auto min-h-11 shrink-0 rounded-md px-5 py-3 text-sm font-medium whitespace-nowrap"
             onClick={() => setParam("offerType", null)}
-            className={[
-              "px-5 py-3 rounded-xl font-medium text-sm transition-colors whitespace-nowrap flex-shrink-0",
-              !activeOfferType
-                ? "bg-primary text-on-primary"
-                : "bg-surface-highest text-on-surface-variant hover:bg-surface-high",
-            ].join(" ")}
           >
             All Types
-          </button>
+          </Button>
           {OFFER_TYPES.map((type) => {
             const isActive = activeOfferType === type.value;
             return (
-              <button
+              <Button
                 key={type.value}
                 data-testid={`offer-type-${type.value}`}
-                onClick={() => handleOfferTypeClick(type.value)}
+                type="button"
+                variant={isActive ? "default" : "outline"}
                 aria-pressed={isActive}
-                className={[
-                  "px-5 py-3 rounded-xl font-medium text-sm transition-colors whitespace-nowrap flex-shrink-0",
-                  isActive
-                    ? "bg-primary text-on-primary"
-                    : "bg-surface-highest text-on-surface-variant hover:bg-surface-high",
-                ].join(" ")}
+                className="h-auto min-h-11 shrink-0 rounded-md px-5 py-3 text-sm font-medium whitespace-nowrap"
+                onClick={() => handleOfferTypeClick(type.value)}
               >
                 {type.label}
-              </button>
+              </Button>
             );
           })}
         </div>
       </div>
 
-      {/* Hidden select for offer type (backwards compat with tests) */}
       <select id="offer-type-filter" value={activeOfferType ?? ""} onChange={(e) => setParam("offerType", e.target.value || null)} data-testid="offer-type-filter" className="sr-only" tabIndex={-1} aria-hidden="true">
         <option value="">All Types</option>
         {OFFER_TYPES.map((type) => (<option key={type.value} value={type.value}>{type.label}</option>))}

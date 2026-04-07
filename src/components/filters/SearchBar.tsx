@@ -2,6 +2,10 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface Props {
   initialQuery?: string;
@@ -54,27 +58,32 @@ export function SearchBar({ initialQuery = "" }: Props) {
 
   return (
     <div className="relative" data-testid="search-bar">
-      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-        <svg className="h-4 w-4 text-on-surface-variant" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-        </svg>
-      </div>
-      <input
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+      <Input
         type="search"
         data-testid="search-input"
         value={query}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Search offers, merchants..."
-        className="w-full rounded-full bg-surface-lowest py-3 pl-11 pr-11 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-2 focus:ring-primary/30 shadow-sm transition-colors"
+        className={cn(
+          "h-11 rounded-full border-input bg-background py-3 pl-10 pr-10 text-sm shadow-sm",
+          "placeholder:text-muted-foreground",
+        )}
       />
-      {query && (
-        <button type="button" data-testid="search-clear" onClick={handleClear} className="absolute inset-y-0 right-0 flex items-center pr-4 text-on-surface-variant hover:text-on-surface" aria-label="Clear search">
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      )}
+      {query ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          data-testid="search-clear"
+          onClick={handleClear}
+          className="absolute right-0.5 top-1/2 size-9 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          aria-label="Clear search"
+        >
+          <X className="size-4" />
+        </Button>
+      ) : null}
     </div>
   );
 }

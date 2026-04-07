@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DateFilter } from "./DateFilter";
 
@@ -12,10 +12,10 @@ vi.mock("next/navigation", () => ({
 describe("DateFilter", () => {
   beforeEach(() => { mockPush.mockClear(); });
 
-  it("renders from and to date inputs", () => {
+  it("renders from and to date trigger buttons", () => {
     render(<DateFilter />);
-    expect(screen.getByTestId("date-from")).toBeInTheDocument();
-    expect(screen.getByTestId("date-to")).toBeInTheDocument();
+    expect(screen.getByTestId("date-from-trigger")).toBeInTheDocument();
+    expect(screen.getByTestId("date-to-trigger")).toBeInTheDocument();
   });
 
   it("renders the Date Filter heading", () => {
@@ -23,26 +23,19 @@ describe("DateFilter", () => {
     expect(screen.getByText("Date Filter")).toBeInTheDocument();
   });
 
-  it("sets activeFrom as initial value on from input", () => {
+  it("shows formatted activeFrom date on from trigger", () => {
     render(<DateFilter activeFrom="2026-06-01" />);
-    expect(screen.getByTestId("date-from")).toHaveValue("2026-06-01");
+    expect(screen.getByTestId("date-from-trigger")).toHaveTextContent("01 Jun 2026");
   });
 
-  it("sets activeTo as initial value on to input", () => {
+  it("shows formatted activeTo date on to trigger", () => {
     render(<DateFilter activeTo="2026-12-31" />);
-    expect(screen.getByTestId("date-to")).toHaveValue("2026-12-31");
+    expect(screen.getByTestId("date-to-trigger")).toHaveTextContent("31 Dec 2026");
   });
 
-  it("pushes activeFrom param when from date changes", () => {
+  it("shows 'Pick a date' placeholder when no date set", () => {
     render(<DateFilter />);
-    fireEvent.change(screen.getByTestId("date-from"), { target: { value: "2026-03-01" } });
-    expect(mockPush).toHaveBeenCalledWith("/?activeFrom=2026-03-01");
-  });
-
-  it("pushes activeTo param when to date changes", () => {
-    render(<DateFilter />);
-    fireEvent.change(screen.getByTestId("date-to"), { target: { value: "2026-06-30" } });
-    expect(mockPush).toHaveBeenCalledWith("/?activeTo=2026-06-30");
+    expect(screen.getAllByText("Pick a date")).toHaveLength(2);
   });
 
   it("does not show clear button when no dates are set", () => {
@@ -52,6 +45,11 @@ describe("DateFilter", () => {
 
   it("shows clear button when activeFrom is set", () => {
     render(<DateFilter activeFrom="2026-03-01" />);
+    expect(screen.getByTestId("date-clear")).toBeInTheDocument();
+  });
+
+  it("shows clear button when activeTo is set", () => {
+    render(<DateFilter activeTo="2026-06-30" />);
     expect(screen.getByTestId("date-clear")).toBeInTheDocument();
   });
 

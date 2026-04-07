@@ -1,16 +1,42 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useState } from "react";
+import { CalendarIcon, X } from "lucide-react";
+import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface Props {
   activeFrom?: string;
   activeTo?: string;
 }
 
+function toDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
+function toISODate(date: Date | undefined): string | null {
+  if (!date) return null;
+  return format(date, "yyyy-MM-dd");
+}
+
 export function DateFilter({ activeFrom, activeTo }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const [fromOpen, setFromOpen] = useState(false);
+  const [toOpen, setToOpen] = useState(false);
+
+  const fromDate = toDate(activeFrom);
+  const toDate_ = toDate(activeTo);
 
   function setDateParams(from: string | null, to: string | null) {
     const params = new URLSearchParams(searchParams.toString());
@@ -21,12 +47,14 @@ export function DateFilter({ activeFrom, activeTo }: Props) {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
 
-  function handleFromChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setDateParams(e.target.value || null, activeTo ?? null);
+  function handleFromSelect(date: Date | undefined) {
+    setFromOpen(false);
+    setDateParams(toISODate(date), activeTo ?? null);
   }
 
-  function handleToChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setDateParams(activeFrom ?? null, e.target.value || null);
+  function handleToSelect(date: Date | undefined) {
+    setToOpen(false);
+    setDateParams(activeFrom ?? null, toISODate(date));
   }
 
   function handleClear() {
@@ -37,97 +65,93 @@ export function DateFilter({ activeFrom, activeTo }: Props) {
 
   return (
     <div data-testid="date-filter">
-      <h2 className="font-[family-name:var(--font-space-grotesk)] text-sm uppercase tracking-widest text-primary font-bold mb-4">
+      <Label className="mb-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Date Filter
-      </h2>
+      </Label>
 
-      {/* Airline-style connected range picker */}
-      <div className="inline-flex items-stretch bg-surface-lowest rounded-xl shadow-sm overflow-hidden">
-        {/* From section */}
-        <div className="flex items-center gap-2 px-4 py-3">
-          <svg
-            className="h-4 w-4 text-primary flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
+      <div className="inline-flex max-w-full items-stretch overflow-hidden rounded-lg border bg-card shadow-sm">
+        {/* From picker */}
+        <Popover open={fromOpen} onOpenChange={setFromOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              data-testid="date-from-trigger"
+              className={cn(
+                "h-auto min-h-[52px] flex-col items-start gap-0.5 rounded-none border-0 px-4 py-3 text-left shadow-none hover:bg-accent",
+                !fromDate && "text-muted-foreground",
+              )}
+            >
+              <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <CalendarIcon className="size-3" aria-hidden />
+                From
+              </span>
+              <span className="text-sm font-medium">
+                {fromDate ? format(fromDate, "dd MMM yyyy") : "Pick a date"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={fromDate}
+              onSelect={handleFromSelect}
+              toDate={toDate_}
+              captionLayout="dropdown"
+              initialFocus
             />
-          </svg>
-          <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold font-[family-name:var(--font-space-grotesk)]">
-              From
-            </span>
-            <label htmlFor="date-from" className="sr-only">Valid from</label>
-            <input
-              id="date-from"
-              type="date"
-              data-testid="date-from"
-              value={activeFrom ?? ""}
-              onChange={handleFromChange}
-              className="bg-transparent text-sm font-[family-name:var(--font-space-grotesk)] font-bold text-on-surface focus:outline-none w-[130px]"
-            />
-          </div>
-        </div>
+          </PopoverContent>
+        </Popover>
 
-        {/* Divider */}
-        <div className="w-px bg-outline-variant/30 self-stretch my-2" />
+        <Separator orientation="vertical" className="min-h-[52px] self-stretch" />
 
-        {/* To section */}
-        <div className="flex items-center gap-2 px-4 py-3">
-          <svg
-            className="h-4 w-4 text-primary flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
+        {/* To picker */}
+        <Popover open={toOpen} onOpenChange={setToOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              data-testid="date-to-trigger"
+              className={cn(
+                "h-auto min-h-[52px] flex-col items-start gap-0.5 rounded-none border-0 px-4 py-3 text-left shadow-none hover:bg-accent",
+                !toDate_ && "text-muted-foreground",
+              )}
+            >
+              <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <CalendarIcon className="size-3" aria-hidden />
+                To
+              </span>
+              <span className="text-sm font-medium">
+                {toDate_ ? format(toDate_, "dd MMM yyyy") : "Pick a date"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={toDate_}
+              onSelect={handleToSelect}
+              fromDate={fromDate}
+              captionLayout="dropdown"
+              initialFocus
             />
-          </svg>
-          <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-widest text-on-surface-variant font-bold font-[family-name:var(--font-space-grotesk)]">
-              To
-            </span>
-            <label htmlFor="date-to" className="sr-only">Valid until</label>
-            <input
-              id="date-to"
-              type="date"
-              data-testid="date-to"
-              value={activeTo ?? ""}
-              onChange={handleToChange}
-              min={activeFrom ?? undefined}
-              className="bg-transparent text-sm font-[family-name:var(--font-space-grotesk)] font-bold text-on-surface focus:outline-none w-[130px]"
-            />
-          </div>
-        </div>
+          </PopoverContent>
+        </Popover>
 
-        {/* Clear button inside the picker */}
-        {hasDateFilter && (
+        {hasDateFilter ? (
           <>
-            <div className="w-px bg-outline-variant/30 self-stretch my-2" />
-            <button
+            <Separator orientation="vertical" className="min-h-[52px] self-stretch" />
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               data-testid="date-clear"
               onClick={handleClear}
-              className="px-3 flex items-center text-on-surface-variant hover:text-error transition-colors"
+              className="h-auto shrink-0 rounded-none text-muted-foreground hover:text-destructive"
               aria-label="Clear dates"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              <X className="size-4" />
+            </Button>
           </>
-        )}
+        ) : null}
       </div>
     </div>
   );

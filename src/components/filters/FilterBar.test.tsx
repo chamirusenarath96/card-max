@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FilterBar } from "./FilterBar";
 
@@ -106,9 +106,9 @@ describe("FilterBar", () => {
     expect(mockPush).toHaveBeenCalledWith("/?offerType=cashback");
   });
 
-  it("passes activeFrom and activeTo to DateFilter", () => {
+  it("passes activeFrom and activeTo to DateFilter as formatted dates", () => {
     render(<FilterBar activeFrom="2026-03-01" activeTo="2026-06-30" />);
-    expect(screen.getByTestId("date-from")).toHaveValue("2026-03-01");
-    expect(screen.getByTestId("date-to")).toHaveValue("2026-06-30");
+    expect(screen.getByTestId("date-from-trigger")).toHaveTextContent("01 Mar 2026");
+    expect(screen.getByTestId("date-to-trigger")).toHaveTextContent("30 Jun 2026");
   });
 });

@@ -1,6 +1,15 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export interface PaginationData {
   page: number;
@@ -14,26 +23,23 @@ interface Props {
 }
 
 export function PaginationControls({ pagination }: Props) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   if (pagination.totalPages <= 1) return null;
 
-  function goToPage(page: number) {
+  const { page, totalPages, total } = pagination;
+
+  function buildHref(p: number): string {
     const params = new URLSearchParams(searchParams.toString());
-    if (page <= 1) {
+    if (p <= 1) {
       params.delete("page");
     } else {
-      params.set("page", String(page));
+      params.set("page", String(p));
     }
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    return qs ? `${pathname}?${qs}` : pathname;
   }
-
-  const { page, totalPages, total } = pagination;
-  const hasPrev = page > 1;
-  const hasNext = page < totalPages;
 
   function getPageNumbers(): (number | "...")[] {
     const pages: (number | "...")[] = [];
@@ -50,20 +56,46 @@ export function PaginationControls({ pagination }: Props) {
   }
 
   return (
-    <nav data-testid="pagination-controls" className="mt-16 flex items-center justify-center gap-2" aria-label="Pagination">
-      <button type="button" data-testid="pagination-prev" onClick={() => goToPage(page - 1)} disabled={!hasPrev} className="w-12 h-12 rounded-xl border border-outline-variant flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-on-primary hover:border-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed" aria-label="Previous page">
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
-      </button>
-      {getPageNumbers().map((p, i) =>
-        p === "..." ? (
-          <span key={`ellipsis-${i}`} className="px-2 text-on-surface-variant">...</span>
-        ) : (
-          <button key={p} type="button" onClick={() => goToPage(p)} className={["w-12 h-12 rounded-xl font-bold font-[family-name:var(--font-space-grotesk)] transition-all", p === page ? "bg-primary text-on-primary" : "border border-outline-variant hover:bg-primary-container"].join(" ")}>{p}</button>
-        )
-      )}
-      <button type="button" data-testid="pagination-next" onClick={() => goToPage(page + 1)} disabled={!hasNext} className="w-12 h-12 rounded-xl border border-outline-variant flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-on-primary hover:border-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed" aria-label="Next page">
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-      </button>
+    <nav data-testid="pagination-controls" className="mt-16" aria-label="Pagination">
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              href={buildHref(page - 1)}
+              aria-disabled={page <= 1}
+              data-testid="pagination-prev"
+              className={page <= 1 ? "pointer-events-none opacity-50" : undefined}
+            />
+          </PaginationItem>
+
+          {getPageNumbers().map((p, i) =>
+            p === "..." ? (
+              <PaginationItem key={`ellipsis-${i}`}>
+                <PaginationEllipsis />
+              </PaginationItem>
+            ) : (
+              <PaginationItem key={p}>
+                <PaginationLink
+                  href={buildHref(p)}
+                  isActive={p === page}
+                  className="size-10 font-semibold"
+                >
+                  {p}
+                </PaginationLink>
+              </PaginationItem>
+            ),
+          )}
+
+          <PaginationItem>
+            <PaginationNext
+              href={buildHref(page + 1)}
+              aria-disabled={page >= totalPages}
+              data-testid="pagination-next"
+              className={page >= totalPages ? "pointer-events-none opacity-50" : undefined}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
       <span className="sr-only">{total} offers</span>
     </nav>
   );

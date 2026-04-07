@@ -1,17 +1,14 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import { PaginationControls } from "./PaginationControls";
 
-const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
 }));
 
 describe("PaginationControls", () => {
-  beforeEach(() => { mockPush.mockClear(); });
-
   it("does not render when only one page", () => {
     const { container } = render(<PaginationControls pagination={{ page: 1, limit: 20, total: 5, totalPages: 1 }} />);
     expect(container.firstChild).toBeNull();
@@ -23,20 +20,24 @@ describe("PaginationControls", () => {
     expect(screen.getByTestId("pagination-next")).toBeInTheDocument();
   });
 
-  it("disables prev button on first page", () => {
+  it("marks prev button as aria-disabled on first page", () => {
     render(<PaginationControls pagination={{ page: 1, limit: 20, total: 60, totalPages: 3 }} />);
-    expect(screen.getByTestId("pagination-prev")).toBeDisabled();
+    expect(screen.getByTestId("pagination-prev")).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("disables next button on last page", () => {
+  it("marks next button as aria-disabled on last page", () => {
     render(<PaginationControls pagination={{ page: 3, limit: 20, total: 60, totalPages: 3 }} />);
-    expect(screen.getByTestId("pagination-next")).toBeDisabled();
+    expect(screen.getByTestId("pagination-next")).toHaveAttribute("aria-disabled", "true");
   });
 
-  it("navigates to next page on click", () => {
+  it("next link points to page 2 when on page 1", () => {
     render(<PaginationControls pagination={{ page: 1, limit: 20, total: 60, totalPages: 3 }} />);
-    fireEvent.click(screen.getByTestId("pagination-next"));
-    expect(mockPush).toHaveBeenCalledWith("/?page=2");
+    expect(screen.getByTestId("pagination-next")).toHaveAttribute("href", "/?page=2");
+  });
+
+  it("prev link points to page 1 (no param) when on page 2", () => {
+    render(<PaginationControls pagination={{ page: 2, limit: 20, total: 60, totalPages: 3 }} />);
+    expect(screen.getByTestId("pagination-prev")).toHaveAttribute("href", "/");
   });
 
   it("displays total offer count in sr-only", () => {
