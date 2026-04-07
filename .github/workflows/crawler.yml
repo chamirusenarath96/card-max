@@ -5,8 +5,14 @@ on:
   schedule:
     - cron: "30 20 * * *"
 
-  # Allow manual trigger from GitHub Actions UI
+  # Manual trigger from GitHub Actions UI (useful for one-off scrapes)
   workflow_dispatch:
+    inputs:
+      revalidate:
+        description: "Revalidate Vercel ISR cache after crawl?"
+        required: false
+        default: "true"
+        type: boolean
 
 jobs:
   crawl:
@@ -15,11 +21,9 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -28,19 +32,48 @@ jobs:
         run: npm ci
 
       - name: Run crawler
+        id: crawl
         run: npm run crawler
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
-      - name: Notify on failure
+      # After new data is written to MongoDB, bust the Vercel ISR cache so
+      # users see fresh offers within seconds instead of waiting up to 1 hour.
+      - name: Revalidate Vercel ISR cache
+        if: success() && (github.event.inputs.revalidate != 'false')
+        run: |
+          echo "Revalidating ISR cache..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_REVALIDATION_SECRET }}" \
+            "${{ secrets.VERCEL_APP_URL }}/api/revalidate")
+          echo "Revalidation HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Warning: revalidation returned $STATUS — cache may be stale"
+          fi
+
+      - name: Notify on failure (open GitHub Issue)
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
+            const today = new Date().toISOString().split('T')[0];
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[Crawler] Daily scrape failed - ${new Date().toISOString().split('T')[0]}`,
-              body: `The daily crawler job failed. Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`,
+              title: `[Crawler] Daily scrape failed — ${today}`,
+              body: [
+                '## Crawler Failure',
+                '',
+                `**Date:** ${today}`,
+                `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                '### Checklist',
+                '- [ ] Check bank website for layout changes',
+                '- [ ] Check MongoDB Atlas connectivity',
+                '- [ ] Check for Incapsula/bot-protection blocks on NTB',
+                '- [ ] Verify HNB API endpoint is responsive',
+                '- [ ] Re-run workflow manually once fixed',
+              ].join('\n'),
               labels: ['bug', 'crawler']
-            })
+            });
