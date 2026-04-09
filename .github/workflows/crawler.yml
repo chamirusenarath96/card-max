@@ -39,18 +39,37 @@ jobs:
 
       # After new data is written to MongoDB, bust the Vercel ISR cache so
       # users see fresh offers within seconds instead of waiting up to 1 hour.
+      #
+      # This step is advisory — a failure here should NOT fail the whole job,
+      # since the crawl itself already succeeded. It also skips gracefully when
+      # VERCEL_APP_URL / VERCEL_REVALIDATION_SECRET are not yet configured.
       - name: Revalidate Vercel ISR cache
         if: success() && (github.event.inputs.revalidate != 'false')
+        continue-on-error: true
         run: |
-          echo "Revalidating ISR cache..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer ${{ secrets.VERCEL_REVALIDATION_SECRET }}" \
-            "${{ secrets.VERCEL_APP_URL }}/api/revalidate")
-          echo "Revalidation HTTP status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "Warning: revalidation returned $STATUS — cache may be stale"
+          if [ -z "$VERCEL_APP_URL" ] || [ -z "$VERCEL_REVALIDATION_SECRET" ]; then
+            echo "⚠️  VERCEL_APP_URL or VERCEL_REVALIDATION_SECRET not configured — skipping revalidation."
+            exit 0
           fi
+
+          echo "Revalidating ISR cache at ${VERCEL_APP_URL}..."
+          STATUS=$(curl -s -o /tmp/revalidate_response.txt -w "%{http_code}" \
+            --max-time 15 \
+            -X POST \
+            -H "Authorization: Bearer ${VERCEL_REVALIDATION_SECRET}" \
+            "${VERCEL_APP_URL}/api/revalidate")
+
+          echo "HTTP status: $STATUS"
+          cat /tmp/revalidate_response.txt
+
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ ISR cache revalidated successfully."
+          else
+            echo "⚠️  Revalidation returned $STATUS — the cache may serve stale data for up to 1 hour."
+          fi
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
+          VERCEL_REVALIDATION_SECRET: ${{ secrets.VERCEL_REVALIDATION_SECRET }}
 
       - name: Notify on failure (open GitHub Issue)
         if: failure()
