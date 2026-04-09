@@ -20,8 +20,13 @@
 6. [API Reference](#api-reference)
 7. [Getting Started](#getting-started)
 8. [Testing](#testing)
-9. [Deployment](#deployment)
-10. [Known Limitations & Roadmap](#known-limitations--roadmap)
+9. [CI / Continuous Integration](#ci--continuous-integration)
+   - [When CI runs](#when-ci-runs)
+   - [CI Flow](#ci-flow)
+   - [Test layers](#test-layers)
+   - [Secrets & environments](#secrets--environments)
+10. [Deployment](#deployment)
+11. [Known Limitations & Roadmap](#known-limitations--roadmap)
 
 ---
 
@@ -559,6 +564,100 @@ npm run test:e2e       # requires dev server running + real MongoDB
 
 E2E tests are in `e2e/`. They launch a real Chromium browser against
 `http://localhost:3000` (or `PLAYWRIGHT_BASE_URL` env var).
+
+---
+
+## CI / Continuous Integration
+
+Every push and pull request to `master`, `main`, or `develop` triggers the CI pipeline defined in `.github/workflows/ci.yml`.
+
+### When CI runs
+
+| Event | Branches | What happens |
+|-------|----------|--------------|
+| `push` | `master`, `main`, `develop` | Full pipeline runs |
+| `pull_request` (opened / updated) | targeting above | Full pipeline runs, result shown on PR |
+| Concurrent push | same branch | Previous run cancelled automatically (`concurrency` group) |
+
+### CI Flow
+
+```
+Push / PR
+    │
+    ▼
+┌─────────────────────────────────────────────────────┐
+│  Job 1 — "Lint, Type Check & Test"                  │
+│  Runs on: ubuntu-latest (fresh VM, no secrets)      │
+│                                                     │
+│  1. Checkout code                                   │
+│  2. Set up Node.js 22 + restore npm cache           │
+│  3. npm ci          — install dependencies          │
+│  4. npm run lint    — ESLint (fails on any error)   │
+│  5. npm run type-check — tsc --noEmit (strict)      │
+│  6. npm run test    — Vitest (103 unit tests)       │
+│  7. npm run build   — next build (no DB needed)     │
+└───────────────┬─────────────────────────────────────┘
+                │ needs: (Job 2 only runs if Job 1 passes)
+                ▼
+┌─────────────────────────────────────────────────────┐
+│  Job 2 — "E2E Tests"                                │
+│  Runs on: ubuntu-latest (new isolated VM)           │
+│  environment: Production (has MONGODB_URI secret)   │
+│                                                     │
+│  1. Checkout code                                   │
+│  2. Set up Node.js 22 + restore npm cache           │
+│  3. npm ci                                          │
+│  4. npm run build   — rebuild .next (VMs are        │
+│                       isolated; Job 1's build       │
+│                       does not carry over)          │
+│  5. npx playwright install chromium                 │
+│  6. npm run test:e2e — Playwright (6 E2E tests)     │
+│     (next start serves :3000; Chromium hits it)     │
+│  7. Upload playwright-report/ on failure            │
+└─────────────────────────────────────────────────────┘
+```
+
+**Why two jobs?** Job 1 runs fast checks with no secrets or infrastructure needed — if linting or a unit test fails there's no point burning time on a full browser test. Job 2 is slower (browser install + real DB) and only runs after Job 1 is green.
+
+**Why rebuild in Job 2?** Each GitHub Actions job runs on a completely separate VM. The `.next` build output from Job 1 does not exist in Job 2's VM. Without rebuilding, `next start` would fail with *"Could not find a production build"*.
+
+### Test layers
+
+| Layer | Tool | Command | Speed | DB needed | What it catches |
+|-------|------|---------|-------|-----------|-----------------|
+| Unit & component | Vitest + Testing Library | `npm run test` | ~3s | ❌ No (mocked) | Logic bugs, bad props, UI regressions |
+| E2E | Playwright (Chromium) | `npm run test:e2e` | ~10s | ✅ Yes (Production secret) | Broken pages, routing, full-stack integration |
+
+**Unit tests** run in Node.js with a fake browser environment (jsdom). MongoDB is fully mocked using `vi.mock` — no network calls, no real database. They are colocated next to source files (`*.test.ts` / `*.test.tsx`).
+
+**E2E tests** launch a real Chromium browser against `next start` on port 3000. The Next.js server component makes a real call to MongoDB Atlas using the `MONGODB_URI` from the Production environment secret. Tests are in `e2e/`.
+
+```
+src/
+├── app/api/offers/route.test.ts          API filter + pagination logic
+├── components/cards/OfferCard.test.tsx   Card rendering, discount display
+├── components/cards/OfferGrid.test.tsx   Grid vs empty-state, size toggle
+├── components/filters/FilterBar.test.tsx Bank/category chip interactions
+├── components/filters/SearchBar.test.tsx Search input → URL param
+├── components/filters/DateFilter.test.tsx Date picker selection
+└── components/layout/PaginationControls.test.tsx  Prev/next href, disabled state
+
+e2e/
+└── offers.spec.ts    Page load, bank filter → URL, empty state
+```
+
+### Secrets & environments
+
+All secrets live under the **Production** GitHub environment (`Settings → Environments → Production`). Jobs must declare `environment: Production` to access them — repository-level secrets are not used.
+
+| Secret | Used by |
+|--------|---------|
+| `MONGODB_URI` | E2E job (live DB), Crawler cron |
+| `VERCEL_APP_URL` | Crawler cron (ISR revalidation) |
+| `VERCEL_REVALIDATION_SECRET` | Crawler cron (ISR revalidation) |
+| `VERCEL_TOKEN` | Deploy workflow |
+| `VERCEL_ORG_ID` | Deploy workflow |
+| `VERCEL_PROJECT_ID` | Deploy workflow |
 
 ---
 
