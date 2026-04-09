@@ -19,6 +19,7 @@ jobs:
     name: Scrape Bank Offers
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: Production  # grants access to MONGODB_URI and Vercel secrets
 
     steps:
       - uses: actions/checkout@v4
