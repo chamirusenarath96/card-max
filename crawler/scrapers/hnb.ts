@@ -13,6 +13,7 @@ import { parseDiscount } from "../utils/parseDiscount";
 
 const API_URL = "https://venus.hnb.lk/api/get_all_pcard_promotions";
 const SOURCE_URL = "https://www.hnb.lk/personal/cards/credit-cards";
+const THUMB_BASE = "https://venus.hnb.lk";
 
 interface HnbPromotion {
   id: number;
@@ -78,12 +79,29 @@ function mapPromotion(item: HnbPromotion): Partial<OfferInput> {
     description,
     ...parseDiscount(discountValue),
     category,
-    merchantLogoUrl: item.thumbUrl || undefined,
+    merchantLogoUrl: resolveThumbUrl(item.thumbUrl),
     validFrom: parseApiDate(item.from),
     validUntil: parseApiDate(item.to),
     sourceUrl: SOURCE_URL,
     scrapedAt: new Date(),
   };
+}
+
+/**
+ * Normalise HNB thumbnail URLs.
+ * The API returns relative paths ("/uploads/foo.jpg") — prepend the API base.
+ * Already-absolute URLs are returned as-is. Anything else is discarded.
+ */
+function resolveThumbUrl(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  // Already absolute
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // Relative path — make it absolute using the API host
+  if (trimmed.startsWith("/")) return `${THUMB_BASE}${trimmed}`;
+  // Unknown format — discard rather than fail validation
+  return undefined;
 }
 
 /** Parse YYYY-MM-DD from the API */
