@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
+import { OfferImage } from "./OfferImage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -28,35 +28,14 @@ export function OfferCardDefault({ offer }: Props) {
         className="flex h-full flex-col"
       >
         <div className="relative h-44 overflow-hidden" style={{ backgroundColor: `${bankMeta.color}18` }}>
-          {offer.merchantLogoUrl ? (
-            <Image
-              src={offer.merchantLogoUrl}
-              alt={offer.merchant}
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover"
-              onError={(e) => {
-                const el = e.currentTarget as HTMLImageElement;
-                el.style.display = "none";
-                el.parentElement!.querySelector("[data-fallback]")?.removeAttribute("hidden");
-              }}
-            />
-          ) : null}
-          <div
-            data-fallback=""
-            className="absolute inset-0 flex w-full items-center justify-center"
-            {...(offer.merchantLogoUrl ? { hidden: true } : {})}
-          >
-            <div
-              className="flex h-20 w-20 items-center justify-center rounded-xl text-4xl font-bold text-primary-foreground"
-              style={{ backgroundColor: bankMeta.color }}
-            >
-              {offer.merchant.charAt(0).toUpperCase()}
-            </div>
-          </div>
+          <OfferImage
+            offer={offer}
+            bankColor={bankMeta.color}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
 
           {offer.discountLabel ? (
-            <Badge data-testid="offer-type-badge" className="absolute top-3 right-3 text-xs font-semibold shadow">
+            <Badge data-testid="offer-type-badge" className="absolute top-3 right-3 z-10 text-xs font-semibold shadow">
               {badgeLabel}
             </Badge>
           ) : null}
@@ -65,13 +44,13 @@ export function OfferCardDefault({ offer }: Props) {
             <Badge
               data-testid="offer-expiry-badge"
               variant={expiry.isExpired ? "destructive" : "secondary"}
-              className={cn("absolute right-3 text-[10px] font-semibold", offer.discountLabel ? "top-12" : "top-3")}
+              className={cn("absolute right-3 z-10 text-[10px] font-semibold", offer.discountLabel ? "top-12" : "top-3")}
             >
               {expiry.label}
             </Badge>
           ) : null}
 
-          <div className="absolute bottom-3 left-3 flex flex-wrap gap-2">
+          <div className="absolute bottom-3 left-3 z-10 flex flex-wrap gap-2">
             <Badge
               className="border-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground"
               style={{ backgroundColor: `${bankMeta.color}ee` }}

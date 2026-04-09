@@ -3,19 +3,20 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
-      // Sampath Bank CDN
+      // Bank CDNs
       { protocol: "https", hostname: "**.sampath.lk" },
-      // Commercial Bank CDN
       { protocol: "https", hostname: "**.combank.lk" },
-      // HNB CDN
       { protocol: "https", hostname: "**.hnb.lk" },
-      // Nations Trust Bank CDN
       { protocol: "https", hostname: "**.nationstrust.com" },
-      // AWS S3 (bank promo images)
-      { protocol: "https", hostname: "**.amazonaws.com" },
-      // Generic CDN fallbacks
-      { protocol: "https", hostname: "**.cloudfront.net" },
+      // AWS S3 — ComBank and others host images here
+      { protocol: "https", hostname: "s3.amazonaws.com" },
       { protocol: "https", hostname: "**.s3.amazonaws.com" },
+      { protocol: "https", hostname: "**.amazonaws.com" },
+      { protocol: "https", hostname: "**.cloudfront.net" },
+      // AI-generated fallback images (Pollinations.ai — free, no API key)
+      { protocol: "https", hostname: "image.pollinations.ai" },
+      // Clearbit logo API (free merchant logos by domain)
+      { protocol: "https", hostname: "logo.clearbit.com" },
     ],
   },
 };
