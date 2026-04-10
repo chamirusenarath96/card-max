@@ -52,8 +52,11 @@ export async function GET(request: NextRequest) {
     const t0 = Date.now();
     const conn = await dbConnect();
     const tConnect = Date.now() - t0;
-    const dbName = conn.connection.db?.databaseName ?? "unknown";
-    console.log(`[api/offers] using database: "${dbName}", collection: "${OfferModel.collection.name}"`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dbName = (conn as any)?.connection?.db?.databaseName ?? "unknown";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const collName = (OfferModel as any)?.collection?.name ?? "unknown";
+    console.log(`[api/offers] using database: "${dbName}", collection: "${collName}"`);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filter: Record<string, any> = {};
