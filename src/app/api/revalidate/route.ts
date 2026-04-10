@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     // Revalidate the home page and all offer list variants
     revalidatePath("/");
     revalidatePath("/", "layout");
-    revalidateTag("offers");
+    revalidateTag("offers", "max");
 
     return NextResponse.json({
       revalidated: true,
