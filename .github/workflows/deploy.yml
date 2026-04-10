@@ -92,6 +92,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
 
+    environment:
+      name: production
+
     steps:
       - uses: actions/checkout@v4
 
