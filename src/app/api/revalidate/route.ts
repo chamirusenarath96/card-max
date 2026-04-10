@@ -11,7 +11,7 @@
  *     -H "Authorization: Bearer $VERCEL_REVALIDATION_SECRET" \
  *     https://your-app.vercel.app/api/revalidate
  */
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     // Revalidate the home page and all offer list variants
     revalidatePath("/");
     revalidatePath("/", "layout");
+    revalidateTag("offers");
 
     return NextResponse.json({
       revalidated: true,
