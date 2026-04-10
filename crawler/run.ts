@@ -4,7 +4,10 @@
  *
  * Usage: npx tsx crawler/run.ts
  */
-import "dotenv/config";
+import dotenv from "dotenv";
+// Load .env.local first (Next.js convention for local secrets), fall back to .env
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 import { connectDb, disconnectDb, upsertOffers, expireStaleOffers } from "./utils/db";
 import * as combank from "./scrapers/combank";
 import * as sampath from "./scrapers/sampath";

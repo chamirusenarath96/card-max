@@ -7,7 +7,9 @@ import type { OfferInput } from "../../specs/data/offer.schema";
 
 export async function connectDb(uri: string): Promise<void> {
   await mongoose.connect(uri, { dbName: "card-max" });
-  console.log("[db] Connected to MongoDB");
+  const db = mongoose.connection.db;
+  const dbName = db?.databaseName ?? "unknown";
+  console.log(`[db] Connected to MongoDB — database: "${dbName}"`);
 }
 
 export async function disconnectDb(): Promise<void> {

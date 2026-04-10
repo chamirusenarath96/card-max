@@ -32,5 +32,7 @@ export async function dbConnect(): Promise<typeof mongoose> {
   }
 
   cache.conn = await cache.promise;
+  const dbName = cache.conn.connection.db?.databaseName ?? "unknown";
+  console.log(`[db] Connected to MongoDB — database: "${dbName}"`);
   return cache.conn;
 }
