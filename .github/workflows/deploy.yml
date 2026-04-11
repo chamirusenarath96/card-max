@@ -1,29 +1,29 @@
 name: Deploy to Vercel
 
 on:
-  # Only deploy AFTER the CI workflow passes on main — never deploy broken code
+  # Triggers automatically after CI passes on main
   workflow_run:
     workflows: ["CI"]
     branches: [main]
     types: [completed]
 
-  # Allow manual re-deploy from GitHub Actions UI
+  # Manual re-deploy from GitHub Actions UI
   workflow_dispatch:
 
 jobs:
   deploy-production:
     name: Deploy Production
     runs-on: ubuntu-latest
-    # Only run when CI succeeded (or manual trigger)
+    # Only deploy when CI succeeded (or triggered manually)
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     environment:
       name: production
-      url: ${{ steps.deploy.outputs.url }}
+      url: ${{ steps.promote.outputs.url }}
 
     permissions:
-      contents: write  # needed to post commit comments
-      issues: write    # needed to create failure issue
+      contents: write  # post commit comments
+      issues: write    # create failure issues
 
     steps:
       - uses: actions/checkout@v4
@@ -42,17 +42,27 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Build (using Vercel's build pipeline)
+      - name: Build
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Deploy prebuilt output to Vercel
+      - name: Deploy prebuilt to preview
         id: deploy
         run: |
-          URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$URL" >> $GITHUB_OUTPUT
+          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "preview_url=$URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Promote preview to production
+        id: promote
+        run: |
+          URL=$(vercel promote ${{ steps.deploy.outputs.preview_url }} --prod --token=${{ secrets.VERCEL_TOKEN }})
+          PROD_URL="https://card-max.vercel.app"
+          echo "url=$PROD_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -61,7 +71,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const url = '${{ steps.deploy.outputs.url }}';
+            const url = '${{ steps.promote.outputs.url }}';
             const sha = context.sha.slice(0, 7);
             await github.rest.repos.createCommitComment({
               owner: context.repo.owner,
@@ -89,46 +99,3 @@ jobs:
               ].join('\n'),
               labels: ['bug', 'deploy']
             });
-
-  deploy-preview:
-    name: Deploy Preview
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-
-    environment:
-      name: production
-
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Build preview
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Deploy preview
-        id: preview
-        run: |
-          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$URL" >> $GITHUB_OUTPUT
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
