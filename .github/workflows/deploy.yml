@@ -21,6 +21,10 @@ jobs:
       name: production
       url: ${{ steps.deploy.outputs.url }}
 
+    permissions:
+      contents: write  # needed to post commit comments
+      issues: write    # needed to create failure issue
+
     steps:
       - uses: actions/checkout@v4
 
@@ -86,7 +90,6 @@ jobs:
               labels: ['bug', 'deploy']
             });
 
-  # Preview deploy for PRs (optional — needs Vercel preview env)
   deploy-preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
@@ -94,6 +97,9 @@ jobs:
 
     environment:
       name: production
+
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
