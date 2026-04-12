@@ -26,6 +26,11 @@
    - [Test layers](#test-layers)
    - [Secrets & environments](#secrets--environments)
 10. [Deployment](#deployment)
+    - [The four-step deploy pipeline](#the-four-step-deploy-pipeline)
+    - [Why build as preview then promote](#why-build-as-preview-then-promote-not-deploy-with---prod-directly)
+    - [What "preview" means in Vercel's model](#what-preview-means-in-vercels-model)
+    - [Rollback](#rollback)
+    - [Secrets required](#secrets-required)
 11. [Caching Architecture](#caching-architecture)
     - [The four caches](#the-four-caches)
     - [How this project uses each layer](#how-this-project-uses-each-layer)
@@ -710,29 +715,125 @@ All secrets live under the **Production** GitHub environment (`Settings → Envi
 
 ## Deployment
 
-### Vercel (frontend + API)
+Deployments are handled entirely by GitHub Actions via `.github/workflows/deploy.yml`.
+Vercel's native GitHub integration is **disabled** — nothing deploys to production unless CI passes first.
 
-```bash
-# Automatic on push to main (via .github/workflows/deploy.yml)
-# Manual:
-npx vercel --prod
+### How a deployment is triggered
+
+| Event | What happens |
+|-------|-------------|
+| Push to `master` → CI passes | Deploy workflow fires automatically via `workflow_run` |
+| CI fails | Deploy workflow is skipped — broken code never ships |
+| Manual trigger | Actions → Deploy to Vercel → Run workflow |
+
+### Why GitHub Actions instead of Vercel's native Git integration
+
+Vercel's built-in GitHub integration deploys on every push immediately, bypassing CI entirely.
+Using the Vercel CLI from GitHub Actions means the deploy job only starts after lint,
+type-check, unit tests, and E2E tests all pass.
+
+### The four-step deploy pipeline
+
+```
+Push to master → CI passes
+        │
+        │  workflow_run trigger fires
+        ▼
+Step 1 — vercel pull --environment=production
+        Downloads project config and injects production env vars
+        (MONGODB_URI etc.) into the build environment.
+        │
+        ▼
+Step 2 — vercel build
+        Runs Next.js build on the GitHub Actions runner using
+        the production env vars from step 1.
+        Output written to .vercel/output/ in Vercel's Build Output
+        API format (static files + serverless bundles + config).
+        Tagged internally as a "preview" build.
+        │
+        ▼
+Step 3 — vercel deploy --prebuilt
+        Uploads .vercel/output/ to Vercel. No rebuild on Vercel's
+        side — the prebuilt output is used as-is.
+
+        Returns a unique immutable preview URL:
+        https://card-xyz123-chamirusenarath96s-projects.vercel.app
+
+        This deployment is live at that URL but NOT the production
+        alias yet. It can be inspected and tested before going live.
+        │
+        ▼
+Step 4 — vercel promote <preview-url>
+        Atomically points the production alias (card-max.vercel.app)
+        at the preview deployment. Zero downtime — old deployment
+        keeps serving until the alias switch completes.
+        The preview URL stays live permanently.
+        │
+        ▼
+card-max.vercel.app now serves the new build
+        │
+        ├── Post commit comment with production URL
+        └── On any step failure → create GitHub Issue [Deploy] failed
 ```
 
-Required secrets in Vercel: `MONGODB_URI`
+### Why build as "preview" then promote, not deploy with `--prod` directly
 
-### GitHub Actions secrets
+Every attempt to use `vercel deploy --prebuilt --prod` resulted in one of two errors:
 
-| Secret | Used by |
+- `--prod` was silently ignored and the deploy went to preview anyway
+- Or `vercel build --prod` tagged the output as "production" but `vercel deploy --prebuilt` expected a "preview" tag → **environment mismatch error**
+
+The two-step pattern (`deploy` → `promote`) is the approach Vercel CLI recommends:
+build and upload are separated from the production alias assignment.
+`vercel promote` has no flags — promoting to production is its only job.
+
+### What "preview" means in Vercel's model
+
+```
+Every push creates a deployment with a unique URL:
+  card-xyz123-chamirusenarath96s-projects.vercel.app  ← preview URL (permanent)
+
+The production alias always points to the most recently promoted deployment:
+  card-max.vercel.app  ← production alias (moves on every promote)
+
+Rollback = promote any old preview URL:
+  vercel promote card-abc456-... → card-max.vercel.app instantly points there
+```
+
+| Term | Meaning |
+|------|---------|
+| Preview deployment | Any deployment not yet pointed to a production alias. Unique `*.vercel.app` URL. Permanent. |
+| Production deployment | A preview deployment that has been promoted — the production alias points to it. |
+| Production alias | The stable domain (`card-max.vercel.app`) that always points to the latest promoted deployment. |
+
+### Rollback
+
+Because every deployment has a permanent preview URL, rolling back is instant — no rebuild needed:
+
+```bash
+# Find the previous deployment URL from Vercel dashboard or GitHub commit comments
+vercel promote https://card-abc456-chamirusenarath96s-projects.vercel.app --token=<token>
+# card-max.vercel.app immediately serves the old build
+```
+
+### Secrets required
+
+All secrets live under the **Production** GitHub environment (`Settings → Environments → Production`):
+
+| Secret | Purpose |
 |--------|---------|
-| `MONGODB_URI` | Crawler cron, E2E tests |
-| `VERCEL_TOKEN` | Deploy workflow |
-| `VERCEL_ORG_ID` | Deploy workflow |
-| `VERCEL_PROJECT_ID` | Deploy workflow |
+| `VERCEL_TOKEN` | Authenticates the Vercel CLI for all `vercel` commands |
+| `VERCEL_ORG_ID` | Identifies your Vercel team — found in Vercel project settings |
+| `VERCEL_PROJECT_ID` | Identifies the card-max project — found in `.vercel/project.json` |
+
+`MONGODB_URI` is set directly in Vercel's environment variables (not in GitHub Actions secrets)
+so the running serverless functions have database access at runtime.
 
 ### Daily crawler cron
 
 `.github/workflows/crawler.yml` runs at **08:30 PM UTC = 2:00 AM Colombo** daily.
-On failure, it automatically creates a GitHub Issue with the error log.
+On failure it automatically creates a GitHub Issue with the error log.
+After a successful scrape it calls `POST /api/revalidate` to bust the ISR cache.
 
 ---
 
