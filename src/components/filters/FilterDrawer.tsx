@@ -2,9 +2,11 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SlidersHorizontal, X } from "lucide-react";
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import type { Bank } from "../../../specs/data/offer.schema";
-import { DateFilter } from "./DateFilter";
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -78,6 +80,42 @@ export function FilterDrawer({
 
   function clearAll() {
     router.push(pathname);
+  }
+
+  function toDate(value: string | undefined): Date | undefined {
+    if (!value) return undefined;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+
+  function toISODate(date: Date | undefined): string | null {
+    if (!date) return null;
+    return format(date, "yyyy-MM-dd");
+  }
+
+  const fromDate = toDate(activeFrom);
+  const toDate_ = toDate(activeTo);
+  const dateRange: DateRange | undefined =
+    fromDate || toDate_ ? { from: fromDate, to: toDate_ } : undefined;
+
+  function handleDateSelect(selected: DateRange | undefined) {
+    const params = new URLSearchParams(searchParams.toString());
+    const from = toISODate(selected?.from);
+    const to = toISODate(selected?.to);
+    if (from) params.set("activeFrom", from); else params.delete("activeFrom");
+    if (to) params.set("activeTo", to); else params.delete("activeTo");
+    params.delete("page");
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  function clearDates() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("activeFrom");
+    params.delete("activeTo");
+    params.delete("page");
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
   }
 
   const currentSort = activeSort ?? "latest";
@@ -201,9 +239,42 @@ export function FilterDrawer({
 
           <Separator />
 
-          {/* Date Range */}
+          {/* Date Range — inline calendar, no nested popover */}
           <section className="px-6 py-5">
-            <DateFilter activeFrom={activeFrom} activeTo={activeTo} />
+            <div className="mb-3 flex items-center justify-between">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Date Range
+              </Label>
+              {(activeFrom || activeTo) && (
+                <button
+                  type="button"
+                  onClick={clearDates}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                  aria-label="Clear date range"
+                >
+                  <X className="size-3" />
+                  Clear
+                </button>
+              )}
+            </div>
+            {(fromDate || toDate_) && (
+              <p className="mb-3 text-sm font-medium text-foreground">
+                {fromDate && toDate_
+                  ? `${format(fromDate, "dd MMM")} – ${format(toDate_, "dd MMM yyyy")}`
+                  : fromDate
+                    ? `From ${format(fromDate, "dd MMM yyyy")}`
+                    : `Until ${format(toDate_!, "dd MMM yyyy")}`}
+              </p>
+            )}
+            <div className="overflow-x-auto">
+              <Calendar
+                mode="range"
+                numberOfMonths={2}
+                selected={dateRange}
+                onSelect={handleDateSelect}
+                captionLayout="dropdown"
+              />
+            </div>
           </section>
 
           <Separator />
