@@ -26,7 +26,11 @@
    - [Test layers](#test-layers)
    - [Secrets & environments](#secrets--environments)
 10. [Deployment](#deployment)
-11. [Known Limitations & Roadmap](#known-limitations--roadmap)
+11. [Caching Architecture](#caching-architecture)
+    - [The four caches](#the-four-caches)
+    - [How this project uses each layer](#how-this-project-uses-each-layer)
+    - [How revalidation works after a crawler run](#how-revalidation-works-after-a-crawler-run)
+12. [Known Limitations & Roadmap](#known-limitations--roadmap)
 
 ---
 
@@ -686,6 +690,92 @@ Required secrets in Vercel: `MONGODB_URI`
 
 `.github/workflows/crawler.yml` runs at **08:30 PM UTC = 2:00 AM Colombo** daily.
 On failure, it automatically creates a GitHub Issue with the error log.
+
+---
+
+## Caching Architecture
+
+Next.js has four separate cache layers that stack on top of each other. Understanding all four is essential for debugging data-freshness issues.
+
+### The four caches
+
+```
+Browser request → card-max.vercel.app
+        │
+        ▼
+┌──────────────────────┐
+│  1. Router Cache     │  browser memory — instant back/forward nav
+│     (client-side)    │  cleared on tab close / full reload
+└──────────┬───────────┘
+           │ miss
+           ▼
+┌──────────────────────┐
+│  2. Full Route Cache │  Vercel CDN edge — pre-rendered HTML
+│     (page ISR)       │  controlled by export const revalidate
+└──────────┬───────────┘
+           │ miss or stale
+           ▼
+┌──────────────────────┐
+│  3. Data Cache       │  server-side — fetch() response store
+│     (fetch cache)    │  controlled by next: { revalidate } on fetch()
+└──────────┬───────────┘
+           │ miss or stale
+           ▼
+┌──────────────────────┐
+│  4. Request Memo     │  in-memory — deduplicates identical fetch()
+│     (per-request)    │  calls within a single server render
+└──────────┬───────────┘
+           │
+           ▼
+     MongoDB Atlas  ← actual database query
+```
+
+### How this project uses each layer
+
+| Cache | Config | Invalidated by |
+|-------|--------|----------------|
+| Router Cache | Browser default (~30s) | Full page reload |
+| Full Route Cache | `export const revalidate = 3600` in `page.tsx` | `revalidatePath("/")` via `/api/revalidate` |
+| Data Cache | `cache: "no-store"` on `fetchOffers()` | Not cached — always fresh on page re-render |
+| Request Memo | Automatic | Automatic (per-request lifetime) |
+
+### Why `cache: "no-store"` on the fetch
+
+`page.tsx` calls `fetchOffers()` which makes an HTTP call to the internal `/api/offers` route. This fetch has `cache: "no-store"` — meaning it never stores a response in the Data Cache.
+
+```typescript
+// src/app/page.tsx
+const res = await fetch(`${getBaseUrl()}/api/offers?${query}`, {
+  cache: "no-store",  // always fetch fresh data on every page render
+});
+```
+
+This is intentional. The Full Route Cache (layer 2) already controls how often the page re-renders via `export const revalidate = 3600`. There is no benefit to also caching the fetch response in layer 3 — it would just create a second, independent cache that is hard to invalidate consistently.
+
+**Why not use `revalidateTag`?** In Next.js 16, `revalidateTag(tag, profile)` targets the new `"use cache"` directive cache store, which is separate from the `fetch()` data cache used by the old `next: { tags }` API. Mixing the two systems causes silent invalidation failures where the page re-renders but still serves stale fetch data.
+
+### How revalidation works after a crawler run
+
+```
+Crawler finishes writing to MongoDB
+        │
+        ▼
+POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
+        │
+        ├── revalidatePath("/")           — marks home page HTML as stale
+        └── revalidatePath("/", "layout") — marks all pages sharing root layout as stale
+                │
+                ▼
+        Next visitor to card-max.vercel.app
+                │
+                ├── Full Route Cache is stale → page re-renders on the server
+                │
+                └── fetchOffers() runs with cache: "no-store"
+                        │
+                        └── hits /api/offers → queries MongoDB → returns live data
+                                │
+                                └── fresh HTML cached for next 3600s
+```
 
 ---
 

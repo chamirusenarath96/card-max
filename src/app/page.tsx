@@ -61,7 +61,7 @@ async function fetchOffers(params: {
   query.set("limit", "20");
 
   const res = await fetch(`${getBaseUrl()}/api/offers?${query}`, {
-    next: { revalidate: 3600, tags: ["offers"] },
+    cache: "no-store",
   });
 
   if (!res.ok) {
