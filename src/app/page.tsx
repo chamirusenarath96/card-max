@@ -4,7 +4,6 @@ import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
 import { SearchDrawer } from "@/components/search/SearchDrawer";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   NavigationMenu,
@@ -175,30 +174,13 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
         </section>
 
-        <Separator />
-
-        {/* ── Filters ──────────────────────────────────────────────────── */}
-        <section
-          className="sticky top-[57px] z-40 border-b border-border bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80"
-          data-testid="filter-section"
-        >
-          <div className="mx-auto max-w-screen-xl">
-            <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
-              <FilterBar
-                activeBank={params.bank}
-                activeCategory={params.category}
-                activeOfferType={params.offerType}
-                activeFrom={params.activeFrom}
-                activeTo={params.activeTo}
-                activeSort={params.sort}
-              />
-            </Suspense>
-          </div>
-        </section>
-
         {/* ── Offer grid ───────────────────────────────────────────────── */}
         <section className="mx-auto max-w-screen-xl px-6 py-14">
-          <div className="mb-8 flex items-end justify-between gap-4">
+          {/* Results heading + inline filter trigger */}
+          <div
+            className="mb-8 flex flex-wrap items-center justify-between gap-4"
+            data-testid="filter-section"
+          >
             <div>
               <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
                 {params.q
@@ -215,7 +197,17 @@ export default async function HomePage({ searchParams }: PageProps) {
                   : "Browsing offers"}
               </p>
             </div>
-            <div className="hidden h-1 w-24 shrink-0 rounded-full bg-primary md:block" />
+
+            <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
+              <FilterBar
+                activeBank={params.bank}
+                activeCategory={params.category}
+                activeOfferType={params.offerType}
+                activeFrom={params.activeFrom}
+                activeTo={params.activeTo}
+                activeSort={params.sort}
+              />
+            </Suspense>
           </div>
 
           <OfferGrid offers={offers} pagination={pagination} />

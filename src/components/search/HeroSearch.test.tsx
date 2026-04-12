@@ -9,9 +9,50 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// Default: hook returns no results (query too short or empty)
+const mockUseSearchSuggestions = vi.fn(() => ({
+  results: [],
+  total: 0,
+  isLoading: false,
+  isActive: false,
+}));
+
+vi.mock("./useSearchSuggestions", () => ({
+  useSearchSuggestions: (query: string) => mockUseSearchSuggestions(query),
+}));
+
+const MOCK_RESULTS = [
+  {
+    _id: "1",
+    title: "20% off at Keells",
+    merchant: "Keells",
+    bank: "commercial_bank",
+    bankDisplayName: "Commercial Bank",
+    discountLabel: "20% off",
+    category: "groceries",
+    offerType: "percentage",
+  },
+  {
+    _id: "2",
+    title: "10% cashback on dining",
+    merchant: "Various",
+    bank: "sampath",
+    bankDisplayName: "Sampath Bank",
+    discountLabel: "10% cashback",
+    category: "dining",
+    offerType: "cashback",
+  },
+];
+
 describe("HeroSearch", () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: false,
+      isActive: false,
+    });
   });
 
   it("renders the hero search container", () => {
@@ -101,5 +142,99 @@ describe("HeroSearch", () => {
     });
     fireEvent.click(screen.getByTestId("hero-search-button"));
     expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
+  // --- Dropdown / live results ---
+
+  it("dropdown is not shown when query is too short", () => {
+    render(<HeroSearch />);
+    expect(screen.queryByTestId("search-dropdown")).not.toBeInTheDocument();
+  });
+
+  it("shows dropdown with results when hook returns isActive=true", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    expect(screen.getByTestId("search-dropdown")).toBeInTheDocument();
+    const items = screen.getAllByTestId("search-result-item");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("20% off at Keells");
+    expect(items[1]).toHaveTextContent("10% cashback on dining");
+  });
+
+  it("shows loading spinner while fetching", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: true,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    expect(screen.getByTestId("search-loading")).toBeInTheDocument();
+    expect(screen.queryByTestId("search-result-item")).not.toBeInTheDocument();
+  });
+
+  it("shows no-results message when results are empty", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="xyznotfound" />);
+    expect(screen.getByTestId("search-no-results")).toBeInTheDocument();
+  });
+
+  it("shows discount label badge on result items", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    expect(screen.getByText("20% off")).toBeInTheDocument();
+  });
+
+  it("shows 'See all' link when total > 0", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 42,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    expect(screen.getByTestId("search-see-all")).toBeInTheDocument();
+    expect(screen.getByTestId("search-see-all")).toHaveTextContent("42");
+  });
+
+  it("clicking a result navigates with that title as query", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    const items = screen.getAllByTestId("search-result-item");
+    fireEvent.click(items[0]);
+    expect(mockPush).toHaveBeenCalledWith("/?q=20%25+off+at+Keells");
+  });
+
+  it("pressing Escape closes the dropdown", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    expect(screen.getByTestId("search-dropdown")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId("hero-search-input"), { key: "Escape" });
+    expect(screen.queryByTestId("search-dropdown")).not.toBeInTheDocument();
   });
 });

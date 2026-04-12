@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Search, TrendingUp, LayoutGrid, X } from "lucide-react";
+import { Search, TrendingUp, LayoutGrid, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -13,6 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useSearchSuggestions } from "./useSearchSuggestions";
 
 const QUICK_SEARCHES = [
   "dining deals",
@@ -46,6 +46,7 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { results, total, isLoading, isActive } = useSearchSuggestions(query);
 
   // Ctrl+S / ⌘S opens / closes the drawer
   useEffect(() => {
@@ -82,6 +83,11 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
 
   function handleJump(params: Record<string, string>) {
     navigate(params as Record<string, string | null>);
+  }
+
+  function handleResultClick(title: string) {
+    setQuery(title);
+    navigate({ q: title });
   }
 
   return (
@@ -148,30 +154,99 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
         </SheetHeader>
 
         <div className="space-y-5 px-6 py-5">
-          {/* Popular searches */}
-          <div>
-            <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <TrendingUp className="size-3" aria-hidden />
-              Popular searches
-            </p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Popular search suggestions">
-              {QUICK_SEARCHES.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  data-testid={`quick-search-${q.replace(/\s+/g, "-")}`}
-                  onClick={() => handleQuickSearch(q)}
-                  className="rounded-full border border-border bg-background px-3.5 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+          {/* Inline results while typing — replaces popular searches */}
+          {isActive ? (
+            <div data-testid="drawer-results">
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Search className="size-3" aria-hidden />
+                Results
+              </p>
+
+              {isLoading && (
+                <div
+                  data-testid="drawer-loading"
+                  className="flex items-center justify-center py-6"
                 >
-                  {q}
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Loading" />
+                </div>
+              )}
+
+              {!isLoading && results.length === 0 && (
+                <p
+                  data-testid="drawer-no-results"
+                  className="py-4 text-center text-sm text-muted-foreground"
+                >
+                  No offers found for &ldquo;{query}&rdquo;
+                </p>
+              )}
+
+              {!isLoading && results.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {results.map((item) => (
+                    <button
+                      key={item._id}
+                      type="button"
+                      data-testid="drawer-result-item"
+                      onClick={() => handleResultClick(item.title)}
+                      className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent focus:bg-accent focus:outline-none"
+                    >
+                      <Search
+                        className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {item.title}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {item.merchant} · {item.bankDisplayName}
+                        </p>
+                      </div>
+                      {item.discountLabel && (
+                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                          {item.discountLabel}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!isLoading && total > results.length && (
+                <button
+                  type="button"
+                  data-testid="drawer-see-all"
+                  onClick={handleSearch}
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium text-primary hover:bg-accent"
+                >
+                  See all {total} results
                 </button>
-              ))}
+              )}
             </div>
-          </div>
+          ) : (
+            /* Popular searches — shown when query is empty / short */
+            <div>
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <TrendingUp className="size-3" aria-hidden />
+                Popular searches
+              </p>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Popular search suggestions">
+                {QUICK_SEARCHES.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    data-testid={`quick-search-${q.replace(/\s+/g, "-")}`}
+                    onClick={() => handleQuickSearch(q)}
+                    className="rounded-full border border-border bg-background px-3.5 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <Separator />
-
-          {/* Jump to category */}
+          {/* Jump to category — always visible */}
           <div>
             <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <LayoutGrid className="size-3" aria-hidden />

@@ -9,9 +9,49 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+const mockUseSearchSuggestions = vi.fn(() => ({
+  results: [],
+  total: 0,
+  isLoading: false,
+  isActive: false,
+}));
+
+vi.mock("./useSearchSuggestions", () => ({
+  useSearchSuggestions: (query: string) => mockUseSearchSuggestions(query),
+}));
+
+const MOCK_RESULTS = [
+  {
+    _id: "1",
+    title: "20% off at Keells",
+    merchant: "Keells",
+    bank: "commercial_bank",
+    bankDisplayName: "Commercial Bank",
+    discountLabel: "20% off",
+    category: "groceries",
+    offerType: "percentage",
+  },
+  {
+    _id: "2",
+    title: "10% cashback on dining",
+    merchant: "Various",
+    bank: "sampath",
+    bankDisplayName: "Sampath Bank",
+    discountLabel: "10% cashback",
+    category: "dining",
+    offerType: "cashback",
+  },
+];
+
 describe("SearchDrawer", () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: false,
+      isActive: false,
+    });
   });
 
   it("renders the search drawer trigger button", () => {
@@ -100,5 +140,98 @@ describe("SearchDrawer", () => {
     fireEvent.click(screen.getByTestId("search-drawer-trigger"));
     fireEvent.click(screen.getByTestId("jump-expiring-soon"));
     expect(mockPush).toHaveBeenCalledWith("/?sort=expiringSoon");
+  });
+
+  // --- Inline results while typing ---
+
+  it("hides popular searches and shows results section when isActive", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="ke" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.getByTestId("drawer-results")).toBeInTheDocument();
+    expect(screen.queryByTestId("quick-search-cashback")).not.toBeInTheDocument();
+  });
+
+  it("shows result items inside the drawer when results are available", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="ke" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    const items = screen.getAllByTestId("drawer-result-item");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("20% off at Keells");
+  });
+
+  it("shows loading state inside drawer while fetching", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: true,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="ke" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.getByTestId("drawer-loading")).toBeInTheDocument();
+  });
+
+  it("shows no-results message inside drawer when results are empty", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="xyznotfound" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.getByTestId("drawer-no-results")).toBeInTheDocument();
+  });
+
+  it("shows 'See all' link when total > results shown", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 100,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="ke" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.getByTestId("drawer-see-all")).toBeInTheDocument();
+    expect(screen.getByTestId("drawer-see-all")).toHaveTextContent("100");
+  });
+
+  it("clicking a drawer result navigates and closes drawer", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="ke" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    const items = screen.getAllByTestId("drawer-result-item");
+    fireEvent.click(items[0]);
+    expect(mockPush).toHaveBeenCalledWith("/?q=20%25+off+at+Keells");
+    expect(screen.queryByTestId("search-drawer-input")).not.toBeInTheDocument();
+  });
+
+  it("jump chips are still visible while showing results", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<SearchDrawer initialQuery="ke" />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.getByTestId("jump-dining")).toBeInTheDocument();
   });
 });
