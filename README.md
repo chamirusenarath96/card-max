@@ -582,9 +582,38 @@ npm run dev
 
 ### Environment variables
 
+#### Local (`.env.local`)
+
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MONGODB_URI` | Yes | Atlas connection string |
+| `MONGODB_URI` | Yes | MongoDB Atlas connection string |
+| `VERCEL_REVALIDATION_SECRET` | No | Only needed to test cache revalidation locally |
+
+#### Vercel (set in Vercel dashboard → Settings → Environment Variables)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MONGODB_URI` | Yes | MongoDB Atlas connection string — used by serverless functions at runtime |
+
+#### Vercel system variables (auto-populated, do not set manually)
+
+These are set automatically by Vercel on every deployment. You cannot override them.
+
+| Variable | Value | Used for |
+|----------|-------|----------|
+| `VERCEL_URL` | Per-deployment preview URL (e.g. `card-abc123-....vercel.app`) | Not used directly — see note below |
+| `VERCEL_PROJECT_PRODUCTION_URL` | Stable production domain (e.g. `card-max.vercel.app`) | `getBaseUrl()` in `page.tsx` |
+
+> **Why `VERCEL_PROJECT_PRODUCTION_URL` and not `VERCEL_URL`?**
+>
+> `page.tsx` is a server component that calls its own `/api/offers` route internally via `fetch()`.
+> `VERCEL_URL` points to the per-deployment **preview URL**, which Vercel's deployment protection
+> blocks with a `401 HTML` response for unauthenticated requests. `fetchOffers()` silently returns
+> `{ data: [] }` on any non-ok response — causing the page to render the empty state and ISR to
+> cache it for an hour.
+>
+> `VERCEL_PROJECT_PRODUCTION_URL` is always the stable production domain (`card-max.vercel.app`)
+> which has no auth protection, so the internal fetch always succeeds.
 
 ---
 
@@ -841,6 +870,13 @@ All secrets live under the **Production** GitHub environment (`Settings → Envi
 
 `MONGODB_URI` is set directly in Vercel's environment variables (not in GitHub Actions secrets)
 so the running serverless functions have database access at runtime.
+
+> **Note on `VERCEL_URL` vs `VERCEL_PROJECT_PRODUCTION_URL`:** Vercel auto-sets `VERCEL_URL` to
+> the preview URL of each deployment. Preview URLs are protected by Vercel's deployment auth —
+> unauthenticated requests get a `401 HTML` response, not JSON. `page.tsx` calls its own
+> `/api/offers` via `fetch()` on the server; if that fetch goes to the preview URL it silently
+> gets empty data and renders an empty page. The fix is `VERCEL_PROJECT_PRODUCTION_URL`, which
+> always points to the stable production domain with no auth protection.
 
 ### Daily crawler cron
 
