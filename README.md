@@ -621,57 +621,70 @@ E2E tests are in `e2e/`. They launch a real Chromium browser against
 
 ## CI / Continuous Integration
 
-Every push and pull request to `master`, `main`, or `develop` triggers the CI pipeline defined in `.github/workflows/ci.yml`.
+Everything — CI checks, deployment, and cache invalidation — is defined in a single workflow file: `.github/workflows/ci.yml`.
 
-### When CI runs
+### When the pipeline runs
 
 | Event | Branches | What happens |
 |-------|----------|--------------|
-| `push` | `master`, `main`, `develop` | Full pipeline runs |
-| `pull_request` (opened / updated) | targeting above | Full pipeline runs, result shown on PR |
+| `push` | `master`, `main` | Full pipeline: CI → E2E → Deploy → Invalidate cache |
+| `pull_request` | targeting `master`, `main`, `develop` | CI + E2E only — no deploy |
 | Concurrent push | same branch | Previous run cancelled automatically (`concurrency` group) |
 
-### CI Flow
+### Pipeline flow
 
 ```
-Push / PR
-    │
-    ▼
+Push to master                         Pull request
+      │                                      │
+      ▼                                      ▼
 ┌─────────────────────────────────────────────────────┐
 │  Job 1 — "Lint, Type Check & Test"                  │
-│  Runs on: ubuntu-latest (fresh VM, no secrets)      │
+│  Runs on: ubuntu-latest (no secrets needed)         │
 │                                                     │
-│  1. Checkout code                                   │
-│  2. Set up Node.js 22 + restore npm cache           │
-│  3. npm ci          — install dependencies          │
-│  4. npm run lint    — ESLint (fails on any error)   │
-│  5. npm run type-check — tsc --noEmit (strict)      │
-│  6. npm run test    — Vitest (103 unit tests)       │
-│  7. npm run build   — next build (no DB needed)     │
-└───────────────┬─────────────────────────────────────┘
-                │ needs: (Job 2 only runs if Job 1 passes)
-                ▼
+│  1. npm ci                                          │
+│  2. npm run lint        ESLint                      │
+│  3. npm run type-check  tsc --noEmit                │
+│  4. npm run test        Vitest unit tests           │
+│  5. npm run build       next build                  │
+└──────────────────┬──────────────────────────────────┘
+                   │ needs: ci
+                   ▼
 ┌─────────────────────────────────────────────────────┐
 │  Job 2 — "E2E Tests"                                │
-│  Runs on: ubuntu-latest (new isolated VM)           │
-│  environment: Production (has MONGODB_URI secret)   │
+│  environment: Production (MONGODB_URI secret)       │
 │                                                     │
-│  1. Checkout code                                   │
-│  2. Set up Node.js 22 + restore npm cache           │
-│  3. npm ci                                          │
-│  4. npm run build   — rebuild .next (VMs are        │
-│                       isolated; Job 1's build       │
-│                       does not carry over)          │
-│  5. npx playwright install chromium                 │
-│  6. npm run test:e2e — Playwright (6 E2E tests)     │
-│     (next start serves :3000; Chromium hits it)     │
-│  7. Upload playwright-report/ on failure            │
+│  1. npm ci                                          │
+│  2. npm run build       rebuild (.next doesn't      │
+│                         carry over between VMs)     │
+│  3. playwright install chromium                     │
+│  4. npm run test:e2e    Playwright tests             │
+│  5. Upload report on failure                        │
+└──────────────────┬──────────────────────────────────┘
+                   │ needs: [ci, e2e]
+                   │ if: push event only (not PRs)
+                   ▼
+┌─────────────────────────────────────────────────────┐
+│  Job 3 — "Deploy to Production"                     │
+│  environment: Production (Vercel secrets)           │
+│                                                     │
+│  1. vercel pull --environment=production            │
+│  2. vercel build                                    │
+│  3. vercel deploy --prebuilt  → preview URL         │
+│  4. vercel promote <url>      → card-max.vercel.app │
+│  5. curl /api/revalidate      → bust ISR cache      │
+│  6. Post commit comment with production URL         │
+│  7. On failure → create GitHub Issue                │
 └─────────────────────────────────────────────────────┘
 ```
 
-**Why two jobs?** Job 1 runs fast checks with no secrets or infrastructure needed — if linting or a unit test fails there's no point burning time on a full browser test. Job 2 is slower (browser install + real DB) and only runs after Job 1 is green.
+**Why three jobs?**
+- Job 1 is fast (no secrets, no browser) — fails early if lint or tests break
+- Job 2 needs secrets and a real browser — only runs if Job 1 is green
+- Job 3 only runs on push (not PRs) and only if both Job 1 and Job 2 pass — broken code never ships
 
-**Why rebuild in Job 2?** Each GitHub Actions job runs on a completely separate VM. The `.next` build output from Job 1 does not exist in Job 2's VM. Without rebuilding, `next start` would fail with *"Could not find a production build"*.
+**Why rebuild in Job 2?** Each job runs on a completely isolated VM. The `.next` output from Job 1 does not carry over — without rebuilding, `next start` would fail with *"Could not find a production build"*.
+
+**Cache invalidation on deploy:** After every successful deploy, the pipeline immediately calls `POST /api/revalidate` to bust the ISR cache. This means the deployed code and the rendered page are always in sync — no waiting up to an hour for the page to refresh.
 
 ### Test layers
 
@@ -715,8 +728,8 @@ All secrets live under the **Production** GitHub environment (`Settings → Envi
 
 ## Deployment
 
-Deployments are handled entirely by GitHub Actions via `.github/workflows/deploy.yml`.
-Vercel's native GitHub integration is **disabled** — nothing deploys to production unless CI passes first.
+Deployments are handled by Job 3 of `.github/workflows/ci.yml`.
+Vercel's native GitHub integration is **disabled** — nothing deploys to production unless all CI checks pass first.
 
 ### How a deployment is triggered
 
