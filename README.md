@@ -467,22 +467,26 @@ src/
 
 ## API Reference
 
+The full OpenAPI 3.1 specification lives at [`specs/api/openapi.yaml`](specs/api/openapi.yaml). Below is a quick reference.
+
 ### `GET /api/offers`
 
 ```
-Query params (all optional):
+Query params (all optional, all combinable):
   bank           commercial_bank | sampath_bank | hnb | nations_trust_bank
   category       dining | shopping | travel | fuel | groceries |
                  entertainment | health | online | other
   offerType      percentage | cashback | bogo | installment |
                  fixed_amount | points | free_item | other
-  minDiscount    0–100  (requires offerType=percentage|cashback)
+  minDiscount    0–100  (only meaningful for percentage / cashback types)
   maxDiscount    0–100
-  activeOn       ISO date — offers valid on this exact date
+  activeOn       ISO date — only offers whose validity window covers this date
   activeFrom     ISO date — start of validity overlap window
   activeTo       ISO date — end of validity overlap window
   includeExpired "true" to include expired offers (default: false)
   q              full-text search across title, description, merchant
+  sort           "latest" (default, createdAt desc) |
+                 "expiringSoon" (validUntil asc, within 3 days)
   page           default: 1
   limit          default: 20, max: 100
 
@@ -496,13 +500,52 @@ Response:
 
 ### `GET /api/offers/:id`
 
-Returns a single offer by MongoDB `_id`.
+Returns a single offer by its MongoDB `_id` (24-character hex string).
 
 ### `GET /api/health`
 
 ```json
 { "status": "ok", "db": "connected" }
 ```
+
+### `POST /api/revalidate`
+
+Invalidates Next.js's ISR page cache so the next visitor gets freshly rendered data.
+Called automatically by the crawler workflow after every successful scrape.
+
+```
+Headers:
+  Authorization: Bearer <VERCEL_REVALIDATION_SECRET>
+
+Response 200:
+  { "revalidated": true, "revalidatedAt": "2026-04-12T02:00:34.123Z" }
+
+Response 401:
+  { "error": "Unauthorized" }
+```
+
+**How it works:**
+
+```
+Crawler finishes → POST /api/revalidate
+                        │
+                        ├── revalidatePath("/")           marks home page stale
+                        └── revalidatePath("/", "layout") marks all layout pages stale
+                                │
+                        Next visitor arrives
+                                │
+                        ISR: stale → re-render on server
+                                │
+                        fetchOffers() runs with cache: "no-store"
+                                │
+                        MongoDB query → fresh data → new HTML cached for 3600s
+```
+
+> **Why `cache: "no-store"` on the fetch?** The internal `fetch()` to `/api/offers` inside
+> `page.tsx` has no data cache of its own. This means whenever the page ISR re-renders
+> (triggered by `revalidatePath`), the fetch always goes live to MongoDB — no second cache
+> layer to accidentally serve stale empty results. See the [Caching Architecture](#caching-architecture)
+> section for the full picture.
 
 ---
 

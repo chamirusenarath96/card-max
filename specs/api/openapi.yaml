@@ -1,122 +1,391 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: card-max API
-  description: Credit card offers aggregator API for Sri Lanka
-  version: 1.0.0
+  description: |
+    REST API for the card-max Sri Lankan credit card offers aggregator.
+
+    ## Base URL
+    - **Production:** `https://card-max.vercel.app/api`
+    - **Local dev:** `http://localhost:3000/api`
+
+    ## Caching
+    All `GET /offers` responses are served through Next.js ISR (Incremental Static Regeneration).
+    The page cache is invalidated by the daily crawler via `POST /revalidate` after each scrape.
+    Individual API route responses are not cached — each call hits MongoDB directly.
+
+    ## Authentication
+    Most endpoints are public. `POST /revalidate` requires a Bearer token:
+    ```
+    Authorization: Bearer <VERCEL_REVALIDATION_SECRET>
+    ```
+  version: 2.0.0
+  contact:
+    name: card-max
+    url: https://card-max.vercel.app
 
 servers:
-  - url: /api
-    description: Next.js API routes
+  - url: https://card-max.vercel.app/api
+    description: Production
+  - url: http://localhost:3000/api
+    description: Local development
+
+tags:
+  - name: Offers
+    description: Browse and filter credit card offers
+  - name: System
+    description: Health checks and cache management
 
 paths:
+
+  # ─────────────────────────────────────────────
+  # GET /offers
+  # ─────────────────────────────────────────────
   /offers:
     get:
+      tags: [Offers]
       summary: List credit card offers
-      description: Returns paginated list of offers, optionally filtered by bank, category, or keyword
+      description: |
+        Returns a paginated, filterable list of active credit card offers scraped from
+        Commercial Bank, Sampath Bank, HNB, and Nations Trust Bank.
+
+        All query parameters are optional and combinable. Filters are applied with AND logic
+        (e.g. `bank=hnb&category=dining` returns HNB dining offers only).
+
+        **Full-text search** (`q`) uses MongoDB's text index across `title`, `description`,
+        and `merchant` fields.
+
+        **Date filters** support two modes:
+        - `activeOn` — single-date point-in-time: only offers whose validity window covers that date
+        - `activeFrom` + `activeTo` — range overlap: offers that are active at any point within the window
+      operationId: listOffers
       parameters:
-        - name: bank
+        - $ref: '#/components/parameters/BankParam'
+        - $ref: '#/components/parameters/CategoryParam'
+        - $ref: '#/components/parameters/OfferTypeParam'
+        - name: minDiscount
           in: query
+          description: Minimum discount percentage (inclusive). Only applies to `percentage` and `cashback` offer types.
           schema:
-            $ref: '#/components/schemas/Bank'
-          description: Filter by bank
-        - name: category
+            type: integer
+            minimum: 0
+            maximum: 100
+          example: 10
+        - name: maxDiscount
           in: query
+          description: Maximum discount percentage (inclusive). Only applies to `percentage` and `cashback` offer types.
           schema:
-            $ref: '#/components/schemas/Category'
-          description: Filter by category
-        - name: q
+            type: integer
+            minimum: 0
+            maximum: 100
+          example: 50
+        - name: activeOn
           in: query
+          description: |
+            ISO 8601 date. Returns only offers whose validity window covers this exact date
+            (`validFrom <= activeOn <= validUntil`). Offers with no `validUntil` are always included.
           schema:
             type: string
-          description: Full-text search query
+            format: date
+          example: "2026-04-15"
+        - name: activeFrom
+          in: query
+          description: |
+            ISO 8601 date. Start of a date window. Returns offers that are active at any point
+            from `activeFrom` onwards (i.e. `validUntil >= activeFrom`).
+            Combine with `activeTo` for a full overlap window.
+          schema:
+            type: string
+            format: date
+          example: "2026-04-01"
+        - name: activeTo
+          in: query
+          description: |
+            ISO 8601 date. End of a date window. Returns offers that start on or before `activeTo`
+            (i.e. `validFrom <= activeTo`). Combine with `activeFrom` for a full overlap window.
+          schema:
+            type: string
+            format: date
+          example: "2026-04-30"
         - name: includeExpired
           in: query
+          description: When `true`, includes offers marked as expired by the crawler.
           schema:
             type: boolean
             default: false
-          description: Include expired offers
+          example: false
+        - name: q
+          in: query
+          description: Full-text search query. Searches across `title`, `description`, and `merchant` fields using MongoDB text index.
+          schema:
+            type: string
+            minLength: 1
+          example: "dining discount"
+        - name: sort
+          in: query
+          description: |
+            Sort order for results.
+            - `latest` *(default)* — newest offers first (`createdAt` desc)
+            - `expiringSoon` — offers expiring within the next 3 days, sorted by `validUntil` asc
+          schema:
+            type: string
+            enum: [latest, expiringSoon]
+            default: latest
         - name: page
           in: query
+          description: Page number (1-based).
           schema:
             type: integer
             minimum: 1
             default: 1
+          example: 1
         - name: limit
           in: query
+          description: Number of results per page.
           schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 20
+          example: 20
       responses:
         '200':
-          description: Successful response
+          description: Paginated list of offers matching the filters.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OffersResponse'
+              examples:
+                default:
+                  $ref: '#/components/examples/OffersResponseExample'
         '400':
-          description: Invalid query parameters
+          description: One or more query parameters failed Zod validation.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              example:
+                error: "Invalid query parameters"
+                details:
+                  fieldErrors:
+                    bank: ["Invalid enum value. Expected 'commercial_bank' | 'sampath_bank' | 'hnb' | 'nations_trust_bank'"]
+                  formErrors: []
         '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalError'
 
+  # ─────────────────────────────────────────────
+  # GET /offers/{id}
+  # ─────────────────────────────────────────────
   /offers/{id}:
     get:
-      summary: Get a single offer
+      tags: [Offers]
+      summary: Get a single offer by ID
+      description: Returns a single offer document by its MongoDB `_id`. Returns 404 if the ID does not exist or is malformed.
+      operationId: getOfferById
       parameters:
         - name: id
           in: path
           required: true
+          description: MongoDB ObjectId string (24 hex characters).
           schema:
             type: string
+            pattern: '^[a-f0-9]{24}$'
+          example: "6612a3f4e1b2c3d4e5f60001"
       responses:
         '200':
-          description: Offer found
+          description: Offer found.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Offer'
         '404':
-          description: Offer not found
-
-  /health:
-    get:
-      summary: Health check
-      responses:
-        '200':
-          description: API is healthy
+          description: No offer found with the given ID.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  db:
-                    type: string
-                    example: connected
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not found"
+        '500':
+          $ref: '#/components/responses/InternalError'
 
+  # ─────────────────────────────────────────────
+  # GET /health
+  # ─────────────────────────────────────────────
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: |
+        Returns the current status of the API and its MongoDB connection.
+        Use this to verify the service is reachable and the database is connected.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                db: connected
+        '500':
+          description: Service is unhealthy (database unreachable).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: error
+                db: disconnected
+
+  # ─────────────────────────────────────────────
+  # POST /revalidate
+  # ─────────────────────────────────────────────
+  /revalidate:
+    post:
+      tags: [System]
+      summary: Invalidate the ISR page cache
+      description: |
+        Triggers on-demand revalidation of Next.js's Incremental Static Regeneration (ISR) cache
+        for the home page. Called automatically by the GitHub Actions crawler workflow after each
+        successful scrape so that users see fresh offer data immediately.
+
+        ## How it works
+
+        Next.js caches the fully-rendered home page HTML on Vercel's CDN edge. Without this
+        endpoint, the cached page is only regenerated every 3600 seconds (1 hour). This endpoint
+        marks the page as stale so the **next** request triggers a fresh server render — querying
+        MongoDB for the latest offers.
+
+        ## What it revalidates
+
+        | Call | Effect |
+        |------|--------|
+        | `revalidatePath("/")` | Marks the exact home page as stale |
+        | `revalidatePath("/", "layout")` | Marks all pages sharing the root layout as stale |
+
+        Neither call deletes the cached HTML immediately. The old HTML continues to be served
+        until the next real request triggers a background re-render.
+
+        ## Authentication
+
+        Secured by a Bearer token to prevent unauthorised cache-busting.
+        The token must match the `VERCEL_REVALIDATION_SECRET` environment variable set in Vercel.
+
+        ## Caller
+
+        ```yaml
+        # .github/workflows/crawler.yml
+        - name: Revalidate Vercel ISR cache
+          run: |
+            curl -X POST \
+              -H "Authorization: Bearer $VERCEL_REVALIDATION_SECRET" \
+              $VERCEL_APP_URL/api/revalidate
+        ```
+      operationId: revalidateCache
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cache successfully invalidated. The next request to the home page will trigger a fresh render.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevalidateResponse'
+              example:
+                revalidated: true
+                revalidatedAt: "2026-04-12T02:00:34.123Z"
+        '401':
+          description: |
+            Missing or incorrect Authorization header. Either `VERCEL_REVALIDATION_SECRET` is not
+            set in Vercel environment variables, or the token does not match.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unauthorized"
+        '500':
+          description: Revalidation failed due to an internal Next.js error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Revalidation failed"
+
+# ─────────────────────────────────────────────────
+# Components
+# ─────────────────────────────────────────────────
 components:
+
+  # ── Security ──────────────────────────────────
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Bearer token matching the `VERCEL_REVALIDATION_SECRET` environment variable.
+        Used only by `POST /revalidate`.
+
+  # ── Reusable Parameters ────────────────────────
+  parameters:
+    BankParam:
+      name: bank
+      in: query
+      description: Filter offers by issuing bank.
+      schema:
+        $ref: '#/components/schemas/Bank'
+      example: hnb
+
+    CategoryParam:
+      name: category
+      in: query
+      description: Filter offers by merchant category.
+      schema:
+        $ref: '#/components/schemas/Category'
+      example: dining
+
+    OfferTypeParam:
+      name: offerType
+      in: query
+      description: Filter by the type of discount or benefit.
+      schema:
+        $ref: '#/components/schemas/OfferType'
+      example: percentage
+
+  # ── Reusable Responses ─────────────────────────
+  responses:
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Internal server error"
+
+  # ── Schemas ────────────────────────────────────
   schemas:
+
     Bank:
       type: string
+      description: Bank identifier slug.
       enum:
         - commercial_bank
         - sampath_bank
         - hnb
         - nations_trust_bank
+      x-enumDescriptions:
+        commercial_bank: Commercial Bank of Ceylon
+        sampath_bank: Sampath Bank
+        hnb: Hatton National Bank
+        nations_trust_bank: Nations Trust Bank
 
     Category:
       type: string
+      description: Merchant category for the offer.
       enum:
         - dining
         - shopping
@@ -128,92 +397,275 @@ components:
         - online
         - other
 
+    OfferType:
+      type: string
+      description: |
+        Classification of the discount type. Determined automatically by the crawler's
+        `parseDiscount()` utility from the raw discount text.
+      enum:
+        - percentage
+        - cashback
+        - bogo
+        - installment
+        - fixed_amount
+        - points
+        - free_item
+        - other
+      x-enumDescriptions:
+        percentage: Percentage discount (e.g. "Up to 45% off")
+        cashback: Cashback on spend (e.g. "10% cashback")
+        bogo: Buy one get one free
+        installment: Interest-free installments (e.g. "0% interest – 12 months")
+        fixed_amount: Fixed amount off (e.g. "Rs. 1,000 off")
+        points: Loyalty points bonus (e.g. "Double Points")
+        free_item: Complimentary item (e.g. "Free dessert")
+        other: Offer type could not be classified
+
     Offer:
       type: object
+      description: A single credit card offer scraped from a bank's website.
       required:
         - _id
         - bank
         - bankDisplayName
         - title
+        - offerType
         - category
         - merchant
+        - isExpired
         - sourceUrl
         - scrapedAt
-        - isExpired
+        - createdAt
+        - updatedAt
       properties:
         _id:
           type: string
+          description: MongoDB ObjectId as a hex string.
+          pattern: '^[a-f0-9]{24}$'
+          example: "6612a3f4e1b2c3d4e5f60001"
         bank:
           $ref: '#/components/schemas/Bank'
         bankDisplayName:
           type: string
+          description: Human-readable bank name for display.
+          example: "Hatton National Bank"
         title:
           type: string
+          description: Offer title as scraped from the bank's website.
+          example: "Up to 15% Off Dining at The Kingsbury"
         description:
           type: string
-        discountValue:
+          nullable: true
+          description: Extended offer description. May contain HTML entities from source.
+          example: "Enjoy up to 15% discount on food and beverages at The Kingsbury Hotel."
+        offerType:
+          $ref: '#/components/schemas/OfferType'
+        discountPercentage:
+          type: number
+          nullable: true
+          description: |
+            Numeric discount value. Populated only when `offerType` is `percentage` or `cashback`.
+            Extracted from `discountLabel` by the crawler's `parseDiscount()` utility.
+          minimum: 0
+          maximum: 100
+          example: 15
+        discountLabel:
           type: string
+          nullable: true
+          description: Original human-readable discount string as scraped, before classification.
+          example: "Up to 15% off"
         category:
           $ref: '#/components/schemas/Category'
         merchant:
           type: string
+          description: Merchant or venue name.
+          example: "The Kingsbury"
         merchantLogoUrl:
           type: string
           format: uri
+          nullable: true
+          description: Absolute URL to the merchant's logo image. May be null if not provided by the bank.
+          example: "https://venus.hnb.lk/uploads/kingsbury-logo.jpg"
         validFrom:
           type: string
           format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when the offer becomes active. Null if not specified by the bank.
+          example: "2026-01-01T00:00:00.000Z"
         validUntil:
           type: string
           format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when the offer expires. Null if not specified by the bank.
+          example: "2026-06-30T23:59:59.000Z"
         isExpired:
           type: boolean
+          description: |
+            Set to `true` by the crawler when an offer is no longer returned by the bank's API
+            in the latest scrape. This is a soft-delete flag — the document remains in MongoDB
+            for historical tracking.
+          example: false
         sourceUrl:
           type: string
           format: uri
+          description: URL of the bank page where this offer was scraped from.
+          example: "https://www.hnb.lk/personal/cards/credit-cards/promotions"
         scrapedAt:
           type: string
           format: date-time
+          description: ISO 8601 timestamp of when this offer was last scraped and upserted.
+          example: "2026-04-12T02:00:10.000Z"
         createdAt:
           type: string
           format: date-time
+          description: ISO 8601 timestamp of when this offer document was first inserted into MongoDB.
+          example: "2026-03-01T08:00:00.000Z"
         updatedAt:
           type: string
           format: date-time
+          description: ISO 8601 timestamp of the last upsert from the crawler.
+          example: "2026-04-12T02:00:10.000Z"
+
+    Pagination:
+      type: object
+      required: [page, limit, total, totalPages]
+      properties:
+        page:
+          type: integer
+          description: Current page number (1-based).
+          example: 1
+        limit:
+          type: integer
+          description: Results per page.
+          example: 20
+        total:
+          type: integer
+          description: Total number of documents matching the filters.
+          example: 274
+        totalPages:
+          type: integer
+          description: Total number of pages (`ceil(total / limit)`).
+          example: 14
+
+    Timing:
+      type: object
+      description: Server-side timing breakdown for performance monitoring.
+      properties:
+        totalMs:
+          type: integer
+          description: Total time from request received to response sent (ms).
+          example: 142
+        connectMs:
+          type: integer
+          description: Time spent establishing or reusing the MongoDB connection (ms). High on cold start (~2000ms).
+          example: 98
+        queryMs:
+          type: integer
+          description: Time spent executing the MongoDB find + countDocuments (ms).
+          example: 44
 
     OffersResponse:
       type: object
-      required:
-        - data
-        - pagination
+      required: [data, pagination]
       properties:
         data:
           type: array
           items:
             $ref: '#/components/schemas/Offer'
+          description: Array of offer documents matching the filters for the requested page.
         pagination:
-          type: object
-          required:
-            - page
-            - limit
-            - total
-            - totalPages
-          properties:
-            page:
-              type: integer
-            limit:
-              type: integer
-            total:
-              type: integer
-            totalPages:
-              type: integer
+          $ref: '#/components/schemas/Pagination'
+        _timing:
+          $ref: '#/components/schemas/Timing'
+
+    HealthResponse:
+      type: object
+      required: [status, db]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          example: ok
+        db:
+          type: string
+          enum: [connected, disconnected]
+          example: connected
+
+    RevalidateResponse:
+      type: object
+      required: [revalidated, revalidatedAt]
+      properties:
+        revalidated:
+          type: boolean
+          description: Always `true` on success.
+          example: true
+        revalidatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the revalidation was triggered.
+          example: "2026-04-12T02:00:34.123Z"
 
     ErrorResponse:
       type: object
-      required:
-        - error
+      required: [error]
       properties:
         error:
           type: string
+          description: Human-readable error message.
+          example: "Internal server error"
+
+    ValidationErrorResponse:
+      type: object
+      required: [error, details]
+      properties:
+        error:
+          type: string
+          example: "Invalid query parameters"
         details:
           type: object
+          description: Zod flatten() output with field-level and form-level errors.
+          properties:
+            fieldErrors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+            formErrors:
+              type: array
+              items:
+                type: string
+
+  # ── Examples ───────────────────────────────────
+  examples:
+    OffersResponseExample:
+      summary: Typical paginated response
+      value:
+        data:
+          - _id: "6612a3f4e1b2c3d4e5f60001"
+            bank: hnb
+            bankDisplayName: "Hatton National Bank"
+            title: "Up to 15% Off Dining at The Kingsbury"
+            description: "Enjoy up to 15% discount on food and beverages."
+            offerType: percentage
+            discountPercentage: 15
+            discountLabel: "Up to 15% off"
+            category: dining
+            merchant: "The Kingsbury"
+            merchantLogoUrl: "https://venus.hnb.lk/uploads/kingsbury.jpg"
+            validFrom: "2026-01-01T00:00:00.000Z"
+            validUntil: "2026-06-30T23:59:59.000Z"
+            isExpired: false
+            sourceUrl: "https://www.hnb.lk/personal/cards/credit-cards/promotions"
+            scrapedAt: "2026-04-12T02:00:10.000Z"
+            createdAt: "2026-03-01T08:00:00.000Z"
+            updatedAt: "2026-04-12T02:00:10.000Z"
+        pagination:
+          page: 1
+          limit: 20
+          total: 274
+          totalPages: 14
+        _timing:
+          totalMs: 142
+          connectMs: 98
+          queryMs: 44
