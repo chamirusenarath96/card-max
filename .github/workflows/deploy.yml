@@ -60,7 +60,7 @@ jobs:
       - name: Promote preview to production
         id: promote
         run: |
-          vercel promote ${{ steps.deploy.outputs.preview_url }} --scope=${{ secrets.VERCEL_ORG_ID }} --token=${{ secrets.VERCEL_TOKEN }}
+          vercel promote ${{ steps.deploy.outputs.preview_url }} --scope=${{ secrets.VERCEL_ORG_ID }} --yes --token=${{ secrets.VERCEL_TOKEN }}
           PROD_URL="https://card-max.vercel.app"
           echo "url=$PROD_URL" >> $GITHUB_OUTPUT
         env:
