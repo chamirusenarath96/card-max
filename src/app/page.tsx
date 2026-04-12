@@ -1,8 +1,10 @@
 import { Suspense } from "react";
 import { FilterBar } from "@/components/filters";
-import { SearchBar } from "@/components/filters";
 import { OfferGrid } from "@/components/cards";
+import { HeroSearch } from "@/components/search/HeroSearch";
+import { SearchDrawer } from "@/components/search/SearchDrawer";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   NavigationMenu,
@@ -35,10 +37,8 @@ interface ApiResponse {
 }
 
 function getBaseUrl(): string {
-  // VERCEL_PROJECT_PRODUCTION_URL is the stable production domain (e.g. card-max.vercel.app)
-  // and is always publicly accessible. VERCEL_URL is the per-deployment preview URL which
-  // Vercel's deployment protection blocks with a 401, causing fetchOffers() to return empty.
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL)
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
@@ -69,25 +69,35 @@ async function fetchOffers(params: {
   });
 
   if (!res.ok) {
-    return {
-      data: [],
-      pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
-    };
+    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } };
   }
 
   return res.json();
 }
 
+const BANK_LABEL: Record<string, string> = {
+  commercial_bank: "Commercial Bank",
+  sampath_bank: "Sampath Bank",
+  hnb: "HNB",
+  nations_trust_bank: "Nations Trust Bank",
+};
+
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { data: offers, pagination } = await fetchOffers(params);
 
+  const hasActiveFilters =
+    params.bank || params.category || params.offerType ||
+    params.activeFrom || params.activeTo ||
+    (params.sort && params.sort !== "latest");
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Top bar */}
+      {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-3">
           <div className="text-xl font-bold tracking-tight">CardMax</div>
+
           <NavigationMenu className="hidden md:flex">
             <NavigationMenuList>
               <NavigationMenuItem>
@@ -110,38 +120,70 @@ export default async function HomePage({ searchParams }: PageProps) {
               </NavigationMenuItem>
             </NavigationMenuList>
           </NavigationMenu>
-          <div className="w-64">
-            <Suspense fallback={<Skeleton className="h-11 w-full rounded-full" />}>
-              <SearchBar initialQuery={params.q} />
-            </Suspense>
-          </div>
+
+          {/* Search drawer trigger — Ctrl+S shortcut */}
+          <Suspense fallback={<Skeleton className="h-9 w-32 rounded-full" />}>
+            <SearchDrawer initialQuery={params.q} />
+          </Suspense>
         </div>
       </header>
 
       <main>
-        {/* Hero */}
-        <header className="relative overflow-hidden bg-muted/50 px-6 py-16 lg:py-24">
-          <div className="relative z-10 mx-auto max-w-screen-xl">
-            <div className="text-center lg:text-left">
-              <Badge variant="secondary" className="mb-6 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-                Sri Lanka&apos;s Best Deals
-              </Badge>
-              <h1 className="mb-6 text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl">
-                Explore All <span className="text-primary">Offers</span>
-              </h1>
-              <p className="mb-8 max-w-xl text-lg font-medium text-muted-foreground md:text-xl">
-                Unlock exclusive deals and premium perks from Commercial Bank, Sampath, HNB &amp; Nations Trust Bank.
-              </p>
-            </div>
-          </div>
-          <div className="absolute top-0 right-0 h-full w-1/3 -skew-x-12 bg-primary/5" />
-          <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
-        </header>
+        {/* ── Hero: search + suggestions ───────────────────────────────── */}
+        <section
+          className="relative overflow-hidden bg-background px-6 py-20 lg:py-28"
+          data-testid="hero-section"
+        >
+          {/* Radial glow */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,hsl(var(--primary)/12%),transparent)]"
+          />
 
-        {/* Filters */}
-        <section className="border-y border-border bg-muted/30 px-6 py-10">
+          <div className="relative mx-auto max-w-4xl text-center">
+            <Badge
+              variant="secondary"
+              className="mb-6 px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+            >
+              Sri Lanka&apos;s Credit Card Offers
+            </Badge>
+
+            <h1 className="mb-5 text-5xl font-bold tracking-tight md:text-6xl lg:text-7xl">
+              Find the Best{" "}
+              <span className="text-primary">Card Deals</span>
+            </h1>
+
+            <p className="mx-auto mb-10 max-w-2xl text-lg text-muted-foreground">
+              Exclusive offers from Commercial Bank, Sampath, HNB &amp; Nations
+              Trust Bank — updated daily.
+            </p>
+
+            <Suspense
+              fallback={
+                <div className="flex flex-col items-center gap-4">
+                  <Skeleton className="h-14 w-full max-w-2xl rounded-full" />
+                  <div className="flex gap-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} className="h-9 w-20 rounded-full" />
+                    ))}
+                  </div>
+                </div>
+              }
+            >
+              <HeroSearch initialQuery={params.q} />
+            </Suspense>
+          </div>
+        </section>
+
+        <Separator />
+
+        {/* ── Filters ──────────────────────────────────────────────────── */}
+        <section
+          className="sticky top-[57px] z-40 border-b border-border bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+          data-testid="filter-section"
+        >
           <div className="mx-auto max-w-screen-xl">
-            <Suspense fallback={<Skeleton className="h-32 w-full rounded-xl" />}>
+            <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
               <FilterBar
                 activeBank={params.bank}
                 activeCategory={params.category}
@@ -154,44 +196,52 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
         </section>
 
-        {/* Grid */}
-        <section className="mx-auto max-w-screen-xl px-6 py-16">
-          <div className="mb-10 flex items-end justify-between gap-4">
+        {/* ── Offer grid ───────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-screen-xl px-6 py-14">
+          <div className="mb-8 flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-3xl font-bold tracking-tight md:text-4xl lg:text-5xl">
+              <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
                 {params.q
                   ? `Results for "${params.q}"`
                   : params.bank
                     ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
-                    : "All Offers"}
+                    : hasActiveFilters
+                      ? "Filtered Offers"
+                      : "All Offers"}
               </h2>
-              <p className="mt-2 font-medium text-muted-foreground">
-                {pagination.total} offer{pagination.total !== 1 ? "s" : ""} found
+              <p className="mt-1.5 text-sm font-medium text-muted-foreground">
+                {pagination.total !== undefined
+                  ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
+                  : "Browsing offers"}
               </p>
             </div>
-            <div className="hidden h-1 w-32 shrink-0 rounded-full bg-primary md:block" />
+            <div className="hidden h-1 w-24 shrink-0 rounded-full bg-primary md:block" />
           </div>
 
           <OfferGrid offers={offers} pagination={pagination} />
         </section>
 
-        {/* CTA */}
+        {/* ── CTA ──────────────────────────────────────────────────────── */}
         <section className="relative overflow-hidden bg-primary px-6 py-20 text-primary-foreground">
           <div className="relative z-10 mx-auto max-w-screen-xl text-center">
-            <h2 className="mb-6 text-3xl font-bold tracking-tight md:text-5xl lg:text-6xl">
-              Never Miss a <span className="text-primary-foreground/90 underline decoration-primary-foreground/30 underline-offset-4">Great Deal</span>
+            <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-5xl">
+              Never Miss a{" "}
+              <span className="underline decoration-primary-foreground/30 underline-offset-4">
+                Great Deal
+              </span>
             </h2>
-            <p className="mx-auto mb-10 max-w-2xl text-lg text-primary-foreground/80">
+            <p className="mx-auto max-w-xl text-lg text-primary-foreground/80">
               Browse offers from Sri Lanka&apos;s top banks, updated daily.
             </p>
           </div>
-          <div className="absolute top-0 right-0 h-full w-1/3 -skew-x-12 bg-primary-foreground/5" />
+          <div aria-hidden className="absolute top-0 right-0 h-full w-1/3 -skew-x-12 bg-primary-foreground/5" />
         </section>
       </main>
 
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-border bg-muted">
         <div className="mx-auto flex max-w-screen-2xl flex-col items-center justify-between gap-6 px-12 py-12 md:flex-row">
-          <div className="flex flex-col items-center gap-2 md:items-start">
+          <div className="flex flex-col items-center gap-1 md:items-start">
             <div className="text-lg font-bold tracking-tight">CardMax</div>
             <p className="text-center text-sm text-muted-foreground md:text-left">
               Sri Lanka&apos;s Credit Card Offers Aggregator
@@ -207,10 +257,3 @@ export default async function HomePage({ searchParams }: PageProps) {
     </div>
   );
 }
-
-const BANK_LABEL: Record<string, string> = {
-  commercial_bank: "Commercial Bank",
-  sampath_bank: "Sampath Bank",
-  hnb: "HNB",
-  nations_trust_bank: "Nations Trust Bank",
-};
