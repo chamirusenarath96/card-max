@@ -35,6 +35,10 @@ interface ApiResponse {
 }
 
 function getBaseUrl(): string {
+  // VERCEL_PROJECT_PRODUCTION_URL is the stable production domain (e.g. card-max.vercel.app)
+  // and is always publicly accessible. VERCEL_URL is the per-deployment preview URL which
+  // Vercel's deployment protection blocks with a 401, causing fetchOffers() to return empty.
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
