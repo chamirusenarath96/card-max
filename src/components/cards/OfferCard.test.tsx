@@ -47,7 +47,7 @@ describe("OfferCard", () => {
 
   it("shows offer type badge with percentage for percentage offers", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("15% SAVINGS");
+    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("15% OFF");
   });
 
   it("renders compact variant", () => {

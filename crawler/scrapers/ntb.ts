@@ -225,6 +225,8 @@ function parseSingleOffer(html: string, sourceUrl: string): Partial<OfferInput> 
   const pMatch = html.match(/<p[^>]*>([\s\S]{10,300}?)<\/p>/i);
   const description = pMatch ? cleanText(pMatch[1]!).substring(0, 300) : undefined;
 
+  const merchantLogoUrl = extractOgImage(html);
+
   return {
     bank: "nations_trust_bank",
     bankDisplayName: "Nations Trust Bank",
@@ -233,11 +235,23 @@ function parseSingleOffer(html: string, sourceUrl: string): Partial<OfferInput> 
     description,
     ...discount,
     category,
+    merchantLogoUrl,
     validFrom,
     validUntil,
     sourceUrl,
     scrapedAt: new Date(),
   };
+}
+
+/**
+ * Extract og:image — handles both attribute orderings in the <meta> tag.
+ */
+function extractOgImage(html: string): string | undefined {
+  const m1 = html.match(/<meta\b[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+  if (m1?.[1]) return m1[1];
+  const m2 = html.match(/<meta\b[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (m2?.[1]) return m2[1];
+  return undefined;
 }
 
 function extractTableCells(rowHtml: string): string[] {
