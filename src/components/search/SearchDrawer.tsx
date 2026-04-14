@@ -42,11 +42,19 @@ interface Props {
 
 export function SearchDrawer({ initialQuery = "" }: Props) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState(initialQuery);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // URL is the single source of truth — stays in sync with HeroSearch
+  const urlQuery = searchParams.get("q") ?? initialQuery;
+  const [query, setQuery] = useState(urlQuery);
   const { results, total, isLoading, isActive } = useSearchSuggestions(query);
+
+  // Sync local input whenever the URL q param changes (e.g. HeroSearch navigated)
+  useEffect(() => {
+    setQuery(urlQuery);
+  }, [urlQuery]);
 
   // Ctrl+S / ⌘S opens / closes the drawer
   useEffect(() => {
@@ -60,6 +68,10 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  /**
+   * Jump to a filter/category shortcut — preserves the current search query
+   * so filters layer on top of results (e.g. search "pizza" then jump to Dining).
+   */
   function navigate(params: Record<string, string | null>) {
     const p = new URLSearchParams(searchParams.toString());
     Object.entries(params).forEach(([k, v]) => {
@@ -72,13 +84,25 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
     setOpen(false);
   }
 
+  /**
+   * Every text search resets all active filters — filters are then applied
+   * on top of the search results, not carried over from a previous context.
+   */
+  function freshSearch(q: string) {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+    setOpen(false);
+  }
+
   function handleSearch() {
-    navigate({ q: query.trim() || null });
+    freshSearch(query); // new search always clears filters
   }
 
   function handleQuickSearch(q: string) {
     setQuery(q);
-    navigate({ q });
+    freshSearch(q); // quick-search chip also clears filters
   }
 
   function handleJump(params: Record<string, string>) {
@@ -87,7 +111,7 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
 
   function handleResultClick(title: string) {
     setQuery(title);
-    navigate({ q: title });
+    freshSearch(title); // result click = new intent, clear existing filters
   }
 
   return (
@@ -216,7 +240,7 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
                 <button
                   type="button"
                   data-testid="drawer-see-all"
-                  onClick={handleSearch}
+                  onClick={() => freshSearch(query)}
                   className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium text-primary hover:bg-accent"
                 >
                   See all {total} results

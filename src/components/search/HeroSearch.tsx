@@ -25,13 +25,21 @@ interface Props {
 }
 
 export function HeroSearch({ initialQuery = "" }: Props) {
-  const [query, setQuery] = useState(initialQuery);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // URL is the single source of truth — stays in sync with SearchDrawer
+  const urlQuery = searchParams.get("q") ?? initialQuery;
+  const [query, setQuery] = useState(urlQuery);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { results, total, isLoading, isActive } = useSearchSuggestions(query);
+
+  // Sync local input whenever the URL q param changes (e.g. SearchDrawer navigated)
+  useEffect(() => {
+    setQuery(urlQuery);
+  }, [urlQuery]);
 
   // Open or close dropdown based on whether the query is active
   useEffect(() => {
@@ -49,15 +57,20 @@ export function HeroSearch({ initialQuery = "" }: Props) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  /**
+   * Every search resets all active filters — filters are then applied on
+   * top of the search results, not carried over from a previous context.
+   */
   function pushSearch(q: string) {
     setDropdownOpen(false);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
-    else params.delete("q");
-    params.delete("page");
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
+
+  // Alias used by result-item / see-all clicks (same behaviour, clearer intent)
+  const freshSearch = pushSearch;
 
   function handleChip(chipParams: Record<string, string>) {
     setDropdownOpen(false);
@@ -68,7 +81,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
 
   function handleResultClick(title: string) {
     setQuery(title);
-    pushSearch(title);
+    freshSearch(title); // result click = new intent, clear existing filters
   }
 
   return (
@@ -158,7 +171,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
                 <button
                   type="button"
                   data-testid="search-see-all"
-                  onClick={() => pushSearch(query)}
+                  onClick={() => freshSearch(query)}
                   className="flex w-full items-center justify-center gap-1.5 border-t border-border px-4 py-3 text-sm font-medium text-primary hover:bg-accent"
                 >
                   See all {total} results for &ldquo;{query}&rdquo;

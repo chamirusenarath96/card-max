@@ -130,7 +130,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       <main>
         {/* ── Hero: search + suggestions ───────────────────────────────── */}
         <section
-          className="relative overflow-hidden bg-background px-6 py-20 lg:py-28"
+          className="relative bg-background px-6 py-20 lg:py-28"
           data-testid="hero-section"
         >
           {/* Radial glow */}
