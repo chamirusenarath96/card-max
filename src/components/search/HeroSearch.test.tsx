@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HeroSearch } from "./HeroSearch";
+import type { SuggestionItem } from "./useSearchSuggestions";
 
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -10,8 +11,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Default: hook returns no results (query too short or empty)
-const mockUseSearchSuggestions = vi.fn(() => ({
-  results: [],
+const mockUseSearchSuggestions = vi.fn((_query: string) => ({
+  results: [] as SuggestionItem[],
   total: 0,
   isLoading: false,
   isActive: false,

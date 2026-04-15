@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SearchDrawer } from "./SearchDrawer";
+import type { SuggestionItem } from "./useSearchSuggestions";
 
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -9,8 +10,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const mockUseSearchSuggestions = vi.fn(() => ({
-  results: [],
+const mockUseSearchSuggestions = vi.fn((_query: string) => ({
+  results: [] as SuggestionItem[],
   total: 0,
   isLoading: false,
   isActive: false,
