@@ -49,7 +49,7 @@ test.describe("Search — Hero bar", () => {
   });
 });
 
-test.describe("Search — Drawer (Ctrl+S)", () => {
+test.describe("Search — Drawer (Ctrl+K)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
   });
@@ -63,8 +63,8 @@ test.describe("Search — Drawer (Ctrl+S)", () => {
     await expect(page.getByTestId("search-drawer-input")).toBeVisible();
   });
 
-  test("Ctrl+S keyboard shortcut opens the search drawer", async ({ page }) => {
-    await page.keyboard.press("Control+s");
+  test("Ctrl+K keyboard shortcut opens the search drawer", async ({ page }) => {
+    await page.keyboard.press("Control+k");
     await expect(page.getByTestId("search-drawer-input")).toBeVisible();
   });
 

@@ -65,9 +65,9 @@ describe("SearchDrawer", () => {
     expect(screen.getByLabelText("Open search")).toBeInTheDocument();
   });
 
-  it("shows the Ctrl+S keyboard hint", () => {
+  it("shows the Ctrl+K keyboard hint", () => {
     render(<SearchDrawer />);
-    expect(screen.getByText("Ctrl+S")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl+K")).toBeInTheDocument();
   });
 
   it("drawer is closed by default — input not visible", () => {

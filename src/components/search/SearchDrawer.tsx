@@ -56,10 +56,10 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
     setQuery(urlQuery);
   }, [urlQuery]);
 
-  // Ctrl+S / ⌘S opens / closes the drawer
+  // Ctrl+K / ⌘K opens / closes the drawer
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setOpen((prev) => !prev);
       }
@@ -126,7 +126,7 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
           <Search className="size-3.5 shrink-0" aria-hidden />
           <span className="hidden sm:inline">Search</span>
           <kbd className="ml-1 hidden items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:flex">
-            Ctrl+S
+            Ctrl+K
           </kbd>
         </Button>
       </SheetTrigger>
