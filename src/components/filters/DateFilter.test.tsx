@@ -58,17 +58,17 @@ describe("DateFilter", () => {
   });
 
   it("shows clear button when activeFrom is set", () => {
-    render(<DateFilter activeFrom="2026-03-01" />);
+    render(<DateFilter activeFrom="2026-06-01" />);
     expect(screen.getByTestId("date-clear")).toBeInTheDocument();
   });
 
   it("shows clear button when activeTo is set", () => {
-    render(<DateFilter activeTo="2026-06-30" />);
+    render(<DateFilter activeTo="2026-12-31" />);
     expect(screen.getByTestId("date-clear")).toBeInTheDocument();
   });
 
   it("clears both date params when clear button is clicked", () => {
-    render(<DateFilter activeFrom="2026-03-01" activeTo="2026-12-31" />);
+    render(<DateFilter activeFrom="2026-06-01" activeTo="2026-12-31" />);
     fireEvent.click(screen.getByTestId("date-clear"));
     expect(mockPush).toHaveBeenCalledWith("/");
   });
