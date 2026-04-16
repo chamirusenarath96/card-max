@@ -26,7 +26,7 @@ describe("FilterBar", () => {
 
   it("shows no active-filter chips when no props are set", () => {
     render(<FilterBar />);
-    expect(screen.queryByRole("button", { name: /Remove/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove /i })).not.toBeInTheDocument();
   });
 
   it("shows a bank chip when activeBank is set", () => {
@@ -51,54 +51,54 @@ describe("FilterBar", () => {
 
   it("does not show a sort chip when activeSort is 'latest'", () => {
     render(<FilterBar activeSort="latest" />);
+    // "latest" is the default — no chip for it
     expect(screen.queryByText("Latest")).not.toBeInTheDocument();
   });
 
   it("shows a date chip when both activeFrom and activeTo are set", () => {
     render(<FilterBar activeFrom="2026-03-01" activeTo="2026-06-30" />);
-    expect(screen.getByText(/01 Mar/)).toBeInTheDocument();
+    expect(screen.getByText("01 Mar – 30 Jun 2026")).toBeInTheDocument();
   });
 
   it("shows a date chip with 'From ...' when only activeFrom is set", () => {
     render(<FilterBar activeFrom="2026-03-01" />);
-    expect(screen.getByText(/From 01 Mar/)).toBeInTheDocument();
+    expect(screen.getByText(/From 01 Mar 2026/)).toBeInTheDocument();
   });
 
   it("clicking remove on bank chip navigates without bank param", () => {
     render(<FilterBar activeBank="commercial_bank" />);
-    fireEvent.click(screen.getByRole("button", { name: /Remove Commercial Bank filter/i }));
+    fireEvent.click(screen.getByLabelText("Remove Commercial Bank filter"));
     expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("clicking remove on category chip navigates without category param", () => {
     render(<FilterBar activeCategory="dining" />);
-    fireEvent.click(screen.getByRole("button", { name: /Remove Dining filter/i }));
+    fireEvent.click(screen.getByLabelText("Remove Dining filter"));
     expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("clicking remove on offerType chip navigates without offerType param", () => {
     render(<FilterBar activeOfferType="cashback" />);
-    fireEvent.click(screen.getByRole("button", { name: /Remove Cashback filter/i }));
+    fireEvent.click(screen.getByLabelText("Remove Cashback filter"));
     expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("clicking remove on date chip navigates without date params", () => {
     render(<FilterBar activeFrom="2026-03-01" activeTo="2026-06-30" />);
-    const removeBtn = screen.getAllByRole("button", { name: /Remove/i })[0]!;
-    fireEvent.click(removeBtn);
+    fireEvent.click(screen.getByLabelText("Remove 01 Mar – 30 Jun 2026 filter"));
     expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   it("shows multiple chips when multiple filters are active", () => {
     render(
       <FilterBar
-        activeBank="commercial_bank"
+        activeBank="hnb"
         activeCategory="dining"
-        activeOfferType="cashback"
-      />,
+        activeOfferType="percentage"
+      />
     );
-    expect(screen.getByText("Commercial Bank")).toBeInTheDocument();
+    expect(screen.getByText("Hatton National Bank")).toBeInTheDocument();
     expect(screen.getByText("Dining")).toBeInTheDocument();
-    expect(screen.getByText("Cashback")).toBeInTheDocument();
+    expect(screen.getByText("% Discount")).toBeInTheDocument();
   });
 });

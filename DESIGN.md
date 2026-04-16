@@ -99,3 +99,70 @@ All filter changes reset `page` to avoid stale pagination.
 | `Badge` | Active filter count badge + filter chips |
 | `Label` | Section headings inside the drawer |
 | `Separator` | Visual dividers between filter sections |
+
+---
+
+## Search UI Design
+
+### Overview
+
+Search is split into two surfaces:
+
+1. **Hero search bar** — large, centered on the landing page, always visible. The primary entry point for new users.
+2. **Search drawer** — a `Sheet` (slides in from top) triggered by the "Search" button in the header or the `Ctrl+S` / `⌘S` keyboard shortcut. Contains a search input, popular search chips, and category jump shortcuts.
+
+### Components
+
+#### `HeroSearch`
+**Location:** `src/components/search/HeroSearch.tsx`
+
+- Full-width `<Input>` + "Search Now" `<Button>` row, max-width 2xl, centered
+- Hint text below: *"Try searching for 'pizza', 'cashback'..."*
+- Suggestion chip grid: clicking a chip instantly navigates — either sets `?q=`, `?category=`, `?offerType=`, or `?sort=`
+- Each chip has a `data-testid="suggestion-{label}"` for test targeting
+
+#### `SearchDrawer`
+**Location:** `src/components/search/SearchDrawer.tsx`
+
+- Trigger: outline rounded-full button in the header showing "Search" + `Ctrl+S` kbd hint
+- `Sheet side="top"` — slides down from top (familiar command-palette feel)
+- **Keyboard shortcut**: `Ctrl+S` / `⌘S` toggles open/close via `document.addEventListener('keydown')`
+- Inside: search input (auto-focused), popular search chips (set `?q=`), category jump chips (set filter params directly)
+- All navigation calls `router.push()` and closes the drawer
+
+### Design Decisions
+
+#### Why two search surfaces?
+The hero bar gives first-time visitors an obvious, frictionless entry point. The drawer is for power users who know what they want and don't want to scroll back to the top.
+
+#### Why `Sheet side="top"` for the drawer?
+Top-sliding drawers feel like command palettes (VS Code `Ctrl+P`, Linear `Ctrl+K`) — a well-understood pattern for "quick search/navigation". It also doesn't cover the content the user is looking at, unlike a right-side sheet.
+
+#### Why suggestion chips instead of autocomplete?
+At the current scale (~300 offers), the meaningful search space is small and well-defined (8 categories, 8 offer types, 4 banks). Pre-built suggestion chips are instant (zero API calls) and teach users the available filters. Autocomplete will be added when the dataset grows to warrant it (see roadmap).
+
+#### Ctrl+S instead of Ctrl+K
+`Ctrl+K` conflicts with browser "open link" on some platforms. `Ctrl+S` is free (native "Save" is suppressed by `e.preventDefault()` inside the keydown handler) and matches the header button label.
+
+### URL Parameter Mapping
+
+| Search action | URL result |
+|---|---|
+| Hero input → Search Now | `?q={text}` |
+| Hero "Dining" chip | `?category=dining` |
+| Hero "Cashback" chip | `?offerType=cashback` |
+| Hero "Expiring Soon" chip | `?sort=expiringSoon` |
+| Drawer search submit | `?q={text}` |
+| Drawer "Dining" jump | `?category=dining` |
+| Drawer popular search "cashback" | `?q=cashback` |
+
+### shadcn Components Used
+
+| Component | Purpose |
+|---|---|
+| `Sheet`, `SheetContent`, `SheetHeader`, `SheetTitle`, `SheetTrigger` | Search drawer container |
+| `Input` | Search text inputs |
+| `Button` | Search Now, submit, trigger |
+| `Separator` | Divider between sections in drawer |
+| `Badge` | "Sri Lanka's Credit Card Offers" hero badge |
+| `Skeleton` | Fallback while Suspense loads search components |

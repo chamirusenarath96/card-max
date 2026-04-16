@@ -26,23 +26,30 @@ describe("DateFilter", () => {
 
   it("shows placeholder text when no dates are set", () => {
     render(<DateFilter />);
-    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent("Select date range");
+    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent(
+      "Select date range"
+    );
   });
 
   it("shows 'From ...' label when only activeFrom is set", () => {
     render(<DateFilter activeFrom="2026-06-01" />);
-    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent("From 01 Jun 2026");
+    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent(
+      "From 01 Jun 2026"
+    );
   });
 
   it("shows 'Until ...' label when only activeTo is set", () => {
     render(<DateFilter activeTo="2026-12-31" />);
-    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent("Until 31 Dec 2026");
+    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent(
+      "Until 31 Dec 2026"
+    );
   });
 
   it("shows formatted range when both dates are set", () => {
     render(<DateFilter activeFrom="2026-03-01" activeTo="2026-06-30" />);
-    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent("01 Mar");
-    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent("30 Jun 2026");
+    expect(screen.getByTestId("date-range-trigger")).toHaveTextContent(
+      "01 Mar – 30 Jun 2026"
+    );
   });
 
   it("does not show clear button when no dates are set", () => {

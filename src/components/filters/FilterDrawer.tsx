@@ -9,7 +9,6 @@ import type { Bank } from "../../../specs/data/offer.schema";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -195,8 +194,6 @@ export function FilterDrawer({
             </div>
           </section>
 
-          <Separator />
-
           {/* Bank */}
           <section className="px-6 py-5">
             <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -237,8 +234,6 @@ export function FilterDrawer({
             </div>
           </section>
 
-          <Separator />
-
           {/* Date Range — inline calendar, no nested popover */}
           <section className="px-6 py-5">
             <div className="mb-3 flex items-center justify-between">
@@ -277,8 +272,6 @@ export function FilterDrawer({
             </div>
           </section>
 
-          <Separator />
-
           {/* Category */}
           <section className="px-6 py-5">
             <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -315,8 +308,6 @@ export function FilterDrawer({
               ))}
             </div>
           </section>
-
-          <Separator />
 
           {/* Offer Type */}
           <section className="px-6 py-5">
