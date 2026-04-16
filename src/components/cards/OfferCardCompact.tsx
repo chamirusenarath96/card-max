@@ -84,7 +84,7 @@ export function OfferCardCompact({ offer }: Props) {
 
             {/* Discount */}
             <DiscountDisplay
-              label={offer.discountLabel || badgeLabel}
+              label={badgeLabel}
               size="sm"
               className="mb-2"
             />

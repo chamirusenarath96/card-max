@@ -39,9 +39,14 @@ export function parseDiscount(raw: string | undefined | null): ParsedDiscount {
     return { offerType: "bogo", discountLabel: label };
   }
 
-  // 2. Installment / 0% interest
+  // 2. Installment / 0% interest — catches all common variants:
+  //    • "0% interest", "0% p.a.", "0% APR", "0% financing", "0% per annum"
+  //    • "interest-free" / "interest free" (no % prefix needed)
+  //    • "EasyPay", "Easy Pay", "Easy Payment Plan"
+  //    • "installment plan", "instalment scheme", "instalment facility" (UK spelling)
+  //    • "equal monthly instalments", "monthly installment"
   if (
-    /0\s*%\s*(interest|p\.?a\.?|installment|install)|easy\s*pay|installment\s*plan|equal\s*monthly/.test(
+    /0\s*%\s*(interest|p\.?a\.?|instal{1,2}ments?|financing|apr|per\s*ann?(?:um|ual)?)|interest[\s-]*free|easy[\s-]?pay(?:ment)?(?:\s*plan)?|instal{1,2}ments?\s*(?:plan|scheme|facility)|equal\s*monthly|monthly\s*instal{1,2}ment/.test(
       lower
     )
   ) {
