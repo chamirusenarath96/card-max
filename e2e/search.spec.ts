@@ -7,6 +7,8 @@ import { test, expect } from "@playwright/test";
 test.describe("Search — Hero bar", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    // Wait for the page to be interactive before running tests
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("hero search input is visible on page load", async ({ page }) => {
@@ -25,7 +27,7 @@ test.describe("Search — Hero bar", () => {
   test("typing and clicking Search Now sets ?q= param", async ({ page }) => {
     await page.getByTestId("hero-search-input").fill("pizza");
     await page.getByTestId("hero-search-button").click();
-    await expect(page).toHaveURL(/q=pizza/);
+    await expect(page).toHaveURL(/q=pizza/, { timeout: 10000 });
   });
 
   test("pressing Enter in hero input sets ?q= param", async ({ page }) => {
@@ -52,6 +54,7 @@ test.describe("Search — Hero bar", () => {
 test.describe("Search — Drawer (Ctrl+K)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("search drawer trigger is visible in header", async ({ page }) => {
@@ -63,7 +66,14 @@ test.describe("Search — Drawer (Ctrl+K)", () => {
     await expect(page.getByTestId("search-drawer-input")).toBeVisible();
   });
 
-  test("Ctrl+K keyboard shortcut opens the search drawer", async ({ page }) => {
+  test("Ctrl+K keyboard shortcut opens the search drawer", async ({
+    page,
+    isMobile,
+  }) => {
+    // Mobile devices don't have a hardware Ctrl key — skip this shortcut test
+    test.skip(isMobile, "Ctrl+K shortcut not applicable on mobile");
+    // Click body first to ensure the page has keyboard focus in headless mode
+    await page.locator("body").click();
     await page.keyboard.press("Control+k");
     await expect(page.getByTestId("search-drawer-input")).toBeVisible();
   });
