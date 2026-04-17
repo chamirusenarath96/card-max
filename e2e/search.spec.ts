@@ -15,18 +15,14 @@ test.describe("Search — Hero bar", () => {
     await expect(page.getByTestId("hero-search-input")).toBeVisible();
   });
 
-  test("'Search Now' button is visible", async ({ page }) => {
-    await expect(page.getByTestId("hero-search-button")).toBeVisible();
-  });
-
   test("suggestion chips are visible", async ({ page }) => {
     await expect(page.getByTestId("search-suggestions")).toBeVisible();
     await expect(page.getByTestId("suggestion-dining")).toBeVisible();
   });
 
-  test("typing and clicking Search Now sets ?q= param", async ({ page }) => {
+  test("typing and pressing Enter sets ?q= param", async ({ page }) => {
     await page.getByTestId("hero-search-input").fill("pizza");
-    await page.getByTestId("hero-search-button").click();
+    await page.getByTestId("hero-search-input").press("Enter");
     await expect(page).toHaveURL(/q=pizza/, { timeout: 10000 });
   });
 
@@ -93,8 +89,8 @@ test.describe("Search — Drawer (Ctrl+K)", () => {
   test("searching from drawer sets ?q= and closes drawer", async ({ page }) => {
     await page.getByTestId("search-drawer-trigger").click();
     await page.getByTestId("search-drawer-input").fill("keells");
-    await page.getByTestId("search-drawer-submit").click();
-    await expect(page).toHaveURL(/q=keells/);
+    await page.getByTestId("search-drawer-input").press("Enter");
+    await expect(page).toHaveURL(/q=keells/, { timeout: 10000 });
     await expect(page.getByTestId("search-drawer-input")).not.toBeVisible();
   });
 

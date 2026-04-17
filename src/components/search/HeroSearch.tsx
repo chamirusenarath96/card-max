@@ -3,7 +3,6 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { Search, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSearchSuggestions } from "./useSearchSuggestions";
 
@@ -33,8 +32,21 @@ export function HeroSearch({ initialQuery = "" }: Props) {
   const urlQuery = searchParams.get("q") ?? initialQuery;
   const [query, setQuery] = useState(urlQuery);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [placeholder, setPlaceholder] = useState("Search offers, merchants, or banks...");
   const containerRef = useRef<HTMLDivElement>(null);
   const { results, total, isLoading, isActive } = useSearchSuggestions(query);
+
+  // Shorter placeholder on small screens where input width is limited
+  useEffect(() => {
+    function updatePlaceholder() {
+      setPlaceholder(
+        window.innerWidth < 640 ? "Search offers..." : "Search offers, merchants, or banks...",
+      );
+    }
+    updatePlaceholder();
+    window.addEventListener("resize", updatePlaceholder);
+    return () => window.removeEventListener("resize", updatePlaceholder);
+  }, []);
 
   // Sync local input whenever the URL q param changes (e.g. SearchDrawer navigated)
   useEffect(() => {
@@ -87,8 +99,8 @@ export function HeroSearch({ initialQuery = "" }: Props) {
   return (
     <div className="flex flex-col items-center gap-5" data-testid="hero-search">
       {/* Search input row */}
-      <div className="flex w-full max-w-2xl items-center gap-3">
-        <div className="relative flex-1" ref={containerRef}>
+      <div className="w-full max-w-2xl">
+        <div className="relative" ref={containerRef}>
           <Search
             className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -103,14 +115,14 @@ export function HeroSearch({ initialQuery = "" }: Props) {
               if (e.key === "Escape") setDropdownOpen(false);
             }}
             onFocus={() => isActive && setDropdownOpen(true)}
-            placeholder="Search offers, merchants, or banks..."
+            placeholder={placeholder}
             className="h-14 rounded-full border-border bg-background pl-12 pr-4 text-base shadow-md focus-visible:ring-primary/50"
             aria-label="Search offers"
             aria-expanded={dropdownOpen}
             aria-autocomplete="list"
           />
 
-          {/* Live results dropdown */}
+          {/* Live results dropdown — shows as you type */}
           {dropdownOpen && (
             <div
               data-testid="search-dropdown"
@@ -180,15 +192,6 @@ export function HeroSearch({ initialQuery = "" }: Props) {
             </div>
           )}
         </div>
-
-        <Button
-          onClick={() => pushSearch(query)}
-          data-testid="hero-search-button"
-          size="lg"
-          className="h-14 shrink-0 rounded-full px-8 text-base font-semibold shadow-md"
-        >
-          Search Now
-        </Button>
       </div>
 
       {/* Example hint */}

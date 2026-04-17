@@ -149,31 +149,20 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="Search offers, merchants, banks..."
-              className="h-12 rounded-full pl-11 pr-28 text-sm"
+              placeholder="Search offers..."
+              className="h-12 rounded-full pl-11 pr-12 text-sm"
               aria-label="Search"
             />
-            <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
-              {query && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setQuery("")}
-                  className="size-8 text-muted-foreground"
-                  aria-label="Clear input"
-                >
-                  <X className="size-3.5" />
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={handleSearch}
-                data-testid="search-drawer-submit"
-                className="h-8 rounded-full px-4"
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+                aria-label="Clear input"
               >
-                Search
-              </Button>
-            </div>
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
         </SheetHeader>
 
