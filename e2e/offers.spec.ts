@@ -52,9 +52,10 @@ test.describe("Offer Listing (Feature 001)", () => {
     );
 
     await page.goto("/");
-    // Click a bank filter chip
+    // bank-filter-* lives inside the FilterDrawer Sheet — open it first
+    await page.getByTestId("filter-drawer-trigger").click();
     await page.getByTestId("bank-filter-commercial_bank").click();
-    await expect(page).toHaveURL(/bank=commercial_bank/);
+    await expect(page).toHaveURL(/bank=commercial_bank/, { timeout: 10000 });
   });
 
   test("empty state shown when no offers match filter", async ({ page }) => {
@@ -68,10 +69,18 @@ test.describe("Offer Listing (Feature 001)", () => {
   });
 
   test("hero section is visible on page load", async ({ page }) => {
+    await page.route("**/api/offers**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_RESPONSE) })
+    );
+    await page.goto("/");
     await expect(page.getByTestId("hero-section")).toBeVisible();
   });
 
   test("filter section is visible on page load", async ({ page }) => {
+    await page.route("**/api/offers**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_RESPONSE) })
+    );
+    await page.goto("/");
     await expect(page.getByTestId("filter-section")).toBeVisible();
   });
 });
