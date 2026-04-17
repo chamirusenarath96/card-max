@@ -121,12 +121,19 @@ On merge to `master` the CI pipeline runs:
 Job 1 (CI) → Job 2 (E2E) → Job 3 (Migrate DB) → Job 4 (Deploy)
 ```
 
-Job 3 executes `npm run migrate` against the Production MongoDB using the `MONGODB_URI`
-secret. If any migration exits non-zero, Job 3 fails, a GitHub Issue is created, and
+Job 3 (`npm run migrate`) connects to the Production MongoDB, checks the `migrations`
+collection for already-applied scripts, and runs only the pending ones in order.
+If any migration exits non-zero, Job 3 fails, a GitHub Issue is created, and
 Job 4 (Deploy) is blocked until the issue is fixed.
 
+The runner uses **MongoDB as the source of truth**, not git diff. This means:
+- Fresh environments run all scripts (nothing recorded yet)
+- Skipped deploys catch up — all pending scripts run in order
+- Cherry-picked commits are safe — already-recorded scripts are skipped
+- The "8 scripts, 3 already applied" case works correctly: runs the remaining 5
+
 You do **not** need to run the migration manually against production — the pipeline handles it.
-Running it locally beforehand (step 4 above) is optional but recommended to verify the output.
+Running it locally beforehand is optional but useful to verify count/sample output.
 
 ---
 
@@ -141,8 +148,10 @@ Running it locally beforehand (step 4 above) is optional but recommended to veri
 ## Notes
 
 - Scripts live in `scripts/` and are auto-discovered by `scripts/run-migrations.ts` (no registration needed)
-- Naming convention: `migrate-<description>.ts` — alphabetical order = run order
+- Naming convention: `migrate-<description>.ts` — alphabetical order = run order; prefix with a date (`migrate-2026-04-17-description.ts`) if strict ordering matters
+- The `migrations` collection in MongoDB tracks what has been applied — the runner records each script name after it exits 0
+- **Never delete migration files** — the collection records names; deleting a file and re-adding it with the same name causes it to be skipped permanently
 - `.env.local` must have `MONGODB_URI` set for local runs (same as the crawler)
 - Never hard-code connection strings — always read from `process.env.MONGODB_URI`
-- Migrations are one-way by design; if you need to roll back, write a reverse migration script
-- The CD pipeline (Job 3) runs all migrations automatically before every deploy to `master`
+- Migrations are one-way by design; to undo, write a new reverse migration script
+- The CD pipeline (Job 3) always runs before deploy — safe to have 0 pending scripts (runner exits 0 immediately)

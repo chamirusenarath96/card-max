@@ -788,33 +788,53 @@ They run automatically in the CD pipeline (Job 3) before every deploy.
 CI + E2E pass
       │
       ▼
-Job 3 — npm run migrate
+Job 3 — npm run migrate (scripts/run-migrations.ts)
       │
-      ├── scripts/run-migrations.ts discovers all scripts/migrate-*.ts (alphabetical order)
-      ├── Runs each script as a child process with MONGODB_URI from the Production secret
-      ├── Each script: count matching docs → print sample → updateMany → log result
-      ├── Stops on first failure and creates a GitHub Issue
+      ├── Connect to MongoDB
+      ├── Read `migrations` collection → set of already-applied script names
+      ├── Discover all scripts/migrate-*.ts (alphabetical order)
+      ├── Subtract applied set → pending list
+      │
+      ├── For each pending script:
+      │     ├── Spawn as child process with MONGODB_URI
+      │     ├── SUCCESS → insert { name, appliedAt } into `migrations` collection
+      │     └── FAILURE → stop, exit 1, create GitHub Issue, block deploy
+      │
       └── Deploy (Job 4) only starts when this job exits 0
 ```
 
-Migrations are **idempotent**: once applied, the filter matches nothing and the script exits
-cleanly — safe to re-run on every deploy without side-effects.
+The `migrations` collection in MongoDB is the **single source of truth** for what has been
+applied. This handles every tricky case correctly:
+
+| Scenario | git diff approach | DB-tracked approach |
+|----------|------------------|---------------------|
+| Normal deploy — 1 new migration | ✅ | ✅ |
+| 2 deploys skipped, 3 migrations accumulated | ❌ diff only sees last commit | ✅ runs all 3 pending |
+| Fresh / restored environment | ❌ no baseline to diff | ✅ empty collection → runs all |
+| Cherry-picked commit re-introduces a file | ❌ re-runs migration | ✅ already recorded → skipped |
+| 8 scripts, 3 already applied | ❌ can't know which 3 | ✅ runs remaining 5 in order |
 
 ### Writing a new migration
 
 1. Create `scripts/migrate-<short-description>.ts` (use the existing file as a template):
-   - Filter must be **specific** — never a blank `{}`
+   - Use a **specific filter** — never a blank `{}`
    - Print a count and a 5-row sample before writing
    - Use `OfferModel.updateMany` — never raw MongoDB
-   - Exit non-zero on error (the runner stops and blocks deploy)
+   - Exit non-zero on any error (the runner stops and blocks the deploy)
+   - **Do not** manually call `recordMigration` — the runner records it after the script exits 0
 
 2. `npm run type-check` — must pass clean
 
 3. Test locally: `npm run migrate` (requires `.env.local` with `MONGODB_URI`)
+   - The runner checks the local DB's `migrations` collection, so it only runs scripts not yet applied there
 
-4. Commit on the feature branch — the CD pipeline will run it automatically on merge to master
+4. Commit on the feature branch — the CD pipeline runs it automatically on merge to master
 
 The `run-migration` Claude skill (`.claude/commands/run-migration.md`) has the full template and checklist.
+
+> **Never delete migration files.** The `migrations` collection records names, not file contents.
+> Deleting a file and adding a new one with the same name will cause the new script to be skipped
+> (already recorded). If you need to undo a migration, write a new reverse migration.
 
 ### Migration registry
 
