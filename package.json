@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "crawler": "tsx crawler/run.ts"
+    "crawler": "tsx crawler/run.ts",
+    "migrate": "tsx scripts/migrate-installment-offers.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
