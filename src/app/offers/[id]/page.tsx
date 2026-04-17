@@ -4,6 +4,7 @@
  */
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -62,9 +63,9 @@ export default async function OfferDetailPage({ params }: PageProps) {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-3">
-          <a href="/" className="text-xl font-bold tracking-tight hover:opacity-80 transition-opacity">
+          <Link href="/" className="text-xl font-bold tracking-tight hover:opacity-80 transition-opacity">
             CardMax
-          </a>
+          </Link>
 
           <NavigationMenu className="hidden md:flex">
             <NavigationMenuList>
