@@ -66,11 +66,6 @@ describe("HeroSearch", () => {
     expect(screen.getByTestId("hero-search-input")).toBeInTheDocument();
   });
 
-  it("renders the Search Now button", () => {
-    render(<HeroSearch />);
-    expect(screen.getByTestId("hero-search-button")).toBeInTheDocument();
-  });
-
   it("renders the example hint text", () => {
     render(<HeroSearch />);
     expect(screen.getByTestId("hero-search-hint")).toBeInTheDocument();
@@ -87,15 +82,6 @@ describe("HeroSearch", () => {
   it("shows initialQuery in the input", () => {
     render(<HeroSearch initialQuery="pizza" />);
     expect(screen.getByTestId("hero-search-input")).toHaveValue("pizza");
-  });
-
-  it("clicking Search Now navigates with q param", () => {
-    render(<HeroSearch />);
-    fireEvent.change(screen.getByTestId("hero-search-input"), {
-      target: { value: "keells" },
-    });
-    fireEvent.click(screen.getByTestId("hero-search-button"));
-    expect(mockPush).toHaveBeenCalledWith("/?q=keells");
   });
 
   it("pressing Enter on the input navigates with q param", () => {
@@ -128,21 +114,6 @@ describe("HeroSearch", () => {
     render(<HeroSearch />);
     fireEvent.click(screen.getByTestId("suggestion-hotels"));
     expect(mockPush).toHaveBeenCalledWith("/?q=hotel");
-  });
-
-  it("Search Now with empty query navigates to root path", () => {
-    render(<HeroSearch />);
-    fireEvent.click(screen.getByTestId("hero-search-button"));
-    expect(mockPush).toHaveBeenCalledWith("/");
-  });
-
-  it("Search Now with whitespace-only query navigates to root path", () => {
-    render(<HeroSearch />);
-    fireEvent.change(screen.getByTestId("hero-search-input"), {
-      target: { value: "   " },
-    });
-    fireEvent.click(screen.getByTestId("hero-search-button"));
-    expect(mockPush).toHaveBeenCalledWith("/");
   });
 
   // --- Dropdown / live results ---

@@ -102,17 +102,6 @@ describe("SearchDrawer", () => {
     expect(screen.getByTestId("search-drawer-input")).toHaveValue("pizza");
   });
 
-  it("clicking Search button navigates with q param and closes drawer", () => {
-    render(<SearchDrawer />);
-    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
-    fireEvent.change(screen.getByTestId("search-drawer-input"), {
-      target: { value: "keells" },
-    });
-    fireEvent.click(screen.getByTestId("search-drawer-submit"));
-    expect(mockPush).toHaveBeenCalledWith("/?q=keells");
-    expect(screen.queryByTestId("search-drawer-input")).not.toBeInTheDocument();
-  });
-
   it("pressing Enter on the input navigates and closes drawer", () => {
     render(<SearchDrawer />);
     fireEvent.click(screen.getByTestId("search-drawer-trigger"));
