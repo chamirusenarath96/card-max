@@ -89,7 +89,7 @@ export function OfferCardExpanded({ offer }: Props) {
 
             {/* Discount — percentage in accent, descriptor word softer */}
             <DiscountDisplay
-              label={offer.discountLabel || badgeLabel}
+              label={badgeLabel}
               size="lg"
               className="mb-3"
             />

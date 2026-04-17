@@ -1,12 +1,11 @@
 "use client";
 
 /**
- * Smart offer image with four-level fallback:
+ * Smart offer image with three-level fallback:
  *
  *  1. Scraped / stored image URL  (merchantLogoUrl from DB)
  *  2. Clearbit Logo API           (fast, deterministic, works for known brands)
- *  3. AI-generated image          (Pollinations.ai — always produces something)
- *  4. Category icon               (Lucide icon on gradient background — always works)
+ *  3. Bank name + category icon   (Lucide icon on gradient — always works, no network)
  */
 import { useState } from "react";
 import Image from "next/image";
@@ -22,7 +21,7 @@ import {
   Tag,
 } from "lucide-react";
 import type { Offer } from "../../../specs/data/offer.schema";
-import { buildPollinationsUrl, buildClearbitUrl } from "../../../crawler/utils/logo";
+import { buildClearbitUrl } from "../../../crawler/utils/logo";
 
 // ── Category metadata ─────────────────────────────────────────────────────────
 
@@ -51,24 +50,22 @@ interface Props {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type Stage = "primary" | "clearbit" | "ai" | "icon";
+type Stage = "primary" | "clearbit" | "icon";
 
-export function OfferImage({ offer, bankColor, sizes, imgClassName }: Props) {
+export function OfferImage({ offer, sizes, imgClassName }: Props) {
   const [stage, setStage] = useState<Stage>(offer.merchantLogoUrl ? "primary" : "clearbit");
 
   const clearbitUrl = buildClearbitUrl(offer.merchant);
-  const aiUrl = buildPollinationsUrl(offer.merchant, offer.category);
 
   function advanceStage() {
     setStage((s) => {
       if (s === "primary")  return "clearbit";
-      if (s === "clearbit") return "ai";
-      if (s === "ai")       return "icon";
+      if (s === "clearbit") return "icon";
       return "icon";
     });
   }
 
-  // Stage 4 — category icon (no network, always renders)
+  // Stage 3 — bank name + category icon (no network, always renders)
   if (stage === "icon") {
     const meta = CATEGORY_META[offer.category] ?? CATEGORY_META.other!;
     const { Icon, gradient } = meta;
@@ -76,18 +73,18 @@ export function OfferImage({ offer, bankColor, sizes, imgClassName }: Props) {
       <div
         className={`absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br ${gradient}`}
       >
-        <Icon className="mb-2 size-12 text-white/90" strokeWidth={1.5} aria-hidden />
-        <span className="px-2 text-center text-xs font-semibold text-white/80">
+        <Icon className="mb-2 size-10 text-white/80" strokeWidth={1.5} aria-hidden />
+        <span className="px-3 text-center text-xs font-bold text-white leading-snug">
+          {offer.merchant}
+        </span>
+        <span className="mt-0.5 px-2 text-center text-[10px] font-semibold text-white/70">
           {offer.bankDisplayName}
         </span>
       </div>
     );
   }
 
-  const src =
-    stage === "primary"  ? offer.merchantLogoUrl! :
-    stage === "clearbit" ? clearbitUrl :
-    aiUrl;
+  const src = stage === "primary" ? offer.merchantLogoUrl! : clearbitUrl;
 
   return (
     <Image
@@ -97,7 +94,6 @@ export function OfferImage({ offer, bankColor, sizes, imgClassName }: Props) {
       sizes={sizes ?? "(max-width: 768px) 100vw, 33vw"}
       className={imgClassName ?? "object-contain p-3"}
       onError={advanceStage}
-      style={stage === "ai" ? { backgroundColor: `${bankColor}18` } : undefined}
       unoptimized={stage === "clearbit"} // Clearbit redirects; skip Next.js optimisation
     />
   );
