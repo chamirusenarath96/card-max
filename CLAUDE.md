@@ -111,16 +111,65 @@ spec(NNN):   spec file changes
 test:        test-only changes
 ```
 
-### Workflow
-1. Branch from master: `git checkout -b feat/NNN-slug`
-2. Implement, write tests, verify locally (see **Local Verification Gates** below)
-3. Push branch, open PR against master
-4. CI must be fully green before merge
-5. Squash-merge to keep master history clean
-6. Delete the feature branch after merge
+### Workflow — feature implementation (mandatory)
 
-> Automated agents (scheduled tasks) commit directly to master for spec-only
-> changes. All code changes must go through a branch + CI gate.
+> **Every feature implementation — including automated agents — must follow this flow.**
+> Direct commits to master are only allowed for spec-only or README-only changes.
+
+```
+1.  git checkout master && git pull origin master
+2.  git checkout -b feat/NNN-slug
+3.  Implement + write tests
+4.  Run local verification gates (type-check, lint, test, build — all must pass)
+5.  git push -u origin feat/NNN-slug
+6.  gh pr create --base master --title "feat(NNN): <feature name>" --body "..."
+7.  Poll CI until all jobs pass (see CI/CD Pipeline section)
+8.  gh pr merge --squash --delete-branch
+9.  git checkout master && git pull origin master
+```
+
+### Polling CI after a PR push
+
+After opening or pushing to a PR, check status periodically — do not assume it passed:
+
+```bash
+# Get the PR's head SHA
+SHA=$(gh pr view <PR-number> --repo chamirusenarath96/card-max --json headRefOid -q .headRefOid)
+
+# List all workflow runs for that SHA
+gh run list --repo chamirusenarath96/card-max --commit $SHA \
+  --json name,status,conclusion,databaseId \
+  --jq '.[] | "\(.name): \(.status) \(.conclusion) (id:\(.databaseId))"'
+```
+
+Poll every 60 seconds until every run shows `status=completed`.
+
+- All `conclusion=success` → merge the PR
+- Any `conclusion=failure` → fetch logs, fix, push to the branch, re-poll:
+  ```bash
+  gh run view <run-id> --repo chamirusenarath96/card-max --log-failed
+  ```
+
+**Never merge a PR while any job shows `status=in_progress` or `conclusion=failure`.**
+
+### PR description template
+
+```markdown
+## Summary
+- Implements `specs/features/NNN-slug.md`
+- <bullet: what was built>
+- <bullet: what tests were added>
+
+## Acceptance criteria
+- [x] AC1: ...
+- [x] AC2: ...
+
+## Test plan
+- Unit/component: <N> tests in `src/.../Foo.test.tsx`
+- E2E: <N> tests in `e2e/slug.spec.ts`
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
 
 ### Never commit
 - `.env.local` or any file containing secrets
