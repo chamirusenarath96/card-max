@@ -29,9 +29,7 @@ export function OfferCardCompact({ offer }: Props) {
 
       <Card className="relative h-full overflow-hidden rounded-xl border border-border/50 bg-card shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-lg">
         <a
-          href={offer.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={`/offers/${offer._id}`}
           data-testid="offer-card"
           className="flex h-full flex-col"
         >

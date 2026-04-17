@@ -34,9 +34,7 @@ export function OfferCardDefault({ offer }: Props) {
 
       <Card className="relative h-full overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
         <a
-          href={offer.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={`/offers/${offer._id}`}
           data-testid="offer-card"
           className="flex h-full flex-col"
         >
@@ -116,7 +114,7 @@ export function OfferCardDefault({ offer }: Props) {
                 "mb-3 mt-auto w-full justify-center font-semibold",
               )}
             >
-              View Card Details
+              View Offer Details
             </div>
 
             {/* Bottom row — bank + category */}

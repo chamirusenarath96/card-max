@@ -4,6 +4,7 @@ import { OfferCard } from "./OfferCard";
 import type { Offer } from "../../../specs/data/offer.schema";
 
 const BASE_OFFER: Offer = {
+  _id: "64f1a2b3c4d5e6f7a8b9c0d1",
   bank: "commercial_bank",
   bankDisplayName: "Commercial Bank",
   title: "Enjoy 15% off at Keells",
@@ -38,11 +39,11 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-category")).toHaveTextContent("Groceries");
   });
 
-  it("links to sourceUrl in a new tab", () => {
+  it("links to the offer detail page", () => {
     render(<OfferCard offer={BASE_OFFER} />);
     const link = screen.getByTestId("offer-card");
-    expect(link).toHaveAttribute("href", BASE_OFFER.sourceUrl);
-    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("href", `/offers/${BASE_OFFER._id}`);
+    expect(link).not.toHaveAttribute("target", "_blank");
   });
 
   it("shows offer type badge with percentage for percentage offers", () => {
@@ -62,9 +63,9 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-merchant")).toHaveTextContent("Keells Super");
   });
 
-  it("shows View Card Details button in default size", () => {
+  it("shows View Offer Details button in default size", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    expect(screen.getByText(/View Card Details/)).toBeInTheDocument();
+    expect(screen.getByText(/View Offer Details/)).toBeInTheDocument();
   });
 
   it("shows expiry badge when offer expires within 7 days", () => {

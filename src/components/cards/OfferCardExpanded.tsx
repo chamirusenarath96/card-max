@@ -30,9 +30,7 @@ export function OfferCardExpanded({ offer }: Props) {
 
       <Card className="relative h-full overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
         <a
-          href={offer.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={`/offers/${offer._id}`}
           data-testid="offer-card"
           className="flex h-full flex-col md:flex-row"
         >
@@ -142,7 +140,7 @@ export function OfferCardExpanded({ offer }: Props) {
                 "inline-flex self-start font-semibold",
               )}
             >
-              View Offer →
+              View Offer Details
             </div>
           </CardContent>
         </a>
