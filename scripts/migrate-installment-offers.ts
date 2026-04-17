@@ -1,5 +1,5 @@
 /**
- * One-off migration: re-classify legacy offers stored as
+ * Migration: re-classify legacy offers stored as
  *   offerType: "percentage", discountPercentage: 0
  * to
  *   offerType: "installment"
@@ -9,8 +9,17 @@
  * with discountPercentage=0 because the old regex only caught "0% interest" and
  * missed the "N months 0% installments" phrasing.
  *
- * This script is safe to re-run — it only touches documents that still match
- * the stale pattern and leaves everything else untouched.
+ * ── Idempotency guarantee ────────────────────────────────────────────────────
+ * Safety comes from the DATA FILTER, not from the migrations collection record.
+ * The filter { offerType: "percentage", discountPercentage: 0 } only matches
+ * records that have NOT been migrated yet. Once all records are updated to
+ * offerType: "installment", the filter matches 0 documents and updateMany
+ * is a no-op — no changes are made to the DB.
+ *
+ * This means even if the migrations collection record is accidentally deleted,
+ * re-running this script is completely safe: it finds nothing to update and
+ * exits cleanly without touching any data.
+ * ────────────────────────────────────────────────────────────────────────────
  *
  * Usage:
  *   npx tsx scripts/migrate-installment-offers.ts

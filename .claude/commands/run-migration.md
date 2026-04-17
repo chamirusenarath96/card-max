@@ -23,9 +23,16 @@ Create `scripts/migrate-<short-description>.ts` following this template:
 /**
  * Migration: <what this does and why>
  *
- * Safe to re-run — only touches documents that still match the stale pattern.
+ * ── Idempotency guarantee ──────────────────────────────────────────────────
+ * Safety comes from the DATA FILTER, not from the migrations collection record.
+ * The filter only matches documents in the OLD (pre-migration) state.
+ * Once migrated, those documents no longer match → updateMany is a no-op.
  *
- * Usage: npm run migrate:<short-description>
+ * This means: even if the migrations collection record is accidentally deleted
+ * and this script is re-run, it makes ZERO changes to the database.
+ * ──────────────────────────────────────────────────────────────────────────
+ *
+ * Usage: npx tsx scripts/migrate-<short-description>.ts
  */
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
@@ -40,21 +47,24 @@ async function main(): Promise<void> {
 
   await connectDb(mongoUri);
 
-  // 1. Dry-run count
-  const filter = { /* stale pattern */ };
+  // Filter MUST match only documents in the pre-migration state.
+  // After migration, zero documents should match this filter.
+  const filter = { /* pre-migration state only — be specific */ };
+
   const total = await OfferModel.countDocuments(filter);
   if (total === 0) {
-    console.log("[migrate] Nothing to do.");
+    // Either never needed to run, or already applied — either way, nothing to do.
+    console.log("[migrate] 0 records match — already applied or nothing to do.");
     await disconnectDb();
     return;
   }
   console.log(`[migrate] ${total} record(s) to update`);
 
-  // 2. Sample a few for review
+  // Sample a few so the CI log is human-readable
   const samples = await OfferModel.find(filter).limit(5).select("bank merchant title").lean();
   samples.forEach((s, i) => console.log(`  ${i + 1}. [${s.bank}] ${s.merchant} — "${s.title}"`));
 
-  // 3. Apply the update
+  // Apply the update
   const result = await OfferModel.updateMany(filter, { $set: { /* new values */ } });
   console.log(`[migrate] ✅ Updated ${result.modifiedCount} / ${total} record(s)`);
 
@@ -65,10 +75,11 @@ main().catch(err => { console.error(err); process.exit(1); });
 ```
 
 **Rules:**
-- Always print a count and samples before writing — gives a visual sanity check
-- Always use a specific `filter` so the update is targeted, never a blanket `{}`
-- Make the script idempotent — documents already migrated must not match the filter again
+- The `filter` is the idempotency contract — it must match ONLY documents in the pre-migration state; after migration, 0 documents should match it
+- Never use a blank filter `{}` — a mistake there would rewrite the entire collection
+- Always print count + samples before writing — gives a visual sanity check in CI logs
 - Use `OfferModel.updateMany` (not raw MongoDB) to stay within the Mongoose abstraction
+- Do **not** check the `migrations` collection yourself — the runner handles tracking; your script only cares about data state
 
 ### 2. Register the npm script
 
@@ -150,6 +161,7 @@ Running it locally beforehand is optional but useful to verify count/sample outp
 - Scripts live in `scripts/` and are auto-discovered by `scripts/run-migrations.ts` (no registration needed)
 - Naming convention: `migrate-<description>.ts` — alphabetical order = run order; prefix with a date (`migrate-2026-04-17-description.ts`) if strict ordering matters
 - The `migrations` collection in MongoDB tracks what has been applied — the runner records each script name after it exits 0
+- **Idempotency lives in the data filter, not the migrations record** — if a record is accidentally deleted, re-running the script must still be safe because 0 documents match the pre-migration filter
 - **Never delete migration files** — the collection records names; deleting a file and re-adding it with the same name causes it to be skipped permanently
 - `.env.local` must have `MONGODB_URI` set for local runs (same as the crawler)
 - Never hard-code connection strings — always read from `process.env.MONGODB_URI`
