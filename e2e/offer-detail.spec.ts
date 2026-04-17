@@ -52,10 +52,8 @@ test.describe("Offer Detail — 404", () => {
     await page.goto(`/offers/${INVALID_ID}`);
     await page.waitForLoadState("domcontentloaded");
 
-    // Next.js calls notFound() for 404/400 → our not-found.tsx renders
-    // Use role heading to avoid strict-mode conflict with the <title> tag
-    const notFoundHeading = page.getByRole("heading", { name: /offer not found/i });
-    const notFoundSection = page.getByTestId("offer-not-found");
-    await expect(notFoundHeading.or(notFoundSection)).toBeVisible({ timeout: 8000 });
+    // Next.js calls notFound() for 400/404 → our not-found.tsx renders,
+    // which has data-testid="offer-not-found" on its root element.
+    await expect(page.getByTestId("offer-not-found")).toBeVisible({ timeout: 8000 });
   });
 });
