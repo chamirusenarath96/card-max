@@ -1076,6 +1076,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 
 #### ✅ Recently completed
 
+- [x] **Offer listing page (spec 001)** — responsive grid with bank/category filtering, loading skeleton, empty state, pagination, expiry badges; all spec ACs verified with unit + E2E tests
 - [x] **Pagination controls** — prev/next buttons with page count in FilterBar
 - [x] **Search UI** — hero search bar (`HeroSearch`) + keyboard-triggered search drawer (`SearchDrawer`, `Ctrl+K`)
 - [x] **Live search suggestions** — typeahead dropdown powered by `/api/offers?q=` with debounce
