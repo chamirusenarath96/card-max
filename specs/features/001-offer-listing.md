@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Display all current credit card offers from Sri Lankan banks in a filterable, searchable grid. Users can quickly find relevant offers by bank, category, or keyword.

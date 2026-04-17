@@ -83,4 +83,18 @@ test.describe("Offer Listing (Feature 001)", () => {
     await page.goto("/");
     await expect(page.getByTestId("filter-section")).toBeVisible();
   });
+
+  test("expired offers not shown on initial load - no includeExpired param in default request", async ({ page }) => {
+    let capturedUrl = "";
+    await page.route("**/api/offers**", (route) => {
+      capturedUrl = route.request().url();
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_RESPONSE) });
+    });
+
+    await page.goto("/");
+    const grid = page.getByTestId("offer-grid");
+    const notFound = page.getByTestId("empty-state");
+    await expect(grid.or(notFound)).toBeVisible({ timeout: 10000 });
+    expect(capturedUrl).not.toContain("includeExpired=true");
+  });
 });

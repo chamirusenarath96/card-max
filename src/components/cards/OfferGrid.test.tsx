@@ -54,4 +54,9 @@ describe("OfferGrid", () => {
     render(<OfferGrid offers={[MOCK_OFFER]} pagination={pagination} />);
     expect(screen.getByTestId("pagination-controls")).toBeInTheDocument();
   });
+
+  it("shows skeleton while loading", () => {
+    render(<OfferGrid offers={[]} isLoading />);
+    expect(screen.getByTestId("offer-skeleton")).toBeInTheDocument();
+  });
 });

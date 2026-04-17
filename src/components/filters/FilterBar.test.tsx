@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@/test-utils";
+import { render, screen, fireEvent, waitFor } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FilterBar } from "./FilterBar";
 
@@ -100,5 +100,15 @@ describe("FilterBar", () => {
     expect(screen.getByText("Hatton National Bank")).toBeInTheDocument();
     expect(screen.getByText("Dining")).toBeInTheDocument();
     expect(screen.getByText("% Discount")).toBeInTheDocument();
+  });
+
+  it("filter by bank calls router with correct bank param", async () => {
+    render(<FilterBar />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const bankBtn = await screen.findByTestId("bank-filter-commercial_bank");
+    fireEvent.click(bankBtn);
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"))
+    );
   });
 });
