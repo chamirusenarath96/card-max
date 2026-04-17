@@ -1,65 +1,106 @@
 /**
  * Merchant logo / image resolution utilities.
  *
- * Resolution order:
- *   1. Use the URL already scraped from the bank page (if any)
- *   2. Try Clearbit Logo API — works well for globally-known brands
- *   3. Generate an AI image via Pollinations.ai — always succeeds, based on
- *      the offer's title + merchant + category description
+ * Resolution order (client-side fallback chain in OfferImage.tsx):
+ *   1. URL already scraped from the bank page
+ *   2. Clearbit Logo API  — deterministic, fast, works for known brands
+ *   3. Bank name + category icon — rendered client-side, no network required
  *
- * Pollinations.ai is free with no API key and produces a stable URL from the
- * same prompt, so the generated image is deterministic for a given offer.
+ * For Sri Lankan merchants that Clearbit doesn't know about, we maintain a
+ * curated domain map so Clearbit can still resolve the correct logo.
  */
 
-/** Category → human-readable scene description for the AI prompt */
-const CATEGORY_SCENE: Record<string, string> = {
-  dining:        "restaurant meal food",
-  shopping:      "retail shopping store",
-  travel:        "travel vacation hotel",
-  fuel:          "petrol fuel station",
-  groceries:     "supermarket groceries",
-  entertainment: "entertainment cinema concert",
-  health:        "health wellness pharmacy",
-  online:        "online shopping ecommerce",
-  other:         "promotional offer deal",
+// ── Curated Sri Lankan merchant domains ─────────────────────────────────────
+
+/**
+ * Maps normalised merchant name fragments → their actual website domain.
+ * Keys are lowercase, spaces stripped, punctuation removed.
+ * Clearbit Logo API (`logo.clearbit.com/{domain}`) uses this to resolve logos.
+ */
+const MERCHANT_DOMAINS: Record<string, string> = {
+  // Supermarkets / Groceries
+  keells:              "keells.com",
+  keellssuper:         "keells.com",
+  cargills:            "cargillsceylon.com",
+  cargillsfoodcity:    "cargillsceylon.com",
+  foodcity:            "cargillsceylon.com",
+  arpico:              "arpico.lk",
+  laugfs:              "laugfs.com",
+  sathosa:             "coop.lk",
+
+  // Fast food / Dining
+  pizzahut:            "pizzahut.com",
+  kfc:                 "kfc.com",
+  mcdonalds:           "mcdonalds.com",
+  burgerking:          "burgerking.com",
+  dominos:             "dominos.com",
+  subway:              "subway.com",
+  starbucks:           "starbucks.com",
+  nandos:              "nandos.com",
+
+  // Hotels / Travel
+  cinnamongrand:       "cinnamonhotels.com",
+  cinnamonlakeside:    "cinnamonhotels.com",
+  cinnamonbey:         "cinnamonhotels.com",
+  cinnamon:            "cinnamonhotels.com",
+  shangrila:           "shangri-la.com",
+  hilton:              "hilton.com",
+  marriott:            "marriott.com",
+  taj:                 "tajhotels.com",
+  jetwing:             "jetwinghotels.com",
+  galadari:            "galadarihotel.com",
+  kingsbury:           "thekingsburyhotel.com",
+
+  // Airlines
+  srilankanairlines:   "srilankan.com",
+  srilankan:           "srilankan.com",
+
+  // Retail / Shopping
+  odel:                "odel.lk",
+  softlogic:           "softlogicholdings.lk",
+  singer:              "singersl.com",
+  abans:               "abans.lk",
+  damro:               "damro.lk",
+  hameedia:            "hameedia.com",
+  dialog:              "dialog.lk",
+  mobitel:             "mobitel.lk",
+
+  // Fuel
+  ceypetco:            "ceypetco.gov.lk",
 };
 
-/**
- * Turns a merchant name into a best-effort domain guess for Clearbit.
- * e.g. "Pizza Hut"   → "pizzahut.com"
- *      "Cinnamon Grand" → "cinnamongrand.com"
- */
-function guessDomain(merchant: string): string {
-  return merchant
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, "")  // strip punctuation
-    .trim()
-    .replace(/\s+/g, "")         // remove spaces
-    + ".com";
+/** Normalise a merchant name to a lookup key */
+function normaliseName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Derive the best Clearbit domain for a merchant */
+export function resolveMerchantDomain(merchant: string): string {
+  const key = normaliseName(merchant);
+
+  // Exact match
+  if (MERCHANT_DOMAINS[key]) return MERCHANT_DOMAINS[key]!;
+
+  // Partial match (e.g. "Keells Super Nugegoda" → key starts with "keells")
+  for (const [fragment, domain] of Object.entries(MERCHANT_DOMAINS)) {
+    if (key.startsWith(fragment) || key.includes(fragment)) return domain;
+  }
+
+  // Fallback: guess domain from merchant name
+  return guessDomain(merchant);
 }
 
 /**
- * Build a Pollinations.ai URL that generates a relevant image for the offer.
- * The URL is deterministic (same inputs → same image) so it stays stable
- * across re-scrapes. Width/height match the default card image area.
+ * Build a Clearbit Logo API URL for a given merchant.
+ * Returns a 404 for unknowns — OfferImage.tsx catches this and advances to AI.
  */
-export function buildPollinationsUrl(
-  merchant: string,
-  category: string,
-): string {
-  const scene = CATEGORY_SCENE[category] ?? "promotional offer";
-  const prompt = encodeURIComponent(
-    `${merchant} ${scene} professional marketing photo, clean background, no text`
-  );
-  // seed derived from merchant name for determinism
-  const seed = merchant.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return `https://image.pollinations.ai/prompt/${prompt}?width=640&height=360&seed=${seed}&nologo=true`;
+export function buildClearbitUrl(merchant: string): string {
+  const domain = resolveMerchantDomain(merchant);
+  return `https://logo.clearbit.com/${domain}`;
 }
 
-/**
- * Verify a URL is reachable with a HEAD request (returns true if HTTP 2xx).
- * Times out quickly so it doesn't slow the crawler too much.
- */
+// ── Scrape-time resolver ──────────────────────────────────────────────────────
+
 async function isReachable(url: string, timeoutMs = 3000): Promise<boolean> {
   try {
     const controller = new AbortController();
@@ -73,35 +114,36 @@ async function isReachable(url: string, timeoutMs = 3000): Promise<boolean> {
 }
 
 /**
- * Resolve the best available image URL for a merchant offer.
- *
- * @param existingUrl  - URL already scraped from the bank page (may be undefined)
- * @param merchant     - Merchant name (e.g. "Pizza Hut")
- * @param category     - Offer category (e.g. "dining")
- * @param title        - Full offer title for AI prompt context
- * @returns            - A valid image URL, always falls through to Pollinations
+ * Resolve the best available image URL for a merchant at scrape time.
+ * Falls through: scraped URL → Clearbit.
+ * If neither is reachable, returns undefined — OfferImage renders the
+ * bank name + category icon fallback client-side.
  */
 export async function resolveMerchantImage(
   existingUrl: string | undefined,
   merchant: string,
-  category: string,
-): Promise<string> {
-  // 1. Use scraped URL if it's reachable
-  if (existingUrl) {
-    const ok = await isReachable(existingUrl);
-    if (ok) return existingUrl;
-    console.warn(`[logo] Scraped URL unreachable, trying fallbacks: ${existingUrl}`);
-  }
+): Promise<string | undefined> {
+  if (existingUrl && (await isReachable(existingUrl))) return existingUrl;
+  if (existingUrl) console.warn(`[logo] Scraped URL unreachable: ${existingUrl}`);
 
-  // 2. Try Clearbit logo (great for globally-known brands)
-  const clearbitUrl = `https://logo.clearbit.com/${guessDomain(merchant)}`;
+  const clearbitUrl = buildClearbitUrl(merchant);
   if (await isReachable(clearbitUrl)) {
     console.log(`[logo] Clearbit logo found for ${merchant}`);
     return clearbitUrl;
   }
 
-  // 3. Fallback: AI-generated image via Pollinations.ai (always succeeds)
-  const pollinationsUrl = buildPollinationsUrl(merchant, category);
-  console.log(`[logo] Using Pollinations.ai image for ${merchant}`);
-  return pollinationsUrl;
+  console.log(`[logo] No logo found for ${merchant} — will use icon fallback`);
+  return undefined;
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function guessDomain(merchant: string): string {
+  return (
+    merchant
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, "")
+      .trim()
+      .replace(/\s+/g, "") + ".com"
+  );
 }

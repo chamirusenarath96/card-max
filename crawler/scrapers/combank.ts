@@ -137,11 +137,8 @@ function parseDetailPage(
   const { validFrom, validUntil } = extractDates(html);
   const description = extractDescription(html, cleanTitle);
 
-  // Image: look for og:image or the main offer image
-  // Must decode HTML entities (&amp; → &) and validate before use
-  const imageMatch = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)
-    ?? html.match(/<img[^>]+src="(https:\/\/s3[^"]+)"/i);
-  const merchantLogoUrl = toValidUrl(imageMatch ? imageMatch[1] : undefined);
+  // Image: try og:image (handles both attribute orderings), then any CDN img
+  const merchantLogoUrl = toValidUrl(extractOgImage(html) ?? extractFeaturedImage(html));
 
   return {
     bank: "commercial_bank",
@@ -251,6 +248,41 @@ function detectCategoryFromSlug(slug: string): OfferInput["category"] {
   if (/online/.test(slug)) return "online";
   if (/shopping/.test(slug)) return "shopping";
   return "other";
+}
+
+/**
+ * Extract og:image — handles both attribute orderings in the <meta> tag.
+ */
+/**
+ * Extract og:image — handles both attribute orderings.
+ * Only returns the value if it is an absolute URL; ComBank sets og:image to a
+ * site-wide relative path (/assets/…) on generic pages, which we ignore.
+ */
+function extractOgImage(html: string): string | undefined {
+  const candidates: (string | undefined)[] = [
+    html.match(/<meta\b[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1],
+    html.match(/<meta\b[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1],
+  ];
+  // Only return absolute URLs — ignore relative paths like /assets/images/og/og.jpg
+  return candidates.find((u) => u && /^https?:\/\//i.test(u));
+}
+
+/**
+ * Extract the most relevant absolute image from the page HTML.
+ * Prefers CDN URLs that look like offer / promotion images, then falls back
+ * to the first absolute <img src>.
+ */
+function extractFeaturedImage(html: string): string | undefined {
+  const imgRe = /<img\b[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi;
+  const srcs: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = imgRe.exec(html)) !== null && srcs.length < 20) {
+    if (m[1]) srcs.push(m[1]);
+  }
+  // Prefer URLs whose path clearly belongs to an offer / promotion
+  return (
+    srcs.find((u) => /offers?|promo|shares|banner|campaign/i.test(u)) ?? srcs[0]
+  );
 }
 
 /**

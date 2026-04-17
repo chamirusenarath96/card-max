@@ -12,15 +12,16 @@ export const CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+/** User-facing label shown in the badge for each offer type */
 export const OFFER_TYPE_BADGE_LABEL: Record<OfferType, string> = {
-  percentage: "SAVINGS",
-  cashback: "CASH BACK",
-  bogo: "BOGO",
-  installment: "0% PLANS",
+  percentage:   "OFF",
+  cashback:     "CASHBACK",
+  bogo:         "BUY 1 GET 1",
+  installment:  "INSTALLMENT",
   fixed_amount: "FIXED OFF",
-  points: "POINTS BOOST",
-  free_item: "FREEBIE",
-  other: "OFFER",
+  points:       "POINTS",
+  free_item:    "FREE ITEM",
+  other:        "SPECIAL OFFER",
 };
 
 export type CardSize = "compact" | "default" | "expanded";
@@ -36,7 +37,30 @@ export function getExpiryInfo(validUntil?: Date | string): { label: string; isEx
   return null;
 }
 
+/**
+ * Returns the badge label for an offer.
+ * Percentage prefix is only shown for `percentage` and `cashback` types
+ * with a meaningful positive value — avoids showing "0% INSTALLMENT" etc.
+ *
+ * Edge case: `offerType === "percentage"` with `discountPercentage === 0` means
+ * the offer was misclassified by an older scraper (e.g. "0% installments for 6 months"
+ * before the generalised installment regex landed). Treat it as an installment offer
+ * so the badge shows "INSTALLMENT" instead of "OFF".
+ */
 export function getBadgeLabel(offerType: OfferType, discountPercentage?: number): string {
+  // Legacy mis-classification: percentage type with 0% → really an installment offer
+  if (offerType === "percentage" && discountPercentage === 0) {
+    return OFFER_TYPE_BADGE_LABEL["installment"];
+  }
+
   const base = OFFER_TYPE_BADGE_LABEL[offerType];
-  return discountPercentage != null ? `${discountPercentage}% ${base}` : base;
+  if (
+    (offerType === "percentage" || offerType === "cashback") &&
+    discountPercentage !== undefined &&
+    discountPercentage !== null &&
+    discountPercentage > 0
+  ) {
+    return `${discountPercentage}% ${base}`;
+  }
+  return base;
 }

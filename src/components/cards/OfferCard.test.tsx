@@ -48,7 +48,7 @@ describe("OfferCard", () => {
 
   it("shows offer type badge with percentage for percentage offers", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("15% SAVINGS");
+    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("15% OFF");
   });
 
   it("renders compact variant", () => {
@@ -76,10 +76,25 @@ describe("OfferCard", () => {
   });
 
   it("shows a category icon fallback when no logo URL", () => {
-    // OfferImage cycles: primary (none) → AI → icon fallback.
-    // With no merchantLogoUrl the AI stage loads a <img> pointing at Pollinations.
+    // OfferImage cycles: primary (none) → Clearbit → icon fallback.
     // We verify the card still renders without crashing.
     render(<OfferCard offer={BASE_OFFER} />);
     expect(screen.getByTestId("offer-card")).toBeInTheDocument();
+  });
+
+  it('shows INSTALLMENT badge for percentage offer with 0% discount (legacy mis-classification)', () => {
+    // Old scraper data stored "0% installments for 6 months" as offerType="percentage",
+    // discountPercentage=0 before the generalised installment regex was added.
+    // getBadgeLabel must return "INSTALLMENT" instead of "OFF" for these offers.
+    const installmentOffer: Offer = {
+      ...BASE_OFFER,
+      title: "Up to 06 months 0% installments at MAHK Premium Store",
+      offerType: "percentage",
+      discountPercentage: 0,
+      discountLabel: "0% installments for 06 months",
+    };
+    render(<OfferCard offer={installmentOffer} />);
+    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("INSTALLMENT");
+    expect(screen.getByTestId("offer-type-badge")).not.toHaveTextContent("OFF");
   });
 });

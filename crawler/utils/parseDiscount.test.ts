@@ -59,14 +59,40 @@ describe("parseDiscount", () => {
     expect(parseDiscount("Buy 2 Get 1").offerType).toBe("bogo");
   });
 
-  it("classifies installment offers", () => {
+  it("classifies installment offers — 0% interest variants", () => {
     const result = parseDiscount("0% interest – 12 months");
     expect(result.offerType).toBe("installment");
     expect(result.discountPercentage).toBe(0);
+
+    expect(parseDiscount("0% p.a. for 24 months").offerType).toBe("installment");
+    expect(parseDiscount("0% APR over 36 months").offerType).toBe("installment");
+    expect(parseDiscount("0% financing for 6 months").offerType).toBe("installment");
+    expect(parseDiscount("0% per annum for 12 months").offerType).toBe("installment");
+    expect(parseDiscount("0 % interest for 60 months").offerType).toBe("installment");
   });
 
-  it("classifies EasyPay as installment", () => {
+  it("classifies interest-free phrasings as installment", () => {
+    expect(parseDiscount("Interest-free for 12 months").offerType).toBe("installment");
+    expect(parseDiscount("Interest free installments").offerType).toBe("installment");
+    expect(parseDiscount("Get interest free 24-month plan").offerType).toBe("installment");
+  });
+
+  it("classifies EasyPay / easy payment variants as installment", () => {
     expect(parseDiscount("Easy Pay 24 months").offerType).toBe("installment");
+    expect(parseDiscount("EasyPay plan available").offerType).toBe("installment");
+    expect(parseDiscount("Easy Payment Plan up to 36 months").offerType).toBe("installment");
+    expect(parseDiscount("Easy payment over 12 months").offerType).toBe("installment");
+  });
+
+  it("classifies UK-spelling 'instalment' variants as installment", () => {
+    expect(parseDiscount("Instalment plan – 12 months").offerType).toBe("installment");
+    expect(parseDiscount("0% instalment scheme").offerType).toBe("installment");
+    expect(parseDiscount("Monthly instalment facility").offerType).toBe("installment");
+  });
+
+  it("classifies equal monthly / monthly instalment patterns", () => {
+    expect(parseDiscount("Equal monthly instalments for 24 months").offerType).toBe("installment");
+    expect(parseDiscount("Monthly installment available").offerType).toBe("installment");
   });
 
   it("classifies loyalty points offers", () => {

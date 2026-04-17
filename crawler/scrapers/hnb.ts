@@ -96,12 +96,29 @@ function resolveThumbUrl(raw: string | undefined | null): string | undefined {
   if (!raw) return undefined;
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
-  // Already absolute
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  // Relative path — make it absolute using the API host
-  if (trimmed.startsWith("/")) return `${THUMB_BASE}${trimmed}`;
-  // Unknown format — discard rather than fail validation
-  return undefined;
+
+  let absolute: string;
+  if (/^https?:\/\//i.test(trimmed)) {
+    absolute = trimmed; // already absolute
+  } else if (trimmed.startsWith("/")) {
+    absolute = `${THUMB_BASE}${trimmed}`;
+  } else {
+    absolute = `${THUMB_BASE}/${trimmed}`;
+  }
+
+  // Percent-encode spaces and other unsafe characters in the path segment
+  // while leaving the scheme, host, and existing %-encodings intact
+  try {
+    const url = new URL(absolute);
+    // Re-encode path segments: decode then re-encode to normalise
+    url.pathname = url.pathname
+      .split("/")
+      .map((seg) => encodeURIComponent(decodeURIComponent(seg)))
+      .join("/");
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 /** Parse YYYY-MM-DD from the API */

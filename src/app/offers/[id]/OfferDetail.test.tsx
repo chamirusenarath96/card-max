@@ -103,6 +103,6 @@ describe("OfferDetail", () => {
 
   it("renders badge label derived from offerType + percentage", () => {
     render(<OfferDetail offer={BASE_OFFER} />);
-    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("30% SAVINGS");
+    expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("30% OFF");
   });
 });
