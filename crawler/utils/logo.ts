@@ -4,8 +4,7 @@
  * Resolution order (client-side fallback chain in OfferImage.tsx):
  *   1. URL already scraped from the bank page
  *   2. Clearbit Logo API  — deterministic, fast, works for known brands
- *   3. Pollinations.ai    — AI-generated, always produces an image
- *   4. Category icon      — local SVG, no network required
+ *   3. Bank name + category icon — rendered client-side, no network required
  *
  * For Sri Lankan merchants that Clearbit doesn't know about, we maintain a
  * curated domain map so Clearbit can still resolve the correct logo.
@@ -100,32 +99,6 @@ export function buildClearbitUrl(merchant: string): string {
   return `https://logo.clearbit.com/${domain}`;
 }
 
-// ── Pollinations.ai (AI-generated fallback) ──────────────────────────────────
-
-const CATEGORY_SCENE: Record<string, string> = {
-  dining:        "restaurant meal food ambiance",
-  shopping:      "retail shopping store interior",
-  travel:        "travel vacation scenic hotel",
-  fuel:          "petrol fuel station clean",
-  groceries:     "supermarket fresh groceries aisle",
-  entertainment: "entertainment cinema concert event",
-  health:        "health wellness pharmacy medical",
-  online:        "online shopping ecommerce digital",
-  other:         "promotional offer deal coupon",
-};
-
-/**
- * Build a deterministic Pollinations.ai URL (same merchant+category → same image).
- */
-export function buildPollinationsUrl(merchant: string, category: string): string {
-  const scene = CATEGORY_SCENE[category] ?? "promotional offer";
-  const prompt = encodeURIComponent(
-    `${merchant} ${scene}, professional marketing photo, clean background, no text, high quality`,
-  );
-  const seed = merchant.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return `https://image.pollinations.ai/prompt/${prompt}?width=640&height=480&seed=${seed}&nologo=true`;
-}
-
 // ── Scrape-time resolver ──────────────────────────────────────────────────────
 
 async function isReachable(url: string, timeoutMs = 3000): Promise<boolean> {
@@ -142,13 +115,14 @@ async function isReachable(url: string, timeoutMs = 3000): Promise<boolean> {
 
 /**
  * Resolve the best available image URL for a merchant at scrape time.
- * Falls through: scraped URL → Clearbit → Pollinations.
+ * Falls through: scraped URL → Clearbit.
+ * If neither is reachable, returns undefined — OfferImage renders the
+ * bank name + category icon fallback client-side.
  */
 export async function resolveMerchantImage(
   existingUrl: string | undefined,
   merchant: string,
-  category: string,
-): Promise<string> {
+): Promise<string | undefined> {
   if (existingUrl && (await isReachable(existingUrl))) return existingUrl;
   if (existingUrl) console.warn(`[logo] Scraped URL unreachable: ${existingUrl}`);
 
@@ -158,8 +132,8 @@ export async function resolveMerchantImage(
     return clearbitUrl;
   }
 
-  console.log(`[logo] Using Pollinations.ai for ${merchant}`);
-  return buildPollinationsUrl(merchant, category);
+  console.log(`[logo] No logo found for ${merchant} — will use icon fallback`);
+  return undefined;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
