@@ -49,7 +49,7 @@ test.describe("Search — Hero bar", () => {
     await page.getByTestId("hero-search-input").press("Enter");
     await expect(page).toHaveURL(/q=pizza/, { timeout: 10000 });
     // Triple-click to select all, then Delete to clear
-    await page.getByTestId("hero-search-input").tripleclick();
+    await page.getByTestId("hero-search-input").click({ clickCount: 3 });
     await page.getByTestId("hero-search-input").press("Backspace");
     await expect(page).not.toHaveURL(/q=/, { timeout: 10000 });
   });
