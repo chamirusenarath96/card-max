@@ -92,7 +92,203 @@ Classification logic lives in `crawler/utils/parseDiscount.ts`.
 All scrapers call `parseDiscount()` and spread the result into each offer.
 
 ## Git Conventions
-- Branch naming: `feature/`, `fix/`, `chore/`, `spec/`
-- Commit format: `feat:`, `fix:`, `chore:`, `spec:`, `test:`
-- PRs must have CI green before merge
-- Never commit `.env.local` or secrets
+
+### Branch naming
+| Prefix | When to use | Example |
+|--------|-------------|---------|
+| `feat/NNN-slug` | Implementing a spec | `feat/006-filter-presets` |
+| `fix/slug` | Bug fix | `fix/offer-card-link` |
+| `chore/slug` | Config, deps, tooling | `chore/update-playwright` |
+| `spec/slug` | Spec-only changes | `spec/roadmap-specs-006-016` |
+| `test/slug` | Test-only changes | `test/e2e-offer-detail` |
+
+### Commit format
+```
+feat(NNN):   implementing a spec feature
+fix:         bug fix
+chore:       config / deps / tooling
+spec(NNN):   spec file changes
+test:        test-only changes
+```
+
+### Workflow
+1. Branch from master: `git checkout -b feat/NNN-slug`
+2. Implement, write tests, verify locally (see **Local Verification Gates** below)
+3. Push branch, open PR against master
+4. CI must be fully green before merge
+5. Squash-merge to keep master history clean
+6. Delete the feature branch after merge
+
+> Automated agents (scheduled tasks) commit directly to master for spec-only
+> changes. All code changes must go through a branch + CI gate.
+
+### Never commit
+- `.env.local` or any file containing secrets
+- `node_modules/`
+- `.next/` build output
+- `playwright-report/`
+
+---
+
+## Local Verification Gates
+
+Run all four in order before every push. All must exit 0:
+
+```bash
+npm run type-check   # TypeScript strict — zero errors allowed
+npm run lint         # ESLint — zero errors allowed (warnings OK)
+npm run test         # Vitest unit/component — all pass
+npm run build        # Next.js production build — must succeed
+```
+
+E2E tests run in CI (they need a built server). Run locally only when changing
+page routing or E2E specs:
+```bash
+npm run test:e2e     # Playwright — requires `npm run build` first
+```
+
+---
+
+## Testing Standards
+
+### Unit / Component tests (Vitest + Testing Library)
+
+**Every new file that contains logic must have a colocated `*.test.tsx` or `*.test.ts`.**
+
+| File type | Test file location | What to cover |
+|-----------|-------------------|---------------|
+| React component | `src/.../Component.test.tsx` | Renders correctly, user interactions, error states |
+| API route | `src/app/api/.../route.test.ts` | Valid input, invalid input (400), not-found (404), server error (500) |
+| Crawler scraper | `crawler/scrapers/<bank>.test.ts` | Parses fixture HTML/JSON correctly, skips invalid items, handles HTTP errors |
+| Utility / hook | `src/.../<util>.test.ts` | All branches, edge cases, error paths |
+
+**Test file conventions:**
+```typescript
+import { render, screen } from "@/test-utils";   // always use @/test-utils, not @testing-library/react directly
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock external I/O — never make real network calls or DB connections in unit tests
+vi.mock("../utils/http", () => ({ fetchHtml: vi.fn(), fetchJson: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+```
+
+**Coverage requirements:**
+- Every `data-testid` attribute used in the component must be asserted in at least one test
+- Every row in the spec's Test Cases table typed "unit" or "component" must map to a test
+- Cover: happy path, empty/null state, error state, and the edge cases listed in the spec
+
+### E2E tests (Playwright)
+
+**Every new page route needs an `e2e/<slug>.spec.ts`.**
+
+**Resilient SSR pattern** — Next.js server components fetch from DB server-side; CI has no DB. Always accept both outcomes:
+```typescript
+// Good — resilient to no-DB environment
+const content = page.getByTestId("offer-detail");
+const notFound = page.getByTestId("offer-not-found");
+await expect(content.or(notFound)).toBeVisible({ timeout: 10000 });
+
+// Bad — will always fail in CI without a DB
+await expect(page.getByTestId("offer-detail")).toBeVisible();
+```
+
+**API mocking for client-side fetches:**
+```typescript
+await page.route("**/api/offers**", route =>
+  route.fulfill({ status: 200, contentType: "application/json",
+    body: JSON.stringify({ data: [MOCK_OFFER], pagination: { page: 1, total: 1, totalPages: 1, limit: 20 } }) })
+);
+```
+
+**Strict mode** — Playwright strict mode is on. Never use a locator that matches more than one element. Prefer `getByTestId` over `getByText` for structural elements.
+
+**Every row in the spec's Test Cases table typed "e2e" must map to a test.**
+
+### Test coverage gate
+Before marking a spec Done, cross-reference the spec's full Test Cases table.
+Every row must map to a test. If a row is "integration" (requires live DB), write a mock-based approximation and add a comment `// TODO: integration test needs real DB`.
+
+---
+
+## Component & UI Standards
+
+### data-testid requirements
+Every interactive element and every major layout section must have a `data-testid`:
+```tsx
+<section data-testid="offer-grid">
+<button data-testid="filter-toggle">
+<div data-testid="offer-card-{offer._id}">
+```
+
+### Design tokens — always use semantic Tailwind classes
+| Use | ✅ Correct | ❌ Wrong |
+|-----|-----------|---------|
+| Text | `text-foreground`, `text-muted-foreground` | `text-gray-900` |
+| Background | `bg-background`, `bg-card` | `bg-white` |
+| Border | `border-border` | `border-gray-200` |
+| Primary action | `bg-primary text-primary-foreground` | `bg-blue-600` |
+
+Dark mode is handled automatically by shadcn semantic tokens — never hardcode colours.
+
+### shadcn components already installed
+`accordion` · `badge` · `button` · `calendar` · `card` · `dialog` · `input`
+`navigation-menu` · `pagination` · `popover` · `separator` · `sheet`
+`skeleton` · `table` · `tabs` · `toast` · `tooltip`
+
+Install new ones with: `npx shadcn@latest add <component>`
+
+### Icons
+Lucide React only (`lucide-react`). No other icon libraries.
+
+---
+
+## CI/CD Pipeline
+
+Defined in `.github/workflows/ci.yml`. Four jobs run in sequence on every push to master and every PR:
+
+| Job | Runs after | What it does | Failure action |
+|-----|-----------|-------------|----------------|
+| `ci` | — | lint → type-check → unit tests → build | Blocks everything downstream |
+| `e2e` | `ci` | Playwright E2E against production build | Blocks migrate + deploy |
+| `migrate` | `ci` + `e2e` | Runs pending DB migration scripts | Creates a GitHub Issue, blocks deploy |
+| `deploy` | all three | Vercel production deploy + cache invalidation | Creates a GitHub Issue |
+
+**Verifying CI after a push:**
+```bash
+# List runs for the latest commit
+gh run list --repo chamirusenarath96/card-max --limit 5
+
+# Watch a specific run
+gh run watch <run-id>
+
+# Fetch logs for a failed job
+gh run view <run-id> --log-failed
+```
+
+All four jobs must show `conclusion: success` before a feature is considered shipped.
+
+---
+
+## Scheduled Automation
+
+Two scheduled agents maintain the project autonomously:
+
+| Task ID | Schedule | Purpose |
+|---------|----------|---------|
+| `card-max-spec-writer` | Every 12 hours | Reads README roadmap → writes missing specs → commits to master |
+| `card-max-implementer` | Every hour | Picks lowest unimplemented spec → implements → tests → verifies CI → marks README done |
+
+Both tasks read this file (`CLAUDE.md`) and the `.claude/commands/` directory for implementation guidance. Do not duplicate rules here that are already in those command files.
+
+---
+
+## Claude Commands (slash commands)
+
+Available in `.claude/commands/` — use these when implementing features:
+
+| Command | Use when |
+|---------|----------|
+| `/add-bank` | Adding a new bank scraper to the crawler |
+| `/new-page` | Adding a new Next.js page or route |
+| `/new-github-action` | Adding a new CI/CD workflow |
+| `/run-migration` | Writing and running a DB migration script |
