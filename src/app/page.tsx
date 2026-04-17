@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { FilterBar } from "@/components/filters";
 import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
-import { SearchDrawer } from "@/components/search/SearchDrawer";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -120,10 +119,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* Search drawer trigger — Ctrl+S shortcut */}
-          <Suspense fallback={<Skeleton className="h-9 w-32 rounded-full" />}>
-            <SearchDrawer initialQuery={params.q} />
-          </Suspense>
+          {/* Search drawer removed — single page for now, will be restored once multi-page nav exists */}
         </div>
       </header>
 
