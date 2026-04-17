@@ -184,7 +184,7 @@ describe("HeroSearch", () => {
     expect(screen.getByTestId("search-see-all")).toHaveTextContent("42");
   });
 
-  it("clicking a result navigates with that title as query", () => {
+  it("clicking a result navigates to the offer detail page", () => {
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
       total: 2,
@@ -194,7 +194,7 @@ describe("HeroSearch", () => {
     render(<HeroSearch initialQuery="ke" />);
     const items = screen.getAllByTestId("search-result-item");
     fireEvent.click(items[0]);
-    expect(mockPush).toHaveBeenCalledWith("/?q=20%25+off+at+Keells");
+    expect(mockPush).toHaveBeenCalledWith("/offers/1");
   });
 
   // --- Clear button ---

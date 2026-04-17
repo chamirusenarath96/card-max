@@ -21,9 +21,7 @@ export function OfferCardDefault({ offer }: Props) {
   return (
     <Card className="h-full gap-0 overflow-hidden py-0 shadow-sm transition-shadow hover:shadow-md">
       <a
-        href={offer.sourceUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={`/offers/${offer._id}`}
         data-testid="offer-card"
         className="flex h-full flex-col"
       >
@@ -92,7 +90,7 @@ export function OfferCardDefault({ offer }: Props) {
               "pointer-events-none w-full justify-center text-center font-semibold",
             )}
           >
-            View Card Details
+            View Offer Details
           </div>
         </CardContent>
       </a>

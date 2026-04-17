@@ -21,9 +21,7 @@ export function OfferCardExpanded({ offer }: Props) {
   return (
     <Card className="h-full gap-0 overflow-hidden py-0 shadow-sm transition-shadow hover:shadow-md">
       <a
-        href={offer.sourceUrl}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={`/offers/${offer._id}`}
         data-testid="offer-card"
         className="flex h-full flex-col md:flex-row"
       >
@@ -103,7 +101,7 @@ export function OfferCardExpanded({ offer }: Props) {
             ) : null}
           </div>
           <div className={cn(buttonVariants({ variant: "outline" }), "inline-flex self-start font-semibold")}>
-            View Card Details
+            View Offer Details
           </div>
         </CardContent>
       </a>
