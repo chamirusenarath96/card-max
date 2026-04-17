@@ -25,7 +25,11 @@
    - [CI Flow](#ci-flow)
    - [Test layers](#test-layers)
    - [Secrets & environments](#secrets--environments)
-10. [Deployment](#deployment)
+10. [DB Migrations](#db-migrations)
+    - [How migrations run in CD](#how-migrations-run-in-cd)
+    - [Writing a new migration](#writing-a-new-migration)
+    - [Migration registry](#migration-registry)
+11. [Deployment](#deployment)
     - [The four-step deploy pipeline](#the-four-step-deploy-pipeline)
     - [Why build as preview then promote](#why-build-as-preview-then-promote-not-deploy-with---prod-directly)
     - [What "preview" means in Vercel's model](#what-preview-means-in-vercels-model)
@@ -48,7 +52,12 @@
 │  ┌──────────────────────────────┐   ┌────────────────────────┐ │
 │  │  Daily Cron (2AM Colombo)    │   │  CI Pipeline (on PR)   │ │
 │  │  npm run crawler             │   │  lint → tsc → test     │ │
-│  └─────────────┬────────────────┘   └────────────────────────┘ │
+│  └─────────────┬────────────────┘   └───────────────────────-┘ │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  CD Pipeline (on push to master)                         │   │
+│  │  CI → E2E → Migrate DB → Deploy → Bust ISR cache        │   │
+│  └──────────────────────────────────────────────────────────┘   │
 └────────────────┼────────────────────────────────────────────────┘
                  │ scrapes 4 banks
                  ▼
@@ -693,7 +702,19 @@ Push to master                         Pull request
                    │ if: push event only (not PRs)
                    ▼
 ┌─────────────────────────────────────────────────────┐
-│  Job 3 — "Deploy to Production"                     │
+│  Job 3 — "Run DB Migrations"                        │
+│  environment: Production (MONGODB_URI secret)       │
+│                                                     │
+│  1. npm ci                                          │
+│  2. npm run migrate     runs all scripts/           │
+│                         migrate-*.ts in order       │
+│  3. On failure → create GitHub Issue + block deploy │
+└──────────────────┬──────────────────────────────────┘
+                   │ needs: [ci, e2e, migrate]
+                   │ if: push event only (not PRs)
+                   ▼
+┌─────────────────────────────────────────────────────┐
+│  Job 4 — "Deploy to Production"                     │
 │  environment: Production (Vercel secrets)           │
 │                                                     │
 │  1. vercel pull --environment=production            │
@@ -706,10 +727,11 @@ Push to master                         Pull request
 └─────────────────────────────────────────────────────┘
 ```
 
-**Why three jobs?**
+**Why four jobs?**
 - Job 1 is fast (no secrets, no browser) — fails early if lint or tests break
 - Job 2 needs secrets and a real browser — only runs if Job 1 is green
-- Job 3 only runs on push (not PRs) and only if both Job 1 and Job 2 pass — broken code never ships
+- Job 3 applies DB schema changes before the new code goes live — ensures the DB is in the expected shape when the deploy completes; blocks deploy on failure
+- Job 4 only runs on push (not PRs) and only if Jobs 1–3 all pass — broken or unmigrated code never ships
 
 **Why rebuild in Job 2?** Each job runs on a completely isolated VM. The `.next` output from Job 1 does not carry over — without rebuilding, `next start` would fail with *"Could not find a production build"*.
 
@@ -755,18 +777,65 @@ All secrets live under the **Production** GitHub environment (`Settings → Envi
 
 ---
 
+## DB Migrations
+
+One-off scripts that backfill or reshape existing MongoDB documents live in `scripts/migrate-*.ts`.
+They run automatically in the CD pipeline (Job 3) before every deploy.
+
+### How migrations run in CD
+
+```
+CI + E2E pass
+      │
+      ▼
+Job 3 — npm run migrate
+      │
+      ├── scripts/run-migrations.ts discovers all scripts/migrate-*.ts (alphabetical order)
+      ├── Runs each script as a child process with MONGODB_URI from the Production secret
+      ├── Each script: count matching docs → print sample → updateMany → log result
+      ├── Stops on first failure and creates a GitHub Issue
+      └── Deploy (Job 4) only starts when this job exits 0
+```
+
+Migrations are **idempotent**: once applied, the filter matches nothing and the script exits
+cleanly — safe to re-run on every deploy without side-effects.
+
+### Writing a new migration
+
+1. Create `scripts/migrate-<short-description>.ts` (use the existing file as a template):
+   - Filter must be **specific** — never a blank `{}`
+   - Print a count and a 5-row sample before writing
+   - Use `OfferModel.updateMany` — never raw MongoDB
+   - Exit non-zero on error (the runner stops and blocks deploy)
+
+2. `npm run type-check` — must pass clean
+
+3. Test locally: `npm run migrate` (requires `.env.local` with `MONGODB_URI`)
+
+4. Commit on the feature branch — the CD pipeline will run it automatically on merge to master
+
+The `run-migration` Claude skill (`.claude/commands/run-migration.md`) has the full template and checklist.
+
+### Migration registry
+
+| File | What it does | Status |
+|------|-------------|--------|
+| `migrate-installment-offers.ts` | Re-classifies `offerType="percentage"` + `discountPercentage=0` → `offerType="installment"` (96 records fixed 2026-04-17) | ✅ Applied |
+
+---
+
 ## Deployment
 
-Deployments are handled by Job 3 of `.github/workflows/ci.yml`.
+Deployments are handled by Job 4 of `.github/workflows/ci.yml`.
 Vercel's native GitHub integration is **disabled** — nothing deploys to production unless all CI checks pass first.
 
 ### How a deployment is triggered
 
 | Event | What happens |
 |-------|-------------|
-| Push to `master` → CI passes | Deploy workflow fires automatically via `workflow_run` |
-| CI fails | Deploy workflow is skipped — broken code never ships |
-| Manual trigger | Actions → Deploy to Vercel → Run workflow |
+| Push to `master` → CI + E2E + Migrations pass | Deploy job fires automatically |
+| Any earlier job fails | Deploy job is skipped — broken or unmigrated code never ships |
+| Manual trigger | Actions → CI / Deploy → Run workflow |
 
 ### Why GitHub Actions instead of Vercel's native Git integration
 

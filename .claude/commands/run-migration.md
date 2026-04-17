@@ -106,23 +106,43 @@ Spot-check a few cards / API responses to confirm the data looks correct after t
 ### 6. Commit
 
 ```bash
-git add scripts/migrate-<short-description>.ts package.json
+git add scripts/migrate-<short-description>.ts
 git commit -m "chore: migrate <what changed>"
 ```
+
+No changes to `package.json` needed — `npm run migrate` runs `scripts/run-migrations.ts`
+which auto-discovers all `migrate-*.ts` files. The new script will be picked up automatically.
+
+### 7. CD pipeline runs it automatically
+
+On merge to `master` the CI pipeline runs:
+
+```
+Job 1 (CI) → Job 2 (E2E) → Job 3 (Migrate DB) → Job 4 (Deploy)
+```
+
+Job 3 executes `npm run migrate` against the Production MongoDB using the `MONGODB_URI`
+secret. If any migration exits non-zero, Job 3 fails, a GitHub Issue is created, and
+Job 4 (Deploy) is blocked until the issue is fixed.
+
+You do **not** need to run the migration manually against production — the pipeline handles it.
+Running it locally beforehand (step 4 above) is optional but recommended to verify the output.
 
 ---
 
 ## Existing migrations
 
-| Script | What it does | When to run again |
-|--------|-------------|-------------------|
-| `migrate-installment-offers.ts` | Re-classifies `offerType="percentage"` + `discountPercentage=0` docs to `offerType="installment"` | After any bulk import of pre-regex scraper data |
+| Script | What it does | Status |
+|--------|-------------|--------|
+| `migrate-installment-offers.ts` | Re-classifies `offerType="percentage"` + `discountPercentage=0` → `offerType="installment"` | ✅ Applied 2026-04-17 (96 records) |
 
 ---
 
 ## Notes
 
-- Scripts live in `scripts/` and import from `crawler/utils/db` and `src/lib/models/`
-- `.env.local` must have `MONGODB_URI` set (same as running the crawler locally)
+- Scripts live in `scripts/` and are auto-discovered by `scripts/run-migrations.ts` (no registration needed)
+- Naming convention: `migrate-<description>.ts` — alphabetical order = run order
+- `.env.local` must have `MONGODB_URI` set for local runs (same as the crawler)
 - Never hard-code connection strings — always read from `process.env.MONGODB_URI`
-- Migrations are one-way by design; if you need to roll back, write a reverse migration
+- Migrations are one-way by design; if you need to roll back, write a reverse migration script
+- The CD pipeline (Job 3) runs all migrations automatically before every deploy to `master`
