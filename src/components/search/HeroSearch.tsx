@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useSearchSuggestions } from "./useSearchSuggestions";
 
@@ -81,6 +81,21 @@ export function HeroSearch({ initialQuery = "" }: Props) {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
 
+  /**
+   * Clear the search: empty the input and remove ?q= from the URL while
+   * preserving any other active filters (bank, category, etc.).
+   * Called by both the × button and the keyboard-erase-to-empty path.
+   */
+  function clearSearch() {
+    setQuery("");
+    setDropdownOpen(false);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("q");
+    next.delete("page");
+    const qs = next.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
   // Alias used by result-item / see-all clicks (same behaviour, clearer intent)
   const freshSearch = pushSearch;
 
@@ -106,21 +121,43 @@ export function HeroSearch({ initialQuery = "" }: Props) {
             aria-hidden
           />
           <Input
-            type="search"
+            type="text"
             data-testid="hero-search-input"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setQuery(val);
+              // User erased everything via keyboard — clear URL param immediately
+              // so the results grid resets without needing to press Enter
+              if (val === "") clearSearch();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") pushSearch(query);
-              if (e.key === "Escape") setDropdownOpen(false);
+              if (e.key === "Escape") {
+                if (dropdownOpen) setDropdownOpen(false);
+                else clearSearch();
+              }
             }}
             onFocus={() => isActive && setDropdownOpen(true)}
             placeholder={placeholder}
-            className="h-14 rounded-full border-border bg-background pl-12 pr-4 text-base shadow-md focus-visible:ring-primary/50"
+            className="h-14 rounded-full border-border bg-background pl-12 pr-12 text-base shadow-md focus-visible:ring-primary/50"
             aria-label="Search offers"
             aria-expanded={dropdownOpen}
             aria-autocomplete="list"
           />
+
+          {/* Clear button — only visible when there is text in the input */}
+          {query && (
+            <button
+              type="button"
+              data-testid="hero-search-clear"
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              aria-label="Clear search"
+            >
+              <X className="size-4" />
+            </button>
+          )}
 
           {/* Live results dropdown — shows as you type */}
           {dropdownOpen && (

@@ -197,6 +197,39 @@ describe("HeroSearch", () => {
     expect(mockPush).toHaveBeenCalledWith("/?q=20%25+off+at+Keells");
   });
 
+  // --- Clear button ---
+
+  it("clear button is not visible when input is empty", () => {
+    render(<HeroSearch />);
+    expect(screen.queryByTestId("hero-search-clear")).not.toBeInTheDocument();
+  });
+
+  it("clear button is visible when input has text", () => {
+    render(<HeroSearch initialQuery="pizza" />);
+    expect(screen.getByTestId("hero-search-clear")).toBeInTheDocument();
+  });
+
+  it("clicking clear button empties the input", () => {
+    render(<HeroSearch initialQuery="pizza" />);
+    fireEvent.click(screen.getByTestId("hero-search-clear"));
+    expect(screen.getByTestId("hero-search-input")).toHaveValue("");
+  });
+
+  it("clicking clear button removes ?q= from URL while keeping other params", () => {
+    render(<HeroSearch initialQuery="pizza" />);
+    fireEvent.click(screen.getByTestId("hero-search-clear"));
+    // pushes pathname with no q param (other params preserved via searchParams)
+    expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
+  it("erasing input to empty via keyboard clears ?q= from URL", () => {
+    render(<HeroSearch initialQuery="pizza" />);
+    const input = screen.getByTestId("hero-search-input");
+    fireEvent.change(input, { target: { value: "" } });
+    expect(input).toHaveValue("");
+    expect(mockPush).toHaveBeenCalledWith("/");
+  });
+
   it("pressing Escape closes the dropdown", () => {
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
