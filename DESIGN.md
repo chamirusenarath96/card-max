@@ -116,18 +116,19 @@ Search is split into two surfaces:
 #### `HeroSearch`
 **Location:** `src/components/search/HeroSearch.tsx`
 
-- Full-width `<Input>` + "Search Now" `<Button>` row, max-width 2xl, centered
-- Hint text below: *"Try searching for 'pizza', 'cashback'..."*
+- Full-width `<Input>`, max-width 2xl, centered — **no separate "Search Now" button** (removed; search triggers on Enter or result click)
+- Responsive placeholder: `"Search offers…"` on mobile (< 640 px), `"Search offers, merchants, or banks…"` on desktop — implemented via a `resize` event listener
+- Live-results dropdown appears while typing (powered by `useSearchSuggestions`); "See all N results" link at the bottom triggers a full search
 - Suggestion chip grid: clicking a chip instantly navigates — either sets `?q=`, `?category=`, `?offerType=`, or `?sort=`
 - Each chip has a `data-testid="suggestion-{label}"` for test targeting
 
 #### `SearchDrawer`
 **Location:** `src/components/search/SearchDrawer.tsx`
 
-- Trigger: outline rounded-full button in the header showing "Search" + `Ctrl+S` kbd hint
+- Trigger: outline rounded-full button in the header showing "Search" + `Ctrl+K` kbd hint
 - `Sheet side="top"` — slides down from top (familiar command-palette feel)
-- **Keyboard shortcut**: `Ctrl+S` / `⌘S` toggles open/close via `document.addEventListener('keydown')`
-- Inside: search input (auto-focused), popular search chips (set `?q=`), category jump chips (set filter params directly)
+- **Keyboard shortcut**: `Ctrl+K` / `⌘K` toggles open/close via `document.addEventListener('keydown')` — changed from `Ctrl+S` to avoid browser "Save page" conflict in headless Chromium
+- Inside: search input (auto-focused) with only a clear (×) button — **no separate Search button** (removed; search triggers on Enter or result click); popular search chips (set `?q=`); category jump chips (set filter params directly)
 - All navigation calls `router.push()` and closes the drawer
 
 ### Design Decisions
@@ -141,18 +142,20 @@ Top-sliding drawers feel like command palettes (VS Code `Ctrl+P`, Linear `Ctrl+K
 #### Why suggestion chips instead of autocomplete?
 At the current scale (~300 offers), the meaningful search space is small and well-defined (8 categories, 8 offer types, 4 banks). Pre-built suggestion chips are instant (zero API calls) and teach users the available filters. Autocomplete will be added when the dataset grows to warrant it (see roadmap).
 
-#### Ctrl+S instead of Ctrl+K
-`Ctrl+K` conflicts with browser "open link" on some platforms. `Ctrl+S` is free (native "Save" is suppressed by `e.preventDefault()` inside the keydown handler) and matches the header button label.
+#### Ctrl+K shortcut
+`Ctrl+K` is the de-facto "quick search / command palette" shortcut (GitHub, Linear, Vercel all use it). The previous `Ctrl+S` was changed because headless Chromium intercepts it as the native "Save page" shortcut at the OS level before JavaScript `keydown` handlers fire, causing E2E tests to fail. `Ctrl+K` has no such conflict.
 
 ### URL Parameter Mapping
 
 | Search action | URL result |
 |---|---|
-| Hero input → Search Now | `?q={text}` |
+| Hero input → Enter key | `?q={text}` |
+| Hero input → click result item | `?q={title}` |
+| Hero "See all N results" link | `?q={text}` |
 | Hero "Dining" chip | `?category=dining` |
 | Hero "Cashback" chip | `?offerType=cashback` |
 | Hero "Expiring Soon" chip | `?sort=expiringSoon` |
-| Drawer search submit | `?q={text}` |
+| Drawer input → Enter key | `?q={text}` |
 | Drawer "Dining" jump | `?category=dining` |
 | Drawer popular search "cashback" | `?q=cashback` |
 
@@ -162,7 +165,54 @@ At the current scale (~300 offers), the meaningful search space is small and wel
 |---|---|
 | `Sheet`, `SheetContent`, `SheetHeader`, `SheetTitle`, `SheetTrigger` | Search drawer container |
 | `Input` | Search text inputs |
-| `Button` | Search Now, submit, trigger |
+| `Button` | Drawer trigger |
 | `Separator` | Divider between sections in drawer |
 | `Badge` | "Sri Lanka's Credit Card Offers" hero badge |
 | `Skeleton` | Fallback while Suspense loads search components |
+
+---
+
+## Offer Card Design
+
+### Card Variants
+
+Three layout variants exist, controlled by the `CardSize` type in `offer-card-shared.ts`:
+
+| Variant | Component | Use case |
+|---|---|---|
+| `compact` | `OfferCardCompact` | Dense grid, 4–6 per row on desktop |
+| `default` | `OfferCardDefault` | Standard grid, 3 per row |
+| `expanded` | `OfferCardExpanded` | Horizontal layout, full details visible |
+
+### `DiscountDisplay`
+**Location:** `src/components/cards/DiscountDisplay.tsx`
+
+Renders the discount label with a visual split:
+- Labels starting with a number+% (e.g. `"15% OFF"`, `"10% CASHBACK"`) are split: the percentage renders large in the accent (primary green) colour; the descriptor word renders smaller in `text-foreground/60`
+- All other labels (`"INSTALLMENT"`, `"BUY 1 GET 1"`, `"FREE ITEM"`) render uniformly in `text-primary`
+
+**Key rule**: cards pass `badgeLabel` (from `getBadgeLabel(offerType, discountPercentage)`) to `DiscountDisplay`, **never** the raw `offer.discountLabel`. This prevents "0% INSTALLMENT" from appearing on installment-type offers where `discountPercentage` is stored as `0`.
+
+### `OfferImage` fallback chain
+**Location:** `src/components/cards/OfferImage.tsx`
+
+Three-level fallback (no AI image generation):
+
+```
+1. offer.merchantLogoUrl   — URL scraped from the bank page
+       ↓ (on error)
+2. Clearbit Logo API        — logo.clearbit.com/<domain>
+       ↓ (on error)
+3. Icon + text fallback     — category Lucide icon on gradient background
+                              showing merchant name + bank display name
+```
+
+The Clearbit step uses a curated `MERCHANT_DOMAINS` map in `crawler/utils/logo.ts`
+for Sri Lankan merchants that Clearbit doesn't know by name alone.
+
+### Hover glow effect
+
+Each card wraps its content in a `<div className="group relative">`. A sibling
+`aria-hidden` `<div>` with `box-shadow: 0 0 0 2px {bankColor}, 0 0 Xpx {bankColor}55`
+is shown at `opacity-0` and transitions to `opacity-100` on `group-hover`. This keeps
+the glow **outside** the card's `overflow-hidden` boundary so it isn't clipped.

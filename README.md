@@ -985,14 +985,40 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 
 ### Roadmap
 
-- [ ] **Playwright fallback** for NTB (and any future bot-protected site)
-- [ ] **Pagination controls** (prev/next buttons in FilterBar)
-- [ ] **Search input UI** (`?q=` param is supported in API but no UI)
-- [ ] **offerType badge** on OfferCard (visual indicator for BOGO, installment, etc.)
-- [ ] **Atlas warmup cron** (keep connection alive, eliminate cold-start latency)
-- [ ] **Atlas Search** migration (Lucene-based, better relevance for full-text search)
+#### ✅ Recently completed
+
+- [x] **Pagination controls** — prev/next buttons with page count in FilterBar
+- [x] **Search UI** — hero search bar (`HeroSearch`) + keyboard-triggered search drawer (`SearchDrawer`, `Ctrl+K`)
+- [x] **Live search suggestions** — typeahead dropdown powered by `/api/offers?q=` with debounce
+- [x] **offerType badge + DiscountDisplay** — colour-coded percentage/cashback highlight on all card variants
+- [x] **Filter drawer** — hamburger-style Sheet replacing the inline filter bar; active-filter chips with one-click removal
+- [x] **Date-range filter** — dual-month calendar range picker in the filter drawer
+- [x] **Card view variants** — compact / default / expanded layouts switchable from the grid toolbar
+- [x] **Remove Pollination AI image gen** — replaced with Clearbit logo → merchant name + category icon fallback
+
+#### 🔧 Crawler & data
+
+- [ ] **Playwright fallback** for NTB (and any future bot-protected site) — Incapsula JS challenge still blocks the HTTP scraper
+- [ ] **Better merchant image resolution** — explore Google Custom Search API, DuckDuckGo image search, or an open-source logo DB (Brandfetch, Clearbit v2) to get higher-quality merchant images; update `crawler/utils/logo.ts`
 - [ ] **AmEx offers** from Nations Trust Bank (separate URL: `americanexpress.lk`)
-- [ ] **People's Bank** and **Bank of Ceylon** (state-owned banks, large customer base)
+- [ ] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base)
+- [ ] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
+- [ ] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting
+
+#### 🖥️ Frontend features
+
+- [ ] **Offer detail page** — dedicated `src/app/offers/[id]/page.tsx` showing full offer description, validity dates, terms & conditions, price history chart (track `discountPercentage` over time), and a prominent CTA linking to the bank's credit card page
+- [ ] **Save filter presets** — "Save current filters" button stores the active filter combination in a React context (+ `localStorage` for persistence across sessions); saved presets appear as one-click chips above the filter bar
+- [ ] **Dark mode** — toggle in the header; use `next-themes` with `ThemeProvider` wrapping `<body>`; all components already use shadcn semantic tokens (`bg-background`, `text-foreground`) so the switch requires minimal per-component changes
+
+#### 💰 Monetisation
+
+- [ ] **Google AdSense integration** — place `<AdUnit>` components in: (1) between offer grid rows (every 8 cards), (2) sidebar on desktop, (3) top of the filter drawer; apply via `next/script` Strategy `"afterInteractive"`; measure RPM/CTR in AdSense dashboard and correlate with Vercel Analytics page views to optimise placement
+
+#### 🔒 Security & reliability
+
+- [ ] **IP-based rate limiting** — add `src/middleware.ts` using Vercel's Edge Runtime; bucket requests per IP with a sliding-window counter stored in Vercel KV (Redis-compatible); limits: 60 req/min for `/api/offers`, 20 req/min for `/api/search`; return `429` with `Retry-After` header on breach
+- [ ] **Security CI step** — add `.github/workflows/security.yml` running `npm audit --audit-level=high` + [Trivy](https://github.com/aquasecurity/trivy) filesystem scan on every PR; block merges on HIGH/CRITICAL vulnerabilities; schedule a weekly full scan; report findings as PR annotations using `aquasecurity/trivy-action`
 
 ---
 
