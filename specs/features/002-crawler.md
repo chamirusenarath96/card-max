@@ -2,10 +2,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
+- [x] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Automatically scrape credit card offer pages from 4 Sri Lankan banks every day at 2:00 AM (Asia/Colombo) and persist new/updated offers to MongoDB Atlas. This keeps the offer data fresh without manual intervention.
