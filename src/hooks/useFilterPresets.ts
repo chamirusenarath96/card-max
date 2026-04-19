@@ -18,6 +18,7 @@ export interface FilterPreset {
 
 const STORAGE_KEY = "card-max:filter-presets";
 const MAX_PRESETS = 10;
+const SYNC_EVENT = "card-max:filter-presets-change";
 
 function readFromStorage(): FilterPreset[] {
   try {
@@ -33,6 +34,8 @@ function readFromStorage(): FilterPreset[] {
 function writeToStorage(presets: FilterPreset[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+    // Notify other hook instances on the same page to re-read storage.
+    window.dispatchEvent(new Event(SYNC_EVENT));
   } catch {
     // QuotaExceededError or storage unavailable — silently ignore
   }
@@ -45,6 +48,9 @@ export function useFilterPresets() {
     // localStorage is a synchronous external system; reading on mount (not SSR) avoids hydration mismatch.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPresets(readFromStorage());
+    const handleSync = () => setPresets(readFromStorage());
+    window.addEventListener(SYNC_EVENT, handleSync);
+    return () => window.removeEventListener(SYNC_EVENT, handleSync);
   }, []);
 
   const savePreset = useCallback(
