@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Allow users to search across all offers by keyword (e.g. "pizza", "fuel", "online shopping") to quickly find relevant deals without knowing which bank has them.
