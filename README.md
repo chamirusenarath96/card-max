@@ -1093,7 +1093,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 - [ ] **Better merchant image resolution** — explore Google Custom Search API, DuckDuckGo image search, or an open-source logo DB (Brandfetch, Clearbit v2) to get higher-quality merchant images; update `crawler/utils/logo.ts`
 - [ ] **AmEx offers** from Nations Trust Bank (separate URL: `americanexpress.lk`)
 - [ ] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base)
-- [ ] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
+- [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
 - [ ] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting
 
 #### 🖥️ Frontend features
