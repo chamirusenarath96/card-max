@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { FilterBar } from "@/components/filters";
+import { FilterPresetChips } from "@/components/filters/FilterPresetChips";
 import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +173,11 @@ export default async function HomePage({ searchParams }: PageProps) {
 
         {/* ── Offer grid ───────────────────────────────────────────────── */}
         <section className="mx-auto max-w-screen-xl px-6 py-14">
+          {/* Saved filter preset chips — client-side only, above filter bar */}
+          <Suspense fallback={null}>
+            <FilterPresetChips />
+          </Suspense>
+
           {/* Results heading + inline filter trigger */}
           <div
             className="mb-8 flex flex-wrap items-center justify-between gap-4"

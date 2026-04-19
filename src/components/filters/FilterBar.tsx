@@ -6,7 +6,9 @@ import { format } from "date-fns";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import type { Bank } from "../../../specs/data/offer.schema";
 import { FilterDrawer } from "./FilterDrawer";
+import { SavePresetPopover } from "./SavePresetPopover";
 import { Badge } from "@/components/ui/badge";
+import { useFilterPresets } from "@/hooks/useFilterPresets";
 
 interface Props {
   activeBank?: string;
@@ -57,6 +59,7 @@ export function FilterBar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { savePreset } = useFilterPresets();
 
   function removeParam(key: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -124,6 +127,15 @@ export function FilterBar({
     });
   }
 
+  const activeFilters = {
+    ...(activeBank ? { bank: activeBank } : {}),
+    ...(activeCategory ? { category: activeCategory } : {}),
+    ...(activeOfferType ? { offerType: activeOfferType } : {}),
+    ...(activeSort && activeSort !== "latest" ? { sort: activeSort } : {}),
+    ...(activeFrom ? { activeFrom } : {}),
+    ...(activeTo ? { activeTo } : {}),
+  };
+
   return (
     <div data-testid="filter-bar">
       <div className="flex flex-wrap items-center gap-3">
@@ -153,6 +165,13 @@ export function FilterBar({
             </button>
           </Badge>
         ))}
+
+        {chips.length > 0 && (
+          <SavePresetPopover
+            filters={activeFilters}
+            onSave={savePreset}
+          />
+        )}
       </div>
     </div>
   );
