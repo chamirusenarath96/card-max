@@ -2,10 +2,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
+- [x] Spec reviewed
 - [x] Implementation started
-- [ ] Benchmarks measured
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Define measurable performance targets for the offer listing page and API, and the implementation strategy to meet them. These targets drive database indexing, caching, and rendering decisions.

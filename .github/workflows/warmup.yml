@@ -1,0 +1,41 @@
+name: Atlas Connection Warmup
+
+on:
+  # Hit /api/ping every 5 minutes to keep the MongoDB connection warm.
+  # Eliminates cold-start latency spikes on Vercel serverless functions.
+  schedule:
+    - cron: "*/5 * * * *"
+
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping API
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Ping /api/ping
+        run: |
+          if [ -z "$VERCEL_APP_URL" ]; then
+            echo "⚠️  VERCEL_APP_URL not configured — skipping warmup."
+            exit 0
+          fi
+
+          STATUS=$(curl -s -o /tmp/ping_response.txt -w "%{http_code}" \
+            --max-time 10 \
+            "${VERCEL_APP_URL}/api/ping")
+
+          echo "HTTP status: $STATUS"
+          cat /tmp/ping_response.txt
+
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Connection warm."
+          elif [ "$STATUS" = "503" ]; then
+            echo "⚠️  DB unreachable — cold start will be slow."
+          else
+            echo "⚠️  Unexpected status $STATUS"
+          fi
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
