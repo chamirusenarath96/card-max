@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Power users repeatedly apply the same filter combinations (e.g. "Commercial Bank dining

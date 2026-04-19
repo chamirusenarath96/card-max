@@ -2,6 +2,10 @@ import { render, screen, fireEvent, waitFor } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FilterBar } from "./FilterBar";
 
+vi.mock("@/hooks/useFilterPresets", () => ({
+  useFilterPresets: () => ({ presets: [], savePreset: vi.fn(), deletePreset: vi.fn() }),
+}));
+
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -110,5 +114,15 @@ describe("FilterBar", () => {
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"))
     );
+  });
+
+  it("shows save preset button when ≥1 filter is active (AC1)", () => {
+    render(<FilterBar activeBank="hnb" />);
+    expect(screen.getByTestId("save-preset-button")).toBeInTheDocument();
+  });
+
+  it("hides save preset button when no filters are active (AC1)", () => {
+    render(<FilterBar />);
+    expect(screen.queryByTestId("save-preset-button")).not.toBeInTheDocument();
   });
 });
