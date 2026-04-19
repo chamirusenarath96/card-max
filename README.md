@@ -1099,7 +1099,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 #### 🖥️ Frontend features
 
 - [ ] **Offer detail page** — dedicated `src/app/offers/[id]/page.tsx` showing full offer description, validity dates, terms & conditions, price history chart (track `discountPercentage` over time), and a prominent CTA linking to the bank's credit card page
-- [ ] **Save filter presets** — "Save current filters" button stores the active filter combination in a React context (+ `localStorage` for persistence across sessions); saved presets appear as one-click chips above the filter bar
+- [x] **Save filter presets** — "Save current filters" button stores the active filter combination in a React context (+ `localStorage` for persistence across sessions); saved presets appear as one-click chips above the filter bar
 - [ ] **Dark mode** — toggle in the header; use `next-themes` with `ThemeProvider` wrapping `<body>`; all components already use shadcn semantic tokens (`bg-background`, `text-foreground`) so the switch requires minimal per-component changes
 
 #### 💰 Monetisation
