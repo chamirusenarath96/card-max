@@ -1,14 +1,13 @@
 /**
  * Nations Trust Bank (nationstrust.com) offer scraper
- * Spec: specs/features/002-crawler.md
+ * Spec: specs/features/008-playwright-ntb-fallback.md
  *
- * NTB uses Incapsula/Imperva bot protection which blocks plain HTTP requests.
+ * NTB uses Incapsula/Imperva bot protection that blocks plain HTTP requests.
  * Strategy:
- *   1. "Warm up" a session by fetching the home page first (gets session cookies)
- *   2. Fetch known promotion category pages using those cookies + Referer header
- *   3. Parse each campaign detail page for offer table rows
- *
- * If Incapsula still blocks, we return [] gracefully (scraper never throws).
+ *   1. Try HTTP (session-based) first — faster, no Chromium overhead
+ *   2. If Incapsula blocks all listing pages (0 campaign URLs found),
+ *      fall back to Playwright headless Chromium which renders JS challenges
+ *   3. On any Playwright error, log and return [] — never crash the crawl
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { fetchHtmlSessioned, pLimit, sleep } from "../utils/http";
@@ -17,9 +16,12 @@ import { parseDiscount } from "../utils/parseDiscount";
 const HOME_URL = "https://www.nationstrust.com";
 const BASE_URL = "https://www.nationstrust.com";
 
+/** Main promotions URL — used as Playwright fallback target */
+const PROMOTIONS_URL = "https://www.nationstrust.com/promotions/what-s-new";
+
 /** Known promotion listing pages — used when dynamic discovery is blocked */
 const KNOWN_LISTING_URLS = [
-  "https://www.nationstrust.com/promotions/what-s-new",
+  PROMOTIONS_URL,
   "https://www.nationstrust.com/promotions",
 ];
 
@@ -35,7 +37,6 @@ export async function scrape(): Promise<OfferInput[]> {
   console.log("[ntb] Starting scrape…");
   const allOffers: OfferInput[] = [];
 
-  // Shared cookie jar across all requests to maintain the Incapsula session
   const cookieJar = new Map<string, string>();
 
   try {
@@ -46,16 +47,15 @@ export async function scrape(): Promise<OfferInput[]> {
       console.log(`[ntb] Session cookies acquired: ${cookieJar.size}`);
     } catch (err) {
       console.warn("[ntb] Home page warm-up failed:", (err as Error).message);
-      // Continue anyway — some requests may still work
     }
 
     // Step 2: Collect campaign URLs from listing pages
     const campaignUrls = await collectCampaignUrls(cookieJar);
-    console.log(`[ntb] Found ${campaignUrls.length} campaign pages`);
+    console.log(`[ntb] Found ${campaignUrls.length} campaign pages via HTTP`);
 
     if (campaignUrls.length === 0) {
-      console.warn("[ntb] No campaign URLs found — site may be blocking scraper or page structure changed");
-      return [];
+      console.warn("[ntb] No campaign URLs found — falling back to Playwright");
+      return scrapeWithPlaywright();
     }
 
     // Step 3: Scrape each campaign page (max 3 concurrent, 1.2s gap)
@@ -64,7 +64,6 @@ export async function scrape(): Promise<OfferInput[]> {
         await sleep(1200);
         const html = await fetchHtmlSessioned(url, cookieJar, KNOWN_LISTING_URLS[0], 0);
 
-        // Check if we got a real page or an Incapsula block page
         if (isBlockPage(html)) {
           console.warn(`[ntb] Request blocked by Incapsula for ${url}`);
           return [];
@@ -90,12 +89,71 @@ export async function scrape(): Promise<OfferInput[]> {
       }
     }
   } catch (err) {
-    console.error("[ntb] Scrape failed:", err);
-    throw err;
+    console.error("[ntb] HTTP flow failed:", err);
+    console.log("[ntb] Falling back to Playwright…");
+    return scrapeWithPlaywright();
   }
 
   console.log(`[ntb] Scraped ${allOffers.length} valid offers`);
   return allOffers;
+}
+
+/**
+ * Playwright fallback: launch headless Chromium to render the promotions page,
+ * bypassing Incapsula JS challenge. Returns [] on any error.
+ */
+async function scrapeWithPlaywright(): Promise<OfferInput[]> {
+  try {
+    console.log("[ntb] Playwright: launching Chromium…");
+    const html = await fetchWithPlaywright(PROMOTIONS_URL);
+
+    if (isBlockPage(html)) {
+      console.warn("[ntb] Playwright: page still blocked by Incapsula — returning []");
+      return [];
+    }
+
+    const rawOffers = parseCampaignPage(html, PROMOTIONS_URL);
+    const validOffers: OfferInput[] = [];
+    for (const raw of rawOffers) {
+      const result = OfferInputSchema.safeParse(raw);
+      if (result.success) {
+        validOffers.push(result.data);
+      } else {
+        console.warn("[ntb] Playwright: offer failed validation:", result.error.flatten());
+      }
+    }
+
+    console.log(`[ntb] Playwright: scraped ${validOffers.length} valid offers`);
+    return validOffers;
+  } catch (err) {
+    console.error("[ntb] Playwright scrape failed:", err);
+    return [];
+  }
+}
+
+/**
+ * Launch headless Chromium, navigate to URL, wait for a table element,
+ * and return the fully-rendered page HTML.
+ * Uses --no-sandbox and --disable-dev-shm-usage for GitHub Actions compatibility.
+ */
+async function fetchWithPlaywright(url: string): Promise<string> {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  });
+  try {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: "networkidle" });
+    try {
+      await page.waitForSelector("table", { timeout: 30000 });
+    } catch {
+      // Table not found — proceed with whatever content is on the page
+    }
+    return await page.content();
+  } finally {
+    await browser.close();
+  }
 }
 
 /** Returns true if the HTML looks like an Incapsula block / error page */
@@ -141,7 +199,6 @@ async function collectCampaignUrls(cookieJar: Map<string, string>): Promise<stri
 function extractCampaignLinks(html: string): string[] {
   const links: string[] = [];
 
-  // Match both relative and absolute hrefs pointing to /promotions/X/Y
   const re = /href=["']((?:https?:\/\/(?:www\.)?nationstrust\.com)?\/promotions\/[^"'#?]{5,}\/[^"'#?]{5,})["']/gi;
   let m: RegExpExecArray | null;
 
