@@ -1101,10 +1101,15 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 - [ ] **Offer detail page** — dedicated `src/app/offers/[id]/page.tsx` showing full offer description, validity dates, terms & conditions, price history chart (track `discountPercentage` over time), and a prominent CTA linking to the bank's credit card page
 - [x] **Save filter presets** — "Save current filters" button stores the active filter combination in a React context (+ `localStorage` for persistence across sessions); saved presets appear as one-click chips above the filter bar
 - [x] **Dark mode** — toggle in the header; use `next-themes` with `ThemeProvider` wrapping `<body>`; all components already use shadcn semantic tokens (`bg-background`, `text-foreground`) so the switch requires minimal per-component changes
+- [ ] **Search UX overhaul (spec 017)** — (1) Remove hardcoded default search suggestions; show only live typeahead results from the API. (2) Animated placeholder in the hero search bar that types a sample query (e.g. "dining offers at Keells…"), pauses, backspaces, and cycles through a set of example queries — using a CSS/JS typewriter loop. (3) Partial-page refresh: when the user applies a filter, changes a search term, or navigates a pagination page, only the offers grid section (`<OfferGrid>`) re-renders via React Server Component streaming — the header, filter bar, and hero section stay mounted and do not flash. (4) Add a floating scroll-down chevron button on the right side of the viewport that animates into view when the user is above the offer grid, and a scroll-to-top button that appears once the user scrolls past the grid — both with smooth-scroll behaviour and fade-in/out animation.
 
 #### 💰 Monetisation
 
 - [ ] **Google AdSense integration** — place `<AdUnit>` components in: (1) between offer grid rows (every 8 cards), (2) sidebar on desktop, (3) top of the filter drawer; apply via `next/script` Strategy `"afterInteractive"`; measure RPM/CTR in AdSense dashboard and correlate with Vercel Analytics page views to optimise placement
+
+#### ⚡ Performance & quality
+
+- [ ] **Mobile performance & SLA enforcement (spec 018)** — The desktop version loads acceptably but mobile cold-load is noticeably slow. Goals: (1) Diagnose and fix the mobile bottleneck (likely: large JS bundle, unoptimised images, no font preload, or waterfall blocking render). (2) Define SLAs: initial page load ≤ 2.5 s LCP on mobile (Moto G4 @ 3G in Lighthouse), search/filter response ≤ 500 ms after user input. (3) Add a **pre-production SLA validation CI step**: after the Vercel preview deployment is created (Step 3 of the deploy pipeline) but before `vercel promote` runs, execute [Lighthouse CI](https://github.com/GoogleChrome/lighthouse-ci) (`lhci autorun`) against the preview URL; fail the deploy job if LCP > 2.5 s or Performance score < 70; surface the Lighthouse HTML report as a CI artefact. This gates production on measured performance, not just tests passing.
 
 #### 🔒 Security & reliability
 
