@@ -3,9 +3,9 @@
 ## Status
 - [x] Spec drafted
 - [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Many Sri Lankan merchants are unknown to generic logo APIs, leaving most offer cards
