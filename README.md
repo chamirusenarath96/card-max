@@ -1090,7 +1090,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 #### 🔧 Crawler & data
 
 - [x] **Playwright fallback** for NTB (and any future bot-protected site) — Incapsula JS challenge still blocks the HTTP scraper
-- [ ] **Better merchant image resolution** — explore Google Custom Search API, DuckDuckGo image search, or an open-source logo DB (Brandfetch, Clearbit v2) to get higher-quality merchant images; update `crawler/utils/logo.ts`
+- [x] **Better merchant image resolution** — explore Google Custom Search API, DuckDuckGo image search, or an open-source logo DB (Brandfetch, Clearbit v2) to get higher-quality merchant images; update `crawler/utils/logo.ts`
 - [ ] **AmEx offers** from Nations Trust Bank (separate URL: `americanexpress.lk`)
 - [ ] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base)
 - [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
