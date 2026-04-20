@@ -12,6 +12,7 @@ import {
   NavigationMenuLink,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -120,7 +121,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* Search drawer removed — single page for now, will be restored once multi-page nav exists */}
+          <ThemeToggle />
         </div>
       </header>
 
