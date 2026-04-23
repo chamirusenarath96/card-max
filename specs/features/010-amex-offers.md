@@ -3,9 +3,9 @@
 ## Status
 - [x] Spec drafted
 - [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Nations Trust Bank (NTB) issues American Express cards in Sri Lanka through
