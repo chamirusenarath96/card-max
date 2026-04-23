@@ -11,84 +11,106 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../utils/http", () => ({
-  fetchHtmlSessioned: vi.fn(),
-  pLimit: (tasks: Array<() => Promise<unknown>>, _n: number) =>
-    Promise.all(tasks.map((t) => t())),
-  sleep: vi.fn(),
-}));
-
-vi.mock("playwright", () => ({
-  chromium: {
-    launch: vi.fn(),
-  },
-}));
+vi.mock("crawlee", () => {
+  return {
+    PlaywrightCrawler: vi.fn(),
+    log: { setLevel: vi.fn(), LEVELS: { ERROR: 0 } },
+  };
+});
 
 import { BankSchema } from "../../specs/data/offer.schema";
 import { scrape } from "./amex";
-import { fetchHtmlSessioned } from "../utils/http";
-import { chromium } from "playwright";
+import { PlaywrightCrawler } from "crawlee";
 
-// Minimal listing HTML with one offer detail link
-const LISTING_HTML_WITH_LINKS = `
-<html><body>
-  <div class="offer-card">
-    <h3 class="offer-title">25% off at Pizza Hut</h3>
-    <a href="/offers/pizza-hut-25-off">View Offer</a>
-  </div>
-</body></html>
-`;
+// ── Fixture data ─────────────────────────────────────────────────────────────
 
-// Listing HTML with offer cards (no detail links — triggers direct listing parse)
-const LISTING_HTML_CARDS_ONLY = `
-<html><body>
-  <div class="offer-card">
-    <h3 class="offer-title">15% off at Odel</h3>
-    <div class="offer-discount">15% off</div>
-    <div class="merchant-name">Odel</div>
-  </div>
-  <div class="offer-card">
-    <h3 class="offer-title">Free dessert at The Barista</h3>
-    <div class="offer-discount">Complimentary dessert</div>
-    <div class="merchant-name">The Barista</div>
-  </div>
-</body></html>
-`;
+const DETAIL_URL = "https://www.americanexpress.lk/offers/pizza-hut-25-off";
 
-// Offer detail page HTML
-const DETAIL_HTML = `
-<html>
-<head>
-  <meta property="og:image" content="https://cdn.americanexpress.lk/pizza-hut.jpg" />
-</head>
-<body>
-  <h2>25% off at Pizza Hut with American Express</h2>
-  <p>Enjoy 25% off your dining bill at all Pizza Hut outlets. Valid till 31 December 2026.</p>
-</body>
-</html>
-`;
-
-// Incapsula block page
-const BLOCK_HTML = `<html><body>Incapsula incident ID: 99999</body></html>`;
-
-// Empty page (no recognisable content)
-const EMPTY_HTML = `<html><body><p>No offers at this time.</p></body></html>`;
-
-/** Create a Playwright browser mock returning the given HTML */
-function mockPlaywrightPage(html: string) {
-  const mockPage = {
-    goto: vi.fn(),
-    waitForSelector: vi.fn(),
-    content: vi.fn().mockResolvedValue(html),
+/** Mock page for the LISTING label that has detail links */
+function createListingPageWithLinks() {
+  return {
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    evaluate: vi.fn().mockResolvedValue(""),
+    $$eval: vi.fn().mockResolvedValue([DETAIL_URL]),
+    $eval: vi.fn().mockResolvedValue(""),
   };
-  const mockBrowser = {
-    newPage: vi.fn().mockResolvedValue(mockPage),
-    close: vi.fn(),
-  };
-  vi.mocked(chromium.launch).mockResolvedValue(mockBrowser as never);
 }
 
-describe("amex scraper", () => {
+/** Mock page for the DETAIL label */
+function createDetailPage() {
+  return {
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    evaluate: vi.fn().mockImplementation(async (_fn: () => unknown) => {
+      // First call is Incapsula check, second is og:image, third is bodyText
+      const str = _fn.toString();
+      if (str.includes("og:image")) return "https://cdn.americanexpress.lk/pizza-hut.jpg";
+      if (str.includes("innerText")) return "25% off dining at Pizza Hut. Valid till 31 December 2026.";
+      return "";
+    }),
+    $$eval: vi.fn().mockResolvedValue([]),
+    $eval: vi.fn().mockImplementation(async (selector: string) => {
+      if (selector.includes("h1") || selector.includes("h2")) return "25% off at Pizza Hut";
+      if (selector.includes("discount") || selector.includes("badge")) return "25% off";
+      return "";
+    }),
+  };
+}
+
+/** Mock page that looks blocked by Incapsula */
+function createBlockedPage() {
+  return {
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    evaluate: vi.fn().mockResolvedValue("Incapsula incident ID 99999 blocked"),
+    $$eval: vi.fn().mockResolvedValue([]),
+    $eval: vi.fn().mockResolvedValue(""),
+  };
+}
+
+/** Mock page that has no usable content */
+function createEmptyPage() {
+  return {
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    evaluate: vi.fn().mockResolvedValue(""),
+    $$eval: vi.fn().mockResolvedValue([]),
+    $eval: vi.fn().mockRejectedValue(new Error("No matching element")),
+  };
+}
+
+/**
+ * Wire up PlaywrightCrawler mock so that calling .run() invokes
+ * requestHandler for each request in the queue, then resolves.
+ */
+function setupCrawlerMock(pageFactory: (label: string, url: string) => ReturnType<typeof createDetailPage>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (PlaywrightCrawler as any).mockImplementation((options: Record<string, any>) => ({
+    run: vi.fn().mockImplementation(async (requests: Array<{ url: string; label: string }>) => {
+      const pendingRequests = [...requests];
+
+      while (pendingRequests.length > 0) {
+        const req = pendingRequests.shift()!;
+        const page = pageFactory(req.label, req.url);
+
+        const addRequests = vi.fn().mockImplementation(
+          async (newReqs: Array<{ url: string; label: string }>) => {
+            for (const r of newReqs) {
+              pendingRequests.push(r);
+            }
+          }
+        );
+
+        await options.requestHandler?.({
+          page: page as never,
+          request: { url: req.url, label: req.label } as never,
+          addRequests,
+        } as never);
+      }
+    }),
+  }));
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+describe("amex scraper (Crawlee)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -102,11 +124,7 @@ describe("amex scraper", () => {
 
   // TC2 — scrape() returns an array (may be empty in CI without network)
   it("TC2: scrape() always returns an array", async () => {
-    // Session warm-up OK, both listing pages are empty → Playwright fallback → empty page
-    vi.mocked(fetchHtmlSessioned)
-      .mockResolvedValueOnce("<html></html>") // HOME warm-up
-      .mockResolvedValue(EMPTY_HTML);         // listing pages (no links, no cards)
-    mockPlaywrightPage(EMPTY_HTML);
+    setupCrawlerMock(() => createEmptyPage());
 
     const offers = await scrape();
 
@@ -115,11 +133,10 @@ describe("amex scraper", () => {
 
   // TC3 — returned offers have bank: "amex_ntb"
   it("TC3: each returned offer has bank: amex_ntb", async () => {
-    vi.mocked(fetchHtmlSessioned)
-      .mockResolvedValueOnce("<html></html>")          // HOME warm-up
-      .mockResolvedValueOnce(LISTING_HTML_WITH_LINKS)  // listing page 0 (finds link)
-      .mockResolvedValueOnce("<html></html>")          // listing page 1
-      .mockResolvedValueOnce(DETAIL_HTML);             // detail page
+    setupCrawlerMock((label) => {
+      if (label === "LISTING") return createListingPageWithLinks();
+      return createDetailPage();
+    });
 
     const offers = await scrape();
 
@@ -130,12 +147,12 @@ describe("amex scraper", () => {
     }
   });
 
-  // TC4 — HTTP 403 (hard block) → returns [], no throw
-  it("TC4: HTTP 403 from site → returns [] and does not throw", async () => {
-    // Session warm-up and all listing pages throw (403 → http utility throws)
-    vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching https://www.americanexpress.lk/offers"));
-    // Playwright fallback — also blocked
-    mockPlaywrightPage(BLOCK_HTML);
+  // TC4 — Crawlee throws (e.g. network error) → returns [], no throw
+  it("TC4: Crawlee throws → returns [] and does not throw", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (PlaywrightCrawler as any).mockImplementation(() => ({
+      run: vi.fn().mockRejectedValue(new Error("Network connection refused")),
+    }));
 
     const offers = await scrape();
 
@@ -143,61 +160,50 @@ describe("amex scraper", () => {
     expect(offers).toHaveLength(0);
   });
 
-  // TC4 variant — site returns Incapsula block page (200 body, not HTTP error)
+  // TC4b — Incapsula block page returned on all requests
   it("TC4b: Incapsula block page → scraper returns [] gracefully", async () => {
-    vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
-    mockPlaywrightPage(BLOCK_HTML);
+    setupCrawlerMock(() => createBlockedPage());
 
     const offers = await scrape();
 
     expect(offers).toHaveLength(0);
   });
 
-  // TC5 — Playwright throws → scraper returns [] (spec AC6)
-  it("TC5: Playwright throws → returns [] without crashing", async () => {
-    vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
-    vi.mocked(chromium.launch).mockRejectedValue(new Error("Chromium binary not found"));
+  // TC5 — Crawlee/PlaywrightCrawler constructor throws → returns []
+  it("TC5: PlaywrightCrawler throws on construction → returns [] without crashing", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (PlaywrightCrawler as any).mockImplementation(() => {
+      throw new Error("Chromium binary not found");
+    });
 
     const offers = await scrape();
 
     expect(offers).toHaveLength(0);
   });
 
-  // Happy path — direct listing card extraction (no detail links)
-  it("extracts offers directly from listing page when no detail links are found", async () => {
-    vi.mocked(fetchHtmlSessioned)
-      .mockResolvedValueOnce("<html></html>")          // HOME warm-up
-      .mockResolvedValueOnce(LISTING_HTML_CARDS_ONLY)  // listing page 0 (no links)
-      .mockResolvedValueOnce(LISTING_HTML_CARDS_ONLY)  // listing page 0 again (parseListingPages)
-      .mockResolvedValue("<html></html>");              // listing page 1
+  // Happy path — listing page has detail links → visits detail pages
+  it("extracts offers from detail pages when listing has links", async () => {
+    setupCrawlerMock((label) => {
+      if (label === "LISTING") return createListingPageWithLinks();
+      return createDetailPage();
+    });
 
     const offers = await scrape();
 
     expect(Array.isArray(offers)).toBe(true);
-    // Even if 0 returned from parsing path, it should not throw
+    expect(offers.length).toBeGreaterThan(0);
+    expect(offers[0]).toMatchObject({
+      bank: "amex_ntb",
+      sourceUrl: expect.stringContaining("americanexpress.lk"),
+    });
   });
 
-  // Home page warm-up failure is non-fatal
-  it("continues when HOME warm-up fails", async () => {
-    vi.mocked(fetchHtmlSessioned)
-      .mockRejectedValueOnce(new Error("Connection refused")) // HOME warm-up fails
-      .mockResolvedValueOnce(EMPTY_HTML)                      // listing page 0
-      .mockResolvedValueOnce(EMPTY_HTML);                     // listing page 1
-    mockPlaywrightPage(EMPTY_HTML);
+  // Home page warm-up / listing empty → returns []
+  it("returns empty array when listing page has no links and no cards", async () => {
+    setupCrawlerMock(() => createEmptyPage());
 
     const offers = await scrape();
 
-    expect(Array.isArray(offers)).toBe(true);
-  });
-
-  // Playwright fallback renders offer cards → extracts offers
-  it("Playwright fallback extracts offers from rendered HTML", async () => {
-    vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
-    mockPlaywrightPage(LISTING_HTML_CARDS_ONLY);
-
-    const offers = await scrape();
-
-    // Playwright page had offer cards — validate they pass through if any parsed
     expect(Array.isArray(offers)).toBe(true);
   });
 });
