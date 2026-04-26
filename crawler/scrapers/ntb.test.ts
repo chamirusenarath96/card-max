@@ -106,11 +106,10 @@ describe("ntb scraper", () => {
     it("falls through to Crawlee when HTTP listing is blocked", async () => {
       vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
 
-      // Crawlee fallback: empty listing → no offers
-      setupCrawlerMock((label) => ({
-        waitForLoadState: vi.fn().mockResolvedValue(undefined),
-        waitForTimeout: vi.fn().mockResolvedValue(undefined),
-        evaluate: vi.fn().mockResolvedValue(label === "LISTING" ? "" : ""),
+      // Crawlee fallback: selector times out → no offers
+      setupCrawlerMock(() => ({
+        waitForSelector: vi.fn().mockRejectedValue(new Error("Timeout")),
+        evaluate: vi.fn().mockResolvedValue(""),
         $$eval: vi.fn().mockResolvedValue([]),
       }));
 
@@ -173,16 +172,14 @@ describe("ntb scraper", () => {
       setupCrawlerMock((label) => {
         if (label === "LISTING") {
           return {
-            waitForLoadState: vi.fn().mockResolvedValue(undefined),
-            waitForTimeout: vi.fn().mockResolvedValue(undefined),
+            waitForSelector: vi.fn().mockResolvedValue(undefined),
             evaluate: vi.fn().mockResolvedValue(""),
             $$eval: vi.fn().mockResolvedValue([CAMPAIGN_URL]),
           };
         }
         // CAMPAIGN page
         return {
-          waitForLoadState: vi.fn().mockResolvedValue(undefined),
-          waitForTimeout: vi.fn().mockResolvedValue(undefined),
+          waitForSelector: vi.fn().mockResolvedValue(undefined),
           evaluate: vi.fn().mockImplementation((fn: () => unknown) => {
             const s = fn.toString();
             if (s.includes("outerHTML")) return CAMPAIGN_HTML;
@@ -208,8 +205,7 @@ describe("ntb scraper", () => {
 
     it("returns [] when listing page is blocked in Crawlee path too", async () => {
       setupCrawlerMock(() => ({
-        waitForLoadState: vi.fn().mockResolvedValue(undefined),
-        waitForTimeout: vi.fn().mockResolvedValue(undefined),
+        waitForSelector: vi.fn().mockRejectedValue(new Error("Timeout")),
         evaluate: vi.fn().mockResolvedValue("Incapsula incident ID 12345"),
         $$eval: vi.fn().mockResolvedValue([]),
       }));

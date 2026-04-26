@@ -119,21 +119,23 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
         async requestHandler({ page, request, addRequests }) {
           const { url, label } = request;
 
-          // Use "load" (not "networkidle") so Incapsula's polling JS doesn't block us.
-          // Then wait 3 s for the challenge redirect to complete.
-          await page.waitForLoadState("load");
-          await page.waitForTimeout(3000);
-
-          const bodyText: string = await page.evaluate(
-            () => (document as Document).body?.innerText ?? ""
-          );
-
-          if (isBlockPage(bodyText)) {
-            console.warn(`[ntb] Crawlee: page blocked: ${url}`);
-            return;
-          }
-
           if (label === REQUEST_LABELS.LISTING) {
+            // Wait for an actual promotion link — this handles the Incapsula challenge
+            // redirect transparently: the selector won't match until the real page loads.
+            try {
+              await page.waitForSelector('a[href*="/promotions/what-s-new/"]', { timeout: 45000 });
+            } catch {
+              const bodyText: string = await page.evaluate(
+                () => (document as Document).body?.innerText ?? ""
+              ).catch(() => "");
+              if (isBlockPage(bodyText)) {
+                console.warn(`[ntb] Crawlee LISTING: page blocked by Incapsula`);
+              } else {
+                console.warn(`[ntb] Crawlee LISTING: content selector timed out on ${url}`);
+              }
+              return;
+            }
+
             const links: string[] = await page.$$eval(
               "a[href]",
               (anchors: Element[]) =>
@@ -147,11 +149,6 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
             const unique = [...new Set(links)];
             console.log(`[ntb] Crawlee LISTING: found ${unique.length} campaign links`);
 
-            if (unique.length === 0) {
-              console.warn("[ntb] Crawlee LISTING: no campaign links — blocked or empty");
-              return;
-            }
-
             await addRequests(
               unique.map((href) => ({
                 url: href.startsWith("http") ? href : `${BASE_URL}${href}`,
@@ -159,6 +156,13 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
               }))
             );
           } else if (label === REQUEST_LABELS.CAMPAIGN) {
+            // Wait for a table (offer table) to appear before extracting HTML
+            try {
+              await page.waitForSelector("table", { timeout: 30000 });
+            } catch {
+              console.warn(`[ntb] Crawlee CAMPAIGN: no table found on ${url}`);
+            }
+
             const html: string = await page.evaluate(
               () => (document as Document).documentElement?.outerHTML ?? ""
             );
