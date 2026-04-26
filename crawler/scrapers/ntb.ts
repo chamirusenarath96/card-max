@@ -110,7 +110,22 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
         headless: true,
         launchContext: {
           launchOptions: {
-            args: ["--no-sandbox", "--disable-dev-shm-usage"],
+            args: [
+              "--no-sandbox",
+              "--disable-dev-shm-usage",
+              "--disable-blink-features=AutomationControlled",
+            ],
+          },
+        },
+        // Explicit fingerprint config improves Incapsula bypass from datacenter IPs
+        browserPoolOptions: {
+          useFingerprints: true,
+          fingerprintOptions: {
+            fingerprintGeneratorOptions: {
+              browsers: [{ name: "chrome", minVersion: 120 }],
+              devices: ["desktop"],
+              operatingSystems: ["linux"],
+            },
           },
         },
         maxRequestsPerCrawl: 60,
