@@ -106,11 +106,9 @@ export async function scrape(): Promise<OfferInput[]> {
 // ── HTML parsing helpers ─────────────────────────────────────────────────────
 
 function isBlockPage(html: string): boolean {
-  return (
-    html.includes("Incapsula incident ID") ||
-    html.includes("_Incapsula_Resource") ||
-    html.includes("Request unsuccessful")
-  );
+  // Only check for the actual Incapsula block/incident page.
+  // "_Incapsula_Resource" appears in CDN scripts on legitimate pages — do NOT check it.
+  return html.includes("Incapsula incident ID");
 }
 
 function isErrorPage(html: string): boolean {

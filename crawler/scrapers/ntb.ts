@@ -2,12 +2,16 @@
  * Nations Trust Bank (nationstrust.com) offer scraper
  * Spec: specs/features/008-playwright-ntb-fallback.md
  *
- * NTB uses server-side rendered HTML — plain HTTP works without a browser.
- * Strategy:
- *   1. Fetch /promotions/what-s-new (listing page)
- *   2. Extract all campaign detail-page links from HTML
- *   3. Fetch each campaign page and parse offer table rows
- *   4. On any error: log warning and return [] — never crash the crawl
+ * NTB is protected by Incapsula/Imperva. Strategy:
+ *   1. Try plain HTTP first — works from residential IPs (fast, no browser overhead)
+ *   2. If Incapsula blocks the HTTP response, fall back to Crawlee PlaywrightCrawler
+ *      which runs a real Chromium browser and can pass JS challenges.
+ *   3. Crawlee uses LISTING → CAMPAIGN two-phase navigation to find offer tables.
+ *   4. On any error: log warning and return [] — never crash the crawl.
+ *
+ * Note on waitForLoadState: we use "load" (not "networkidle") because Incapsula's
+ * challenge JS polls the network continuously, causing "networkidle" to time out.
+ * After "load" we wait 3 s for the challenge redirect to complete.
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { parseDiscount } from "../utils/parseDiscount";
@@ -24,94 +28,209 @@ const MONTH_MAP: Record<string, number> = {
   jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 };
 
-export async function scrape(): Promise<OfferInput[]> {
-  console.log("[ntb] Starting scrape via HTTP…");
+const REQUEST_LABELS = {
+  LISTING: "LISTING",
+  CAMPAIGN: "CAMPAIGN",
+} as const;
 
-  const allOffers: OfferInput[] = [];
+export async function scrape(): Promise<OfferInput[]> {
+  console.log("[ntb] Starting scrape…");
+
+  // Step 1: Try plain HTTP first (works from residential IPs)
+  const httpOffers = await scrapeViaHttp();
+  if (httpOffers !== null) {
+    console.log(`[ntb] HTTP path: scraped ${httpOffers.length} valid offers`);
+    return httpOffers;
+  }
+
+  // Step 2: HTTP blocked — fall back to Crawlee Playwright
+  console.log("[ntb] HTTP blocked, falling back to Crawlee PlaywrightCrawler…");
+  return scrapeWithCrawlee();
+}
+
+// ── HTTP path ────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the list of offers scraped via plain HTTP, or null if Incapsula blocks.
+ */
+async function scrapeViaHttp(): Promise<OfferInput[] | null> {
   const cookieJar = new Map<string, string>();
 
   try {
-    // Step 1: Fetch listing page
     const listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
 
     if (isBlockPage(listingHtml)) {
-      console.warn("[ntb] Listing page blocked by bot protection — returning []");
-      return [];
+      console.warn("[ntb] HTTP: listing page is blocked by Incapsula");
+      return null;
     }
 
-    // Step 2: Extract campaign links
     const campaignLinks = extractCampaignLinks(listingHtml);
-    console.log(`[ntb] Found ${campaignLinks.length} campaign links`);
+    console.log(`[ntb] HTTP: found ${campaignLinks.length} campaign links`);
 
-    if (campaignLinks.length === 0) {
-      console.warn("[ntb] No campaign links found — page may have changed structure");
-      return [];
-    }
+    if (campaignLinks.length === 0) return null;
 
-    // Step 3: Fetch each campaign page and parse tables
+    const allOffers: OfferInput[] = [];
+
     for (const url of campaignLinks) {
       await sleep(400);
       try {
         const html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
-
         if (isBlockPage(html)) {
-          console.warn(`[ntb] Campaign page blocked: ${url}`);
+          console.warn(`[ntb] HTTP: campaign page blocked: ${url}`);
           continue;
         }
-
         const rows = parseCampaignTable(html);
-        console.log(`[ntb] ${url}: ${rows.length} offer rows`);
-
-        for (const row of rows) {
-          if (!row.merchant || row.merchant.length < 2) continue;
-
-          const discount = parseDiscount(extractDiscount(row.offerText || row.eligibility));
-          const { validFrom, validUntil } = extractDates(row.eligibility || row.offerText);
-          const category = detectCategory(row.merchant, row.offerText);
-          const title = row.offerText ? row.offerText.substring(0, 80) : row.merchant;
-
-          const raw: Partial<OfferInput> = {
-            bank: "nations_trust_bank",
-            bankDisplayName: "Nations Trust Bank",
-            title,
-            merchant: row.merchant,
-            description: row.offerText.substring(0, 300) || undefined,
-            ...discount,
-            category,
-            validFrom,
-            validUntil,
-            sourceUrl: url,
-            scrapedAt: new Date(),
-          };
-
-          const result = OfferInputSchema.safeParse(raw);
-          if (result.success) {
-            allOffers.push(result.data);
-          } else {
-            console.warn("[ntb] Offer failed validation:", result.error.flatten());
-          }
-        }
+        console.log(`[ntb] HTTP ${url}: ${rows.length} rows`);
+        pushValidOffers(rows, url, allOffers);
       } catch (err) {
-        console.warn(`[ntb] Failed to fetch ${url}:`, (err as Error).message);
+        console.warn(`[ntb] HTTP: failed to fetch ${url}:`, (err as Error).message);
       }
     }
+
+    return allOffers;
   } catch (err) {
-    console.error("[ntb] Scrape failed:", err);
+    console.warn("[ntb] HTTP path failed:", (err as Error).message);
+    return null;
+  }
+}
+
+// ── Crawlee Playwright path ──────────────────────────────────────────────────
+
+async function scrapeWithCrawlee(): Promise<OfferInput[]> {
+  process.env.CRAWLEE_STORAGE_DIR = "/tmp/crawlee-ntb";
+
+  const allOffers: OfferInput[] = [];
+
+  try {
+    const { PlaywrightCrawler, log } = await import("crawlee");
+    log.setLevel(log.LEVELS.ERROR);
+
+    await new Promise<void>((resolve, reject) => {
+      const crawler = new PlaywrightCrawler({
+        headless: true,
+        launchContext: {
+          launchOptions: {
+            args: ["--no-sandbox", "--disable-dev-shm-usage"],
+          },
+        },
+        maxRequestsPerCrawl: 60,
+        requestHandlerTimeoutSecs: 90,
+
+        async requestHandler({ page, request, addRequests }) {
+          const { url, label } = request;
+
+          // Use "load" (not "networkidle") so Incapsula's polling JS doesn't block us.
+          // Then wait 3 s for the challenge redirect to complete.
+          await page.waitForLoadState("load");
+          await page.waitForTimeout(3000);
+
+          const bodyText: string = await page.evaluate(
+            () => (document as Document).body?.innerText ?? ""
+          );
+
+          if (isBlockPage(bodyText)) {
+            console.warn(`[ntb] Crawlee: page blocked: ${url}`);
+            return;
+          }
+
+          if (label === REQUEST_LABELS.LISTING) {
+            const links: string[] = await page.$$eval(
+              "a[href]",
+              (anchors: Element[]) =>
+                anchors
+                  .map((a) => (a as HTMLAnchorElement).href)
+                  .filter((href) =>
+                    /\/promotions\/[^/#?]{5,}\/[^/#?]{5,}/.test(href)
+                  )
+            );
+
+            const unique = [...new Set(links)];
+            console.log(`[ntb] Crawlee LISTING: found ${unique.length} campaign links`);
+
+            if (unique.length === 0) {
+              console.warn("[ntb] Crawlee LISTING: no campaign links — blocked or empty");
+              return;
+            }
+
+            await addRequests(
+              unique.map((href) => ({
+                url: href.startsWith("http") ? href : `${BASE_URL}${href}`,
+                label: REQUEST_LABELS.CAMPAIGN,
+              }))
+            );
+          } else if (label === REQUEST_LABELS.CAMPAIGN) {
+            const html: string = await page.evaluate(
+              () => (document as Document).documentElement?.outerHTML ?? ""
+            );
+
+            const rows = parseCampaignTable(html);
+            console.log(`[ntb] Crawlee CAMPAIGN ${url}: ${rows.length} rows`);
+            pushValidOffers(rows, url, allOffers);
+          }
+        },
+
+        failedRequestHandler({ request }) {
+          console.warn(`[ntb] Crawlee: request failed: ${request.url}`);
+        },
+      });
+
+      crawler
+        .run([{ url: LISTING_URL, label: REQUEST_LABELS.LISTING }])
+        .then(() => resolve())
+        .catch((err: unknown) => {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        });
+    });
+  } catch (err) {
+    console.error("[ntb] Crawlee scrape failed:", err);
     return [];
   }
 
-  console.log(`[ntb] Scraped ${allOffers.length} valid offers`);
+  console.log(`[ntb] Crawlee: scraped ${allOffers.length} valid offers`);
   return allOffers;
+}
+
+// ── Shared helpers ───────────────────────────────────────────────────────────
+
+function pushValidOffers(rows: OfferRow[], sourceUrl: string, out: OfferInput[]): void {
+  for (const row of rows) {
+    if (!row.merchant || row.merchant.length < 2) continue;
+
+    const discount = parseDiscount(extractDiscount(row.offerText || row.eligibility));
+    const { validFrom, validUntil } = extractDates(row.eligibility || row.offerText);
+    const category = detectCategory(row.merchant, row.offerText);
+    const title = row.offerText ? row.offerText.substring(0, 80) : row.merchant;
+
+    const raw: Partial<OfferInput> = {
+      bank: "nations_trust_bank",
+      bankDisplayName: "Nations Trust Bank",
+      title,
+      merchant: row.merchant,
+      description: row.offerText.substring(0, 300) || undefined,
+      ...discount,
+      category,
+      validFrom,
+      validUntil,
+      sourceUrl,
+      scrapedAt: new Date(),
+    };
+
+    const result = OfferInputSchema.safeParse(raw);
+    if (result.success) {
+      out.push(result.data);
+    } else {
+      console.warn("[ntb] Offer failed validation:", result.error.flatten());
+    }
+  }
 }
 
 // ── HTML parsing helpers ─────────────────────────────────────────────────────
 
-/** Returns true if the HTML looks like an Incapsula block page */
+/** Returns true if the text/HTML is an Incapsula block/challenge page */
 function isBlockPage(html: string): boolean {
   return (
     html.includes("Incapsula incident ID") ||
-    html.includes("_Incapsula_Resource") ||
-    html.includes("Request unsuccessful")
+    html.includes("Request unsuccessful. Incapsula incident ID")
   );
 }
 
@@ -137,8 +256,7 @@ function extractCampaignLinks(html: string): string[] {
 type OfferRow = { merchant: string; offerText: string; eligibility: string };
 
 /**
- * Parse offer table from a campaign page.
- * Strips HTML comments first so commented-out (expired) rows are excluded.
+ * Parse offer table rows, stripping HTML comments so expired rows are excluded.
  */
 function parseCampaignTable(html: string): OfferRow[] {
   const stripped = html.replace(/<!--[\s\S]*?-->/g, "");
@@ -158,7 +276,6 @@ function parseCampaignTable(html: string): OfferRow[] {
     const offerText = cells[1]!.trim();
     const eligibility = cells[2] ? cells[2].trim() : "";
 
-    // Skip header row
     if (merchant.toLowerCase() === "merchant" || merchant.toLowerCase() === "place") continue;
     if (merchant.length < 2) continue;
 
