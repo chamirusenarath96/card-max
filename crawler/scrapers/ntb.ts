@@ -2,18 +2,19 @@
  * Nations Trust Bank (nationstrust.com) offer scraper
  * Spec: specs/features/008-playwright-ntb-fallback.md
  *
- * NTB uses Incapsula/Imperva bot protection that blocks plain HTTP requests.
+ * NTB uses server-side rendered HTML — plain HTTP works without a browser.
  * Strategy:
- *   1. Use Crawlee PlaywrightCrawler for Incapsula bypass (fingerprint injection, stealth)
- *   2. LISTING label: load /promotions/what-s-new → collect campaign detail links
- *   3. CAMPAIGN label: load each campaign page → extract offer rows from <table>
+ *   1. Fetch /promotions/what-s-new (listing page)
+ *   2. Extract all campaign detail-page links from HTML
+ *   3. Fetch each campaign page and parse offer table rows
  *   4. On any error: log warning and return [] — never crash the crawl
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { parseDiscount } from "../utils/parseDiscount";
+import { fetchHtmlSessioned, sleep } from "../utils/http";
 
 const BASE_URL = "https://www.nationstrust.com";
-const PROMOTIONS_URL = "https://www.nationstrust.com/promotions/what-s-new";
+const LISTING_URL = "https://www.nationstrust.com/promotions/what-s-new";
 
 const MONTH_MAP: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4,
@@ -23,159 +24,79 @@ const MONTH_MAP: Record<string, number> = {
   jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 };
 
-const REQUEST_LABELS = {
-  LISTING: "LISTING",
-  CAMPAIGN: "CAMPAIGN",
-} as const;
-
 export async function scrape(): Promise<OfferInput[]> {
-  console.log("[ntb] Starting scrape with Crawlee…");
-
-  // Set Crawlee storage to a temp dir to avoid polluting the repo
-  process.env.CRAWLEE_STORAGE_DIR = "/tmp/crawlee-ntb";
+  console.log("[ntb] Starting scrape via HTTP…");
 
   const allOffers: OfferInput[] = [];
+  const cookieJar = new Map<string, string>();
 
   try {
-    const { PlaywrightCrawler, log } = await import("crawlee");
+    // Step 1: Fetch listing page
+    const listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
 
-    // Suppress Crawlee's verbose internal logging
-    log.setLevel(log.LEVELS.ERROR);
+    if (isBlockPage(listingHtml)) {
+      console.warn("[ntb] Listing page blocked by bot protection — returning []");
+      return [];
+    }
 
-    await new Promise<void>((resolve, reject) => {
-      let crawlerError: Error | null = null;
+    // Step 2: Extract campaign links
+    const campaignLinks = extractCampaignLinks(listingHtml);
+    console.log(`[ntb] Found ${campaignLinks.length} campaign links`);
 
-      const crawler = new PlaywrightCrawler({
-        headless: true,
-        launchContext: {
-          launchOptions: {
-            args: ["--no-sandbox", "--disable-dev-shm-usage"],
-          },
-        },
-        maxRequestsPerCrawl: 60,
-        requestHandlerTimeoutSecs: 60,
+    if (campaignLinks.length === 0) {
+      console.warn("[ntb] No campaign links found — page may have changed structure");
+      return [];
+    }
 
-        async requestHandler({ page, request, addRequests }) {
-          const { url, label } = request;
+    // Step 3: Fetch each campaign page and parse tables
+    for (const url of campaignLinks) {
+      await sleep(400);
+      try {
+        const html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
 
-          await page.waitForLoadState("networkidle");
+        if (isBlockPage(html)) {
+          console.warn(`[ntb] Campaign page blocked: ${url}`);
+          continue;
+        }
 
-          // Check if blocked by Incapsula
-          const bodyText: string = await page.evaluate(
-            () => (document as Document).body?.innerText ?? ""
-          );
-          if (bodyText.includes("Incapsula incident ID")) {
-            console.warn(`[ntb] Page blocked by Incapsula: ${url}`);
-            return;
+        const rows = parseCampaignTable(html);
+        console.log(`[ntb] ${url}: ${rows.length} offer rows`);
+
+        for (const row of rows) {
+          if (!row.merchant || row.merchant.length < 2) continue;
+
+          const discount = parseDiscount(extractDiscount(row.offerText || row.eligibility));
+          const { validFrom, validUntil } = extractDates(row.eligibility || row.offerText);
+          const category = detectCategory(row.merchant, row.offerText);
+          const title = row.offerText ? row.offerText.substring(0, 80) : row.merchant;
+
+          const raw: Partial<OfferInput> = {
+            bank: "nations_trust_bank",
+            bankDisplayName: "Nations Trust Bank",
+            title,
+            merchant: row.merchant,
+            description: row.offerText.substring(0, 300) || undefined,
+            ...discount,
+            category,
+            validFrom,
+            validUntil,
+            sourceUrl: url,
+            scrapedAt: new Date(),
+          };
+
+          const result = OfferInputSchema.safeParse(raw);
+          if (result.success) {
+            allOffers.push(result.data);
+          } else {
+            console.warn("[ntb] Offer failed validation:", result.error.flatten());
           }
-
-          if (label === REQUEST_LABELS.LISTING) {
-            // Extract all campaign detail links from the listing page
-            const links: string[] = await page.$$eval(
-              "a[href]",
-              (anchors: Element[]) =>
-                anchors
-                  .map((a) => (a as HTMLAnchorElement).href)
-                  .filter((href) =>
-                    /\/promotions\/[^/#?]{5,}\/[^/#?]{5,}/.test(href)
-                  )
-            );
-
-            const unique = [...new Set(links)];
-            console.log(`[ntb] LISTING: found ${unique.length} campaign links`);
-
-            if (unique.length === 0) {
-              console.warn("[ntb] LISTING: no campaign links found — page may be empty or blocked");
-              return;
-            }
-
-            await addRequests(
-              unique.map((href) => ({
-                url: href.startsWith("http") ? href : `${BASE_URL}${href}`,
-                label: REQUEST_LABELS.CAMPAIGN,
-              }))
-            );
-          } else if (label === REQUEST_LABELS.CAMPAIGN) {
-            // Extract offer rows from <table> using DOM API
-            type RowData = { merchant: string; offerText: string; eligibility: string };
-            const rows: RowData[] = await page.$$eval(
-              "table tr",
-              (trs: Element[]) => {
-                const results: RowData[] = [];
-                trs.forEach((tr, idx) => {
-                  if (idx === 0) return; // skip header row
-                  const cells = tr.querySelectorAll("td, th");
-                  if (cells.length < 2) return;
-                  results.push({
-                    merchant: (cells[0] as HTMLElement).innerText?.trim() ?? "",
-                    offerText: (cells[1] as HTMLElement).innerText?.trim() ?? "",
-                    eligibility: cells[2] ? (cells[2] as HTMLElement).innerText?.trim() ?? "" : "",
-                  });
-                });
-                return results;
-              }
-            );
-
-            console.log(`[ntb] CAMPAIGN ${url}: found ${rows.length} table rows`);
-
-            if (rows.length === 0) {
-              // Fallback: treat page as a single offer
-              const singleOffer = await extractSingleOffer(page, url);
-              if (singleOffer) {
-                const result = OfferInputSchema.safeParse(singleOffer);
-                if (result.success) allOffers.push(result.data);
-                else console.warn("[ntb] Single offer failed validation:", result.error.flatten());
-              }
-              return;
-            }
-
-            for (const row of rows) {
-              if (!row.merchant || row.merchant.length < 2) continue;
-
-              const discount = parseDiscount(extractDiscount(row.offerText || row.eligibility));
-              const { validFrom, validUntil } = extractDates(row.eligibility || row.offerText);
-              const category = detectCategory(row.merchant, row.offerText);
-              const title = row.offerText ? row.offerText.substring(0, 80) : row.merchant;
-
-              const raw: Partial<OfferInput> = {
-                bank: "nations_trust_bank",
-                bankDisplayName: "Nations Trust Bank",
-                title,
-                merchant: row.merchant,
-                description: row.offerText.substring(0, 300) || undefined,
-                ...discount,
-                category,
-                validFrom,
-                validUntil,
-                sourceUrl: url,
-                scrapedAt: new Date(),
-              };
-
-              const result = OfferInputSchema.safeParse(raw);
-              if (result.success) {
-                allOffers.push(result.data);
-              } else {
-                console.warn("[ntb] Offer failed validation:", result.error.flatten());
-              }
-            }
-          }
-        },
-
-        failedRequestHandler({ request }) {
-          console.warn(`[ntb] Request failed: ${request.url}`);
-        },
-      });
-
-      crawler
-        .run([{ url: PROMOTIONS_URL, label: REQUEST_LABELS.LISTING }])
-        .then(() => resolve())
-        .catch((err: unknown) => {
-          crawlerError = err instanceof Error ? err : new Error(String(err));
-          reject(crawlerError);
-        });
-    });
+        }
+      } catch (err) {
+        console.warn(`[ntb] Failed to fetch ${url}:`, (err as Error).message);
+      }
+    }
   } catch (err) {
-    console.error("[ntb] Crawlee scrape failed:", err);
+    console.error("[ntb] Scrape failed:", err);
     return [];
   }
 
@@ -183,60 +104,71 @@ export async function scrape(): Promise<OfferInput[]> {
   return allOffers;
 }
 
-/** Extract a single offer from the page using DOM API (fallback for non-table pages) */
-async function extractSingleOffer(
-  page: import("playwright").Page,
-  sourceUrl: string
-): Promise<Partial<OfferInput> | null> {
-  try {
-    const title: string | null = await page
-      .$eval("h1, h2", (el: Element) => (el as HTMLElement).innerText?.trim() ?? "")
-      .catch(() => null);
+// ── HTML parsing helpers ─────────────────────────────────────────────────────
 
-    if (!title || title.length < 3) return null;
+/** Returns true if the HTML looks like an Incapsula block page */
+function isBlockPage(html: string): boolean {
+  return (
+    html.includes("Incapsula incident ID") ||
+    html.includes("_Incapsula_Resource") ||
+    html.includes("Request unsuccessful")
+  );
+}
 
-    const bodyText: string = await page.evaluate(
-      () => (document as Document).body?.innerText ?? ""
-    );
+/** Extract campaign detail-page links from listing page HTML */
+function extractCampaignLinks(html: string): string[] {
+  const seen = new Set<string>();
+  const links: string[] = [];
 
-    const merchantLogoUrl: string | null = await page.evaluate(
-      () =>
-        (document as Document).querySelector<HTMLMetaElement>('meta[property="og:image"]')
-          ?.content ?? null
-    );
-
-    const merchant = extractMerchant(title);
-    const discount = parseDiscount(extractDiscount(bodyText));
-    const { validFrom, validUntil } = extractDates(bodyText);
-    const category = detectCategory(title, bodyText);
-
-    return {
-      bank: "nations_trust_bank",
-      bankDisplayName: "Nations Trust Bank",
-      title: title.substring(0, 300),
-      merchant,
-      ...discount,
-      category,
-      merchantLogoUrl: merchantLogoUrl ?? undefined,
-      validFrom,
-      validUntil,
-      sourceUrl,
-      scrapedAt: new Date(),
-    };
-  } catch {
-    return null;
+  const re = /href=["']((?:https?:\/\/(?:www\.)?nationstrust\.com)?\/promotions\/[^"'#?]{5,}\/[^"'#?]{5,})["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const raw = m[1]!;
+    const full = raw.startsWith("http") ? raw : `${BASE_URL}${raw}`;
+    if (!seen.has(full)) {
+      seen.add(full);
+      links.push(full);
+    }
   }
+
+  return links;
 }
 
-// ── Parsing helpers (unchanged from original — they work correctly) ──────────
+type OfferRow = { merchant: string; offerText: string; eligibility: string };
 
-function extractMerchant(title: string): string {
-  const atMatch = title.match(/\bat\s+(.+?)(?:\s+with\b|\s+for\b|\s+-|,|$)/i);
-  if (atMatch) return cleanText(atMatch[1]!).substring(0, 100);
-  const withMatch = title.match(/\bwith\s+(.+?)(?:\s+card|\s+bank|,|$)/i);
-  if (withMatch) return cleanText(withMatch[1]!).substring(0, 100);
-  return title.substring(0, 80);
+/**
+ * Parse offer table from a campaign page.
+ * Strips HTML comments first so commented-out (expired) rows are excluded.
+ */
+function parseCampaignTable(html: string): OfferRow[] {
+  const stripped = html.replace(/<!--[\s\S]*?-->/g, "");
+  const rows: OfferRow[] = [];
+
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch: RegExpExecArray | null;
+
+  while ((rowMatch = rowRe.exec(stripped)) !== null) {
+    const cells = [...rowMatch[1]!.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) =>
+      cleanText(c[1]!)
+    );
+
+    if (cells.length < 2) continue;
+
+    const merchant = cells[0]!.trim();
+    const offerText = cells[1]!.trim();
+    const eligibility = cells[2] ? cells[2].trim() : "";
+
+    // Skip header row
+    if (merchant.toLowerCase() === "merchant" || merchant.toLowerCase() === "place") continue;
+    if (merchant.length < 2) continue;
+
+    rows.push({ merchant, offerText, eligibility });
+  }
+
+  return rows;
 }
+
+// ── Data extraction helpers ──────────────────────────────────────────────────
 
 function extractDiscount(text: string): string | undefined {
   const match = text.match(
@@ -290,8 +222,8 @@ function detectCategory(merchant: string, offerText: string): OfferInput["catego
   return "other";
 }
 
-function cleanText(text: string): string {
-  return text
+function cleanText(html: string): string {
+  return html
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&nbsp;/g, " ")

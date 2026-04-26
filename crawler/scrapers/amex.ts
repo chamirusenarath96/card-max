@@ -2,20 +2,35 @@
  * American Express NTB (americanexpress.lk) offer scraper
  * Spec: specs/features/010-amex-offers.md
  *
- * NTB issues all Sri Lankan American Express cards via americanexpress.lk,
- * which uses Incapsula/Imperva bot protection similar to nationstrust.com.
+ * The americanexpress.lk site is server-side rendered — plain HTTP works.
+ * Offers are organised by category pages under /en/offers/<category>.
  *
  * Strategy:
- *   1. Use Crawlee PlaywrightCrawler for Incapsula bypass (fingerprint injection, stealth)
- *   2. LISTING label: load /offers → collect detail links, or extract inline cards
- *   3. DETAIL label: load each detail page → extract offer via DOM API
- *   4. Any error → return [] and log a warning (never crash the crawl)
+ *   1. Fetch each known category listing page
+ *   2. Parse offer blocks: merchant (.alloffer-heading), discount (.value-limit span),
+ *      validity text, and detail URL (<a> wrapping the card)
+ *   3. On any error: log warning and return [] — never crash the crawl
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { parseDiscount } from "../utils/parseDiscount";
+import { fetchHtmlSessioned, sleep } from "../utils/http";
 
 const BASE_URL = "https://www.americanexpress.lk";
-const LISTING_URL = "https://www.americanexpress.lk/offers";
+
+// Known category listing URLs — all publicly accessible via plain HTTP
+const CATEGORY_URLS: Array<{ url: string; category: OfferInput["category"] }> = [
+  { url: `${BASE_URL}/en/offers/dining-offers`, category: "dining" },
+  { url: `${BASE_URL}/en/offers/wellness-offers`, category: "health" },
+  { url: `${BASE_URL}/en/offers/supermarket-offers`, category: "groceries" },
+  { url: `${BASE_URL}/en/offers/lodging-offers`, category: "travel" },
+  { url: `${BASE_URL}/en/offers/homecare-offers`, category: "shopping" },
+  { url: `${BASE_URL}/en/offers/clothing-offers`, category: "shopping" },
+  { url: `${BASE_URL}/en/offers/online-offers`, category: "online" },
+  { url: `${BASE_URL}/en/offers/travel-offers`, category: "travel" },
+  { url: `${BASE_URL}/en/offers/healthcare`, category: "health" },
+  { url: `${BASE_URL}/en/offers/installment-offers`, category: "other" },
+  { url: `${BASE_URL}/en/offers/special-offers`, category: "other" },
+];
 
 const MONTH_MAP: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4,
@@ -25,222 +40,62 @@ const MONTH_MAP: Record<string, number> = {
   jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 };
 
-const REQUEST_LABELS = {
-  LISTING: "LISTING",
-  DETAIL: "DETAIL",
-} as const;
-
 export async function scrape(): Promise<OfferInput[]> {
-  console.log("[amex] Starting scrape with Crawlee…");
-
-  // Set Crawlee storage to a temp dir to avoid polluting the repo
-  process.env.CRAWLEE_STORAGE_DIR = "/tmp/crawlee-amex";
+  console.log("[amex] Starting scrape via HTTP…");
 
   const allOffers: OfferInput[] = [];
+  const seen = new Set<string>(); // deduplicate by sourceUrl
+  const cookieJar = new Map<string, string>();
 
   try {
-    const { PlaywrightCrawler, log } = await import("crawlee");
+    for (const { url: categoryUrl, category: defaultCategory } of CATEGORY_URLS) {
+      await sleep(500);
+      try {
+        const html = await fetchHtmlSessioned(categoryUrl, cookieJar, BASE_URL, 0);
 
-    // Suppress Crawlee's verbose internal logging
-    log.setLevel(log.LEVELS.ERROR);
+        if (isBlockPage(html) || isErrorPage(html)) {
+          console.warn(`[amex] Category page unavailable: ${categoryUrl}`);
+          continue;
+        }
 
-    await new Promise<void>((resolve, reject) => {
-      const crawler = new PlaywrightCrawler({
-        headless: true,
-        launchContext: {
-          launchOptions: {
-            args: ["--no-sandbox", "--disable-dev-shm-usage"],
-          },
-        },
-        maxRequestsPerCrawl: 60,
-        requestHandlerTimeoutSecs: 60,
+        const cards = parseOfferCards(html);
+        console.log(`[amex] ${categoryUrl}: ${cards.length} offer cards`);
 
-        async requestHandler({ page, request, addRequests }) {
-          const { url, label } = request;
+        for (const card of cards) {
+          const sourceUrl = card.detailUrl || categoryUrl;
+          if (seen.has(sourceUrl)) continue;
+          seen.add(sourceUrl);
 
-          await page.waitForLoadState("networkidle");
+          const discount = parseDiscount(card.discountText || undefined);
+          const { validFrom, validUntil } = extractDates(card.validityText);
+          const category = detectCategory(card.merchant, card.discountText) ?? defaultCategory;
 
-          // Check if blocked by Incapsula
-          const bodyText: string = await page.evaluate(
-            () => (document as Document).body?.innerText ?? ""
-          );
-          if (bodyText.includes("Incapsula incident ID")) {
-            console.warn(`[amex] Page blocked by Incapsula: ${url}`);
-            return;
+          const raw: Partial<OfferInput> = {
+            bank: "amex_ntb",
+            bankDisplayName: "American Express (NTB)",
+            title: card.merchant.substring(0, 300),
+            merchant: card.merchant.substring(0, 200),
+            ...discount,
+            category,
+            validFrom,
+            validUntil,
+            sourceUrl,
+            scrapedAt: new Date(),
+          };
+
+          const result = OfferInputSchema.safeParse(raw);
+          if (result.success) {
+            allOffers.push(result.data);
+          } else {
+            console.warn("[amex] Offer failed validation:", result.error.flatten());
           }
-
-          if (label === REQUEST_LABELS.LISTING) {
-            // Try to find offer detail links first
-            const links: string[] = await page.$$eval(
-              "a[href]",
-              (anchors: Element[]) =>
-                anchors
-                  .map((a) => (a as HTMLAnchorElement).href)
-                  .filter((href) =>
-                    /americanexpress\.lk\/(offers|exclusive-offers)\/[^/#?]{4,}/.test(href)
-                  )
-            );
-
-            const unique = [...new Set(links)];
-            console.log(`[amex] LISTING: found ${unique.length} detail links`);
-
-            if (unique.length > 0) {
-              await addRequests(
-                unique.map((href) => ({
-                  url: href.startsWith("http") ? href : `${BASE_URL}${href}`,
-                  label: REQUEST_LABELS.DETAIL,
-                }))
-              );
-              return;
-            }
-
-            // No detail links — try to extract offer cards inline from the listing page
-            console.log("[amex] LISTING: no detail links found, trying inline card extraction");
-
-            type CardData = { title: string; merchant: string; discount: string; detailUrl: string };
-            const cards: CardData[] = await page.evaluate((): CardData[] => {
-              const results: CardData[] = [];
-
-              // Query elements whose class contains "offer", "promo", or "card"
-              const allEls = Array.from(
-                (document as Document).querySelectorAll<HTMLElement>(
-                  '[class*="offer"], [class*="promo"], [class*="card"]'
-                )
-              );
-
-              for (const el of allEls) {
-                // Must have reasonable content
-                const text = el.innerText?.trim() ?? "";
-                if (text.length < 10) continue;
-
-                // Avoid deeply nested duplicates — only pick top-level matches
-                if (el.parentElement?.matches('[class*="offer"], [class*="promo"], [class*="card"]')) {
-                  continue;
-                }
-
-                const titleEl = el.querySelector<HTMLElement>("h1, h2, h3, h4, [class*='title']");
-                const discountEl = el.querySelector<HTMLElement>(
-                  '[class*="discount"], [class*="badge"], [class*="saving"], [class*="percent"]'
-                );
-                const linkEl = el.querySelector<HTMLAnchorElement>("a[href]");
-
-                const title = titleEl?.innerText?.trim() ?? text.substring(0, 80);
-                const discount = discountEl?.innerText?.trim() ?? "";
-                const merchant = title.substring(0, 80);
-                const detailUrl = linkEl?.href ?? "";
-
-                if (title.length >= 3) {
-                  results.push({ title, merchant, discount, detailUrl });
-                }
-              }
-
-              return results;
-            });
-
-            console.log(`[amex] LISTING inline: found ${cards.length} offer cards`);
-
-            for (const card of cards) {
-              if (!card.title) continue;
-
-              const discount = parseDiscount(card.discount || undefined);
-              const { validFrom, validUntil } = extractDates(card.title);
-              const category = detectCategory(card.merchant, card.title + " " + (card.discount ?? ""));
-
-              const raw: Partial<OfferInput> = {
-                bank: "amex_ntb",
-                bankDisplayName: "American Express (NTB)",
-                title: card.title.substring(0, 300),
-                merchant: extractMerchantFromTitle(card.merchant).substring(0, 200),
-                ...discount,
-                category,
-                validFrom,
-                validUntil,
-                sourceUrl: card.detailUrl || url,
-                scrapedAt: new Date(),
-              };
-
-              const result = OfferInputSchema.safeParse(raw);
-              if (result.success) {
-                allOffers.push(result.data);
-              } else {
-                console.warn("[amex] Inline card failed validation:", result.error.flatten());
-              }
-            }
-          } else if (label === REQUEST_LABELS.DETAIL) {
-            // Extract offer from detail page using DOM API
-            const title: string | null = await page
-              .$eval("h1, h2", (el: Element) => (el as HTMLElement).innerText?.trim() ?? "")
-              .catch(() => null);
-
-            if (!title || title.length < 3) {
-              console.warn(`[amex] DETAIL ${url}: no title found`);
-              return;
-            }
-
-            const discountText: string | null = await page
-              .$eval(
-                '[class*="discount"], [class*="badge"], [class*="saving"]',
-                (el: Element) => (el as HTMLElement).innerText?.trim() ?? ""
-              )
-              .catch(() => null);
-
-            const merchantLogoUrl: string | null = await page.evaluate(
-              () =>
-                (document as Document).querySelector<HTMLMetaElement>(
-                  'meta[property="og:image"]'
-                )?.content ?? null
-            );
-
-            const bodyText2: string = await page.evaluate(
-              () => (document as Document).body?.innerText ?? ""
-            );
-
-            const merchant = extractMerchantFromTitle(title);
-            const discount = parseDiscount(
-              discountText || extractDiscountFromText(bodyText2) || undefined
-            );
-            const { validFrom, validUntil } = extractDates(bodyText2);
-            const category = detectCategory(merchant, bodyText2);
-
-            console.log(`[amex] DETAIL ${url}: extracted offer "${title.substring(0, 50)}"`);
-
-            const raw: Partial<OfferInput> = {
-              bank: "amex_ntb",
-              bankDisplayName: "American Express (NTB)",
-              title: title.substring(0, 300),
-              merchant: merchant.substring(0, 200),
-              ...discount,
-              category,
-              merchantLogoUrl: merchantLogoUrl ?? undefined,
-              validFrom,
-              validUntil,
-              sourceUrl: url,
-              scrapedAt: new Date(),
-            };
-
-            const result = OfferInputSchema.safeParse(raw);
-            if (result.success) {
-              allOffers.push(result.data);
-            } else {
-              console.warn("[amex] Detail offer failed validation:", result.error.flatten());
-            }
-          }
-        },
-
-        failedRequestHandler({ request }) {
-          console.warn(`[amex] Request failed: ${request.url}`);
-        },
-      });
-
-      crawler
-        .run([{ url: LISTING_URL, label: REQUEST_LABELS.LISTING }])
-        .then(() => resolve())
-        .catch((err: unknown) => {
-          reject(err instanceof Error ? err : new Error(String(err)));
-        });
-    });
+        }
+      } catch (err) {
+        console.warn(`[amex] Failed to fetch ${categoryUrl}:`, (err as Error).message);
+      }
+    }
   } catch (err) {
-    console.error("[amex] Crawlee scrape failed:", err);
+    console.error("[amex] Scrape failed:", err);
     return [];
   }
 
@@ -248,22 +103,69 @@ export async function scrape(): Promise<OfferInput[]> {
   return allOffers;
 }
 
-// ── Parsing helpers (kept from original — they work correctly) ───────────────
+// ── HTML parsing helpers ─────────────────────────────────────────────────────
 
-function extractMerchantFromTitle(title: string): string {
-  const atMatch = title.match(/\bat\s+(.+?)(?:\s+with\b|\s+for\b|\s+-|,|$)/i);
-  if (atMatch) return cleanText(atMatch[1]!).substring(0, 100);
-  const withMatch = title.match(/\bwith\s+(.+?)(?:\s+card|\s+bank|,|$)/i);
-  if (withMatch) return cleanText(withMatch[1]!).substring(0, 100);
-  return title.substring(0, 80);
-}
-
-function extractDiscountFromText(text: string): string | undefined {
-  const m = text.match(
-    /(up\s+to\s+[\d]+%(?:\s+\w+)?|[\d]+%\s+(?:off|discount|cashback|savings?)|[\d]+\s*month\s+0%\s+install?ments?|buy\s+\d+\s+get\s+\d+|complimentary\s+\w+)/i
+function isBlockPage(html: string): boolean {
+  return (
+    html.includes("Incapsula incident ID") ||
+    html.includes("_Incapsula_Resource") ||
+    html.includes("Request unsuccessful")
   );
-  return m ? m[0].trim() : undefined;
 }
+
+function isErrorPage(html: string): boolean {
+  return html.includes("General Error") || html.includes("Sorry, Something went wrong");
+}
+
+type OfferCard = {
+  merchant: string;
+  discountText: string;
+  validityText: string;
+  detailUrl: string;
+};
+
+/**
+ * Parse offer cards from a category listing page.
+ * Each card follows: .alloffer-box > a.alloffer-box-inner > .alloffer-text > .alloffer-heading
+ */
+function parseOfferCards(html: string): OfferCard[] {
+  const cards: OfferCard[] = [];
+
+  // Match each alloffer-box block
+  const boxRe = /<div[^>]*class="[^"]*alloffer-box[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?=<div[^>]*class="[^"]*alloffer-box|<\/div>)/gi;
+
+  // Simpler approach: extract all .alloffer-heading merchants and pair with surrounding context
+  const merchantRe = /alloffer-heading">\s*([\s\S]*?)\s*<\/div>/gi;
+  let m: RegExpExecArray | null;
+
+  while ((m = merchantRe.exec(html)) !== null) {
+    const merchant = cleanText(m[1]!);
+    if (!merchant || merchant.length < 2) continue;
+
+    // Extract surrounding block (2000 chars before and after the heading for context)
+    const blockStart = Math.max(0, m.index - 1500);
+    const blockEnd = Math.min(html.length, m.index + 500);
+    const block = html.substring(blockStart, blockEnd);
+
+    // Extract discount from value-limit span immediately before the heading in this block
+    const discountMatch = block.match(/value-limit">\s*<span>\s*([^<]+)\s*<\/span>/i);
+    const discountText = discountMatch ? cleanText(discountMatch[1]!) : "";
+
+    // Extract validity text
+    const validityMatch = block.match(/Valid\s+(?:till|until|from|through)[^<]{5,60}/i);
+    const validityText = validityMatch ? validityMatch[0].trim() : "";
+
+    // Extract detail link (href within the block)
+    const linkMatch = block.match(/href="(https?:\/\/www\.americanexpress\.lk\/en\/offers\/[^"#?]+)"/i);
+    const detailUrl = linkMatch ? linkMatch[1]! : "";
+
+    cards.push({ merchant, discountText, validityText, detailUrl });
+  }
+
+  return cards;
+}
+
+// ── Data extraction helpers ──────────────────────────────────────────────────
 
 function extractDates(text: string): { validFrom?: Date; validUntil?: Date } {
   let validFrom: Date | undefined;
@@ -297,27 +199,28 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
   return isNaN(d.getTime()) ? undefined : d;
 }
 
-function detectCategory(merchant: string, offerText: string): OfferInput["category"] {
+function detectCategory(merchant: string, offerText: string): OfferInput["category"] | undefined {
   const text = `${merchant} ${offerText}`.toLowerCase();
-  if (/dining|restaurant|food|pizza|burger|cafe|hotel.*dining/.test(text)) return "dining";
-  if (/hotel|resort|accommodation|stay|travel|flight|airline|holiday/.test(text)) return "travel";
-  if (/fuel|petrol|gas\s+station/.test(text)) return "fuel";
+  if (/dining|restaurant|food|pizza|burger|cafe/.test(text)) return "dining";
+  if (/hotel|resort|travel|flight|airline|holiday|lodging/.test(text)) return "travel";
+  if (/fuel|petrol/.test(text)) return "fuel";
   if (/grocery|supermarket|keells|cargills/.test(text)) return "groceries";
   if (/cinema|entertainment|movie/.test(text)) return "entertainment";
   if (/hospital|pharmacy|health|medical|wellness/.test(text)) return "health";
   if (/online|e-commerce|digital/.test(text)) return "online";
   if (/shopping|retail|fashion|clothing|boutique/.test(text)) return "shopping";
-  return "other";
+  return undefined;
 }
 
-function cleanText(text: string): string {
-  return text
+function cleanText(html: string): string {
+  return html
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&nbsp;/g, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&#\d+;/g, "")
+    .replace(/&#039;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
 }
