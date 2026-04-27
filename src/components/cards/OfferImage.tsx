@@ -104,7 +104,11 @@ export function OfferImage({ offer, sizes, imgClassName }: Props) {
       sizes={sizes ?? "(max-width: 768px) 100vw, 33vw"}
       className={imgClassName ?? "object-contain p-3"}
       onError={advanceStage}
-      unoptimized={stage === "clearbit"} // Clearbit redirects; skip Next.js optimisation
+      // Skip Next.js image optimisation for all external URLs:
+      // - "primary" (bank CDN images) — bank servers often block Vercel's optimisation
+      //   server IPs, so let the browser fetch directly instead.
+      // - "clearbit" — Clearbit redirects; optimisation breaks redirect following.
+      unoptimized
     />
   );
 }
