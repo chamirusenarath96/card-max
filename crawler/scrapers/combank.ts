@@ -34,9 +34,9 @@ const CATEGORY_MAP: Record<string, OfferInput["category"]> = {
   "online-shopping": "online",
   "online": "online",
   "shopping": "shopping",
-  "health": "health",
-  "health-wellness": "health",
-  "wellness": "health",
+  "health": "healthcare",
+  "health-wellness": "wellness",
+  "wellness": "wellness",
   "fuel": "fuel",
   "groceries": "groceries",
   "supermarket": "groceries",
@@ -244,7 +244,8 @@ function detectCategoryFromSlug(slug: string): OfferInput["category"] {
   if (/fuel/.test(slug)) return "fuel";
   if (/grocery|supermarket/.test(slug)) return "groceries";
   if (/entertainment/.test(slug)) return "entertainment";
-  if (/health|wellness/.test(slug)) return "health";
+  if (/wellness/.test(slug)) return "wellness";
+  if (/health/.test(slug)) return "healthcare";
   if (/online/.test(slug)) return "online";
   if (/shopping/.test(slug)) return "shopping";
   return "other";

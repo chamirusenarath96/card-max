@@ -169,7 +169,8 @@ function detectCategory(title: string, content: string): OfferInput["category"] 
   if (/fuel|petrol|gas\s+station|petroleum/.test(text)) return "fuel";
   if (/grocery|supermarket|keells|cargills|laugfs/.test(text)) return "groceries";
   if (/cinema|entertainment|movie|theme\s+park/.test(text)) return "entertainment";
-  if (/hospital|pharmacy|health|medical|wellness|clinic/.test(text)) return "health";
+  if (/wellness|spa|beauty|salon/.test(text)) return "wellness";
+  if (/hospital|pharmacy|health|medical|clinic/.test(text)) return "healthcare";
   if (/online|e-commerce|digital|web\s+store/.test(text)) return "online";
   if (/shopping|retail|fashion|clothing|apparel|boutique/.test(text)) return "shopping";
   return "other";

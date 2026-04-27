@@ -7,7 +7,7 @@ import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -24,7 +24,7 @@ export function OfferCardDefault({ offer }: Props) {
      * Outer wrapper handles the hover glow — kept separate from the Card so
      * the Card's overflow-hidden doesn't clip the box-shadow.
      */
-    <div className="group relative h-full">
+    <div className="group relative h-full" data-testid="offer-card">
       {/* Glowing border — fades in on hover using bank brand colour */}
       <div
         aria-hidden
@@ -33,11 +33,7 @@ export function OfferCardDefault({ offer }: Props) {
       />
 
       <Card className="relative h-full overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
-        <a
-          href={`/offers/${offer._id}`}
-          data-testid="offer-card"
-          className="flex h-full flex-col"
-        >
+        <div className="flex h-full flex-col">
           {/* ── Image area ─────────────────────────────────────────────── */}
           <div className="relative mx-3 mt-3 overflow-hidden rounded-xl bg-muted/40">
             {/* Fixed aspect ratio — same shape as the product card screenshot */}
@@ -107,15 +103,19 @@ export function OfferCardDefault({ offer }: Props) {
               </p>
             )}
 
-            {/* CTA */}
-            <div
+            {/* CTA — opens original bank offer page in new tab */}
+            <a
+              href={offer.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="offer-view-link"
               className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "mb-3 mt-auto w-full justify-center font-semibold",
+                "mb-3 mt-auto flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted",
               )}
             >
               View Offer Details
-            </div>
+              <ExternalLink className="size-3 shrink-0 opacity-60" aria-hidden />
+            </a>
 
             {/* Bottom row — bank + category */}
             <div className="flex flex-wrap items-center gap-1.5">
@@ -137,7 +137,7 @@ export function OfferCardDefault({ offer }: Props) {
               </Badge>
             </div>
           </CardContent>
-        </a>
+        </div>
       </Card>
     </div>
   );

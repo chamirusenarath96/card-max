@@ -32,6 +32,7 @@ const MOCK_RESULTS = [
     discountLabel: "20% off",
     category: "groceries",
     offerType: "percentage",
+    sourceUrl: "https://www.combank.lk/offers/keells",
   },
   {
     _id: "2",
@@ -42,6 +43,7 @@ const MOCK_RESULTS = [
     discountLabel: "10% cashback",
     category: "dining",
     offerType: "cashback",
+    sourceUrl: "https://www.sampath.lk/offers/dining",
   },
 ];
 
@@ -184,7 +186,8 @@ describe("HeroSearch", () => {
     expect(screen.getByTestId("search-see-all")).toHaveTextContent("42");
   });
 
-  it("clicking a result navigates to the offer detail page", () => {
+  it("clicking a result opens the original offer URL in a new tab", () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
       total: 2,
@@ -194,7 +197,12 @@ describe("HeroSearch", () => {
     render(<HeroSearch initialQuery="ke" />);
     const items = screen.getAllByTestId("search-result-item");
     fireEvent.click(items[0]);
-    expect(mockPush).toHaveBeenCalledWith("/offers/1");
+    expect(openSpy).toHaveBeenCalledWith(
+      MOCK_RESULTS[0].sourceUrl,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    openSpy.mockRestore();
   });
 
   // --- Clear button ---

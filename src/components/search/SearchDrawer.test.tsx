@@ -31,6 +31,7 @@ const MOCK_RESULTS = [
     discountLabel: "20% off",
     category: "groceries",
     offerType: "percentage",
+    sourceUrl: "https://www.combank.lk/offers/keells",
   },
   {
     _id: "2",
@@ -41,6 +42,7 @@ const MOCK_RESULTS = [
     discountLabel: "10% cashback",
     category: "dining",
     offerType: "cashback",
+    sourceUrl: "https://www.sampath.lk/offers/dining",
   },
 ];
 

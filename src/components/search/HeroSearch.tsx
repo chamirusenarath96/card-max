@@ -106,9 +106,9 @@ export function HeroSearch({ initialQuery = "" }: Props) {
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  function handleResultClick(id: string) {
+  function handleResultClick(sourceUrl: string) {
     setDropdownOpen(false);
-    router.push(`/offers/${id}`);
+    window.open(sourceUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -193,7 +193,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
                     role="option"
                     aria-selected="false"
                     data-testid="search-result-item"
-                    onClick={() => handleResultClick(item._id)}
+                    onClick={() => handleResultClick(item.sourceUrl)}
                     className="flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left last:border-0 hover:bg-accent focus:bg-accent focus:outline-none"
                   >
                     <Search

@@ -39,11 +39,12 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-category")).toHaveTextContent("Groceries");
   });
 
-  it("links to the offer detail page", () => {
+  it("View Offer Details button links to the original offer source URL in a new tab", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    const link = screen.getByTestId("offer-card");
-    expect(link).toHaveAttribute("href", `/offers/${BASE_OFFER._id}`);
-    expect(link).not.toHaveAttribute("target", "_blank");
+    const link = screen.getByTestId("offer-view-link");
+    expect(link).toHaveAttribute("href", BASE_OFFER.sourceUrl);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   it("shows offer type badge with percentage for percentage offers", () => {
@@ -65,7 +66,7 @@ describe("OfferCard", () => {
 
   it("shows View Offer Details button in default size", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    expect(screen.getByText(/View Offer Details/)).toBeInTheDocument();
+    expect(screen.getByTestId("offer-view-link")).toHaveTextContent("View Offer Details");
   });
 
   it("shows expiry badge when offer expires within 7 days", () => {

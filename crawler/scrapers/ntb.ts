@@ -347,14 +347,18 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
 
 function detectCategory(merchant: string, offerText: string): OfferInput["category"] {
   const text = `${merchant} ${offerText}`.toLowerCase();
-  if (/dining|restaurant|food|pizza|burger|cafe|hotel.*dining/.test(text)) return "dining";
-  if (/hotel|resort|accommodation|stay|travel|flight|airline|holiday/.test(text)) return "travel";
+  if (/dining|restaurant|food|pizza|burger|cafe/.test(text)) return "dining";
+  if (/hotel|resort|accommodation|stay|lodge|lodging/.test(text)) return "lodging";
+  if (/travel|flight|airline|holiday/.test(text)) return "travel";
   if (/fuel|petrol|gas\s+station/.test(text)) return "fuel";
   if (/grocery|supermarket|keells|cargills/.test(text)) return "groceries";
   if (/cinema|entertainment|movie/.test(text)) return "entertainment";
-  if (/hospital|pharmacy|health|medical|wellness/.test(text)) return "health";
+  if (/wellness|spa|beauty|salon/.test(text)) return "wellness";
+  if (/hospital|pharmacy|health|medical|clinic/.test(text)) return "healthcare";
   if (/online|e-commerce|digital/.test(text)) return "online";
-  if (/shopping|retail|fashion|clothing|boutique/.test(text)) return "shopping";
+  if (/clothing|fashion|apparel|wear/.test(text)) return "clothing";
+  if (/home|furniture|appliance|hardware/.test(text)) return "homecare";
+  if (/shopping|retail|boutique/.test(text)) return "shopping";
   return "other";
 }
 

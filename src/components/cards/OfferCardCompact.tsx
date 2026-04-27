@@ -7,6 +7,7 @@ import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -19,7 +20,7 @@ export function OfferCardCompact({ offer }: Props) {
   const badgeLabel = getBadgeLabel(offer.offerType, offer.discountPercentage);
 
   return (
-    <div className="group relative h-full">
+    <div className="group relative h-full" data-testid="offer-card">
       {/* Glowing border on hover */}
       <div
         aria-hidden
@@ -28,11 +29,7 @@ export function OfferCardCompact({ offer }: Props) {
       />
 
       <Card className="relative h-full overflow-hidden rounded-xl border border-border/50 bg-card shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-lg">
-        <a
-          href={`/offers/${offer._id}`}
-          data-testid="offer-card"
-          className="flex h-full flex-col"
-        >
+        <div className="flex h-full flex-col">
           {/* Image */}
           <div className="relative mx-2 mt-2 overflow-hidden rounded-lg bg-muted/40">
             <div className="relative aspect-[4/3]">
@@ -87,6 +84,18 @@ export function OfferCardCompact({ offer }: Props) {
               className="mb-2"
             />
 
+            {/* CTA */}
+            <a
+              href={offer.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="offer-view-link"
+              className="mb-2 flex w-full items-center justify-center gap-1 rounded border border-border/60 bg-muted/40 px-2 py-1.5 text-[10px] font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              View Offer Details
+              <ExternalLink className="size-2.5 shrink-0 opacity-60" aria-hidden />
+            </a>
+
             {/* Bank + category */}
             <div className="flex flex-wrap items-center gap-1">
               <Badge
@@ -105,7 +114,7 @@ export function OfferCardCompact({ offer }: Props) {
               </Badge>
             </div>
           </CardContent>
-        </a>
+        </div>
       </Card>
     </div>
   );
