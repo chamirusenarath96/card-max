@@ -1067,7 +1067,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 
 | Issue | Bank | Status | Fix |
 |-------|------|--------|-----|
-| Incapsula JS challenge blocks scraper | NTB | 🔴 Active | Use Playwright |
+| Incapsula JS challenge blocks scraper | NTB | 🟡 Mitigated | HTTP-first + Crawlee PlaywrightCrawler fallback with waitForSelector |
 | All offers link to same listing page | Sampath | 🟡 Minor | Parse per-offer detail URL from `cards_new` |
 | HNB API occasionally returns empty | HNB | 🟡 Intermittent | Retry + alert threshold |
 | No individual offer detail URLs | HNB | 🟡 Minor | Use `id` field to construct detail URL |
@@ -1089,9 +1089,9 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 
 #### 🔧 Crawler & data
 
-- [x] **Playwright fallback** for NTB (and any future bot-protected site) — Incapsula JS challenge still blocks the HTTP scraper
+- [x] **Playwright fallback** for NTB (and any future bot-protected site) — HTTP-first + Crawlee `PlaywrightCrawler` fallback using `waitForSelector` to handle Incapsula JS-challenge redirect
 - [x] **Better merchant image resolution** — explore Google Custom Search API, DuckDuckGo image search, or an open-source logo DB (Brandfetch, Clearbit v2) to get higher-quality merchant images; update `crawler/utils/logo.ts`
-- [ ] **AmEx offers** from Nations Trust Bank (separate URL: `americanexpress.lk`)
+- [x] **AmEx offers** from Nations Trust Bank — `americanexpress.lk` scraper added; 271 offers verified across 11 categories (dining, wellness, supermarket, lodging, homecare, clothing, online, travel, healthcare, installments, special)
 - [ ] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base)
 - [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
 - [ ] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting

@@ -1,0 +1,52 @@
+name: Scraper Smoke Test
+
+# Manual trigger only — does NOT block CI or deploy.
+# Run this to verify scrapers can fetch real offers from live sites.
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Run scraper smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium with OS dependencies
+        run: npx playwright install chromium --with-deps
+
+      - name: Run scraper smoke tests
+        run: npm run smoke:scrapers
+        continue-on-error: true
+        id: smoke
+
+      - name: Upload smoke test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-output
+          path: /tmp/crawlee-*
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Report result
+        if: always()
+        run: |
+          if [ "${{ steps.smoke.outcome }}" = "success" ]; then
+            echo "Smoke test PASSED — all scrapers returned >= 1 offer."
+          else
+            echo "Smoke test FAILED — one or more scrapers returned 0 offers."
+            exit 1
+          fi
