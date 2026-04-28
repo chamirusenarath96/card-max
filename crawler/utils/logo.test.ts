@@ -61,6 +61,10 @@ describe("buildClearbitUrl", () => {
       "https://www.google.com/s2/favicons?domain=keells.com&sz=128"
     );
   });
+
+  it("returns undefined for an unknown merchant", () => {
+    expect(buildClearbitUrl("Unknown Merchant XYZ")).toBeUndefined();
+  });
 });
 
 // ── AC2: Clearbit failure triggers Brandfetch call ───────────────────────────

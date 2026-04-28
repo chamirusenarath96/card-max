@@ -63,13 +63,15 @@ interface Props {
 type Stage = "primary" | "clearbit" | "icon";
 
 export function OfferImage({ offer, sizes, imgClassName }: Props) {
-  const [stage, setStage] = useState<Stage>(offer.merchantLogoUrl ? "primary" : "clearbit");
-
   const clearbitUrl = buildClearbitUrl(offer.merchant);
+
+  const [stage, setStage] = useState<Stage>(
+    offer.merchantLogoUrl ? "primary" : clearbitUrl ? "clearbit" : "icon"
+  );
 
   function advanceStage() {
     setStage((s) => {
-      if (s === "primary")  return "clearbit";
+      if (s === "primary") return clearbitUrl ? "clearbit" : "icon";
       if (s === "clearbit") return "icon";
       return "icon";
     });
@@ -94,7 +96,7 @@ export function OfferImage({ offer, sizes, imgClassName }: Props) {
     );
   }
 
-  const src = stage === "primary" ? offer.merchantLogoUrl! : clearbitUrl;
+  const src = stage === "primary" ? offer.merchantLogoUrl! : clearbitUrl!;
 
   return (
     <Image

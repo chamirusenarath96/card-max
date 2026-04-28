@@ -204,14 +204,25 @@ export function resolveMerchantDomain(merchant: string): string {
 }
 
 /**
- * Build a Google favicon URL for a given merchant.
- * Google returns 404 for unknown domains — OfferImage.tsx catches this and renders
- * the category icon fallback. sz=128 returns up to 128×128 px which is sufficient
- * for card display. Note: logo.clearbit.com was deprecated when Clearbit was acquired
- * by HubSpot and the domain no longer resolves.
+ * Build a Google favicon URL for a merchant — only when the merchant maps to a
+ * curated domain in MERCHANT_DOMAINS. Returns undefined for unknown merchants so
+ * OfferImage.tsx skips the network stage entirely and renders the category icon
+ * instead of showing a globe/generic favicon.
  */
-export function buildClearbitUrl(merchant: string): string {
-  const domain = resolveMerchantDomain(merchant);
+export function buildClearbitUrl(merchant: string): string | undefined {
+  const key = normaliseName(merchant);
+
+  let domain: string | undefined = MERCHANT_DOMAINS[key];
+  if (!domain) {
+    for (const [fragment, d] of Object.entries(MERCHANT_DOMAINS)) {
+      if (key.startsWith(fragment) || key.includes(fragment)) {
+        domain = d;
+        break;
+      }
+    }
+  }
+
+  if (!domain) return undefined;
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 }
 
@@ -317,7 +328,7 @@ export async function resolveMerchantImage(
   if (existingUrl) return existingUrl;
 
   const clearbitUrl = buildClearbitUrl(merchant);
-  if (await isReachable(clearbitUrl)) {
+  if (clearbitUrl && await isReachable(clearbitUrl)) {
     console.log(`[logo] Clearbit logo found for ${merchant}`);
     return clearbitUrl;
   }
