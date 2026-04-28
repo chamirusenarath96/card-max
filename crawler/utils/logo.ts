@@ -204,12 +204,15 @@ export function resolveMerchantDomain(merchant: string): string {
 }
 
 /**
- * Build a Clearbit Logo API URL for a given merchant.
- * Returns a 404 for unknowns — OfferImage.tsx catches this and renders icon fallback.
+ * Build a Google favicon URL for a given merchant.
+ * Google returns 404 for unknown domains — OfferImage.tsx catches this and renders
+ * the category icon fallback. sz=128 returns up to 128×128 px which is sufficient
+ * for card display. Note: logo.clearbit.com was deprecated when Clearbit was acquired
+ * by HubSpot and the domain no longer resolves.
  */
 export function buildClearbitUrl(merchant: string): string {
   const domain = resolveMerchantDomain(merchant);
-  return `https://logo.clearbit.com/${domain}`;
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 }
 
 // ── Brandfetch API ────────────────────────────────────────────────────────────

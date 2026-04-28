@@ -56,8 +56,10 @@ describe("resolveMerchantDomain — curated map", () => {
 });
 
 describe("buildClearbitUrl", () => {
-  it("builds a Clearbit URL from a known merchant", () => {
-    expect(buildClearbitUrl("Keells")).toBe("https://logo.clearbit.com/keells.com");
+  it("builds a Google favicon URL from a known merchant", () => {
+    expect(buildClearbitUrl("Keells")).toBe(
+      "https://www.google.com/s2/favicons?domain=keells.com&sz=128"
+    );
   });
 });
 
@@ -217,8 +219,8 @@ describe("resolveMerchantImage — existing logo (AC5)", () => {
     });
 
     const result = await resolveMerchantImage(undefined, "Keells");
-    // Clearbit should succeed and be returned
-    expect(result).toBe("https://logo.clearbit.com/keells.com");
+    // Google favicon should succeed and be returned
+    expect(result).toBe("https://www.google.com/s2/favicons?domain=keells.com&sz=128");
     expect(mockFetch).toHaveBeenCalled();
   });
 });

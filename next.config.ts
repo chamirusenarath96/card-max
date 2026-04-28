@@ -15,8 +15,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**.cloudfront.net" },
       // AI-generated fallback images (Pollinations.ai — free, no API key)
       { protocol: "https", hostname: "image.pollinations.ai" },
-      // Clearbit logo API (free merchant logos by domain)
-      { protocol: "https", hostname: "logo.clearbit.com" },
+      // Google favicon service (replaces deprecated Clearbit Logo API)
+      { protocol: "https", hostname: "www.google.com" },
       // AmEx Sri Lanka offer images (hosted on americanexpress.lk CDN)
       { protocol: "https", hostname: "www.americanexpress.lk" },
     ],
