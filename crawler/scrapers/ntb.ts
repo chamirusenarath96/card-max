@@ -79,9 +79,10 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
           console.warn(`[ntb] HTTP: campaign page blocked: ${url}`);
           continue;
         }
+        const pageImageUrl = extractPageImage(html);
         const rows = parseCampaignTable(html);
-        console.log(`[ntb] HTTP ${url}: ${rows.length} rows`);
-        pushValidOffers(rows, url, allOffers);
+        console.log(`[ntb] HTTP ${url}: ${rows.length} rows${pageImageUrl ? " (image found)" : ""}`);
+        pushValidOffers(rows, url, allOffers, pageImageUrl);
       } catch (err) {
         console.warn(`[ntb] HTTP: failed to fetch ${url}:`, (err as Error).message);
       }
@@ -182,9 +183,10 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
               () => (document as Document).documentElement?.outerHTML ?? ""
             );
 
+            const pageImageUrl = extractPageImage(html);
             const rows = parseCampaignTable(html);
-            console.log(`[ntb] Crawlee CAMPAIGN ${url}: ${rows.length} rows`);
-            pushValidOffers(rows, url, allOffers);
+            console.log(`[ntb] Crawlee CAMPAIGN ${url}: ${rows.length} rows${pageImageUrl ? " (image found)" : ""}`);
+            pushValidOffers(rows, url, allOffers, pageImageUrl);
           }
         },
 
@@ -211,7 +213,12 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
-function pushValidOffers(rows: OfferRow[], sourceUrl: string, out: OfferInput[]): void {
+function pushValidOffers(
+  rows: OfferRow[],
+  sourceUrl: string,
+  out: OfferInput[],
+  pageImageUrl?: string,
+): void {
   for (const row of rows) {
     if (!row.merchant || row.merchant.length < 2) continue;
 
@@ -226,6 +233,7 @@ function pushValidOffers(rows: OfferRow[], sourceUrl: string, out: OfferInput[])
       title,
       merchant: row.merchant,
       description: row.offerText.substring(0, 300) || undefined,
+      merchantLogoUrl: pageImageUrl || undefined,
       ...discount,
       category,
       validFrom,
@@ -244,6 +252,33 @@ function pushValidOffers(rows: OfferRow[], sourceUrl: string, out: OfferInput[])
 }
 
 // ── HTML parsing helpers ─────────────────────────────────────────────────────
+
+/**
+ * Extract the best available image URL from a campaign page.
+ * Priority: og:image → twitter:image → first prominent <img> → undefined.
+ */
+function extractPageImage(html: string): string | undefined {
+  // og:image (both attribute orderings)
+  const ogMatch =
+    html.match(/<meta\b[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
+    html.match(/<meta\b[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (ogMatch?.[1] && /^https?:\/\//i.test(ogMatch[1])) return ogMatch[1];
+
+  // twitter:image
+  const twMatch =
+    html.match(/<meta\b[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ??
+    html.match(/<meta\b[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+  if (twMatch?.[1] && /^https?:\/\//i.test(twMatch[1])) return twMatch[1];
+
+  // First absolute <img> with a promotional-looking path
+  const imgRe = /<img\b[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|gif)[^"']*)["']/gi;
+  let m: RegExpExecArray | null;
+  const srcs: string[] = [];
+  while ((m = imgRe.exec(html)) !== null && srcs.length < 20) {
+    if (m[1]) srcs.push(m[1]);
+  }
+  return srcs.find((u) => /promo|offer|banner|campaign|upload|content/i.test(u)) ?? srcs[0];
+}
 
 /** Returns true if the text/HTML is an Incapsula block/challenge page */
 function isBlockPage(html: string): boolean {

@@ -159,22 +159,26 @@ function parseOfferCards(html: string): OfferCard[] {
     const linkMatch = block.match(/href="(https?:\/\/www\.americanexpress\.lk\/en\/offers\/[^"#?]+)"/i);
     const detailUrl = linkMatch ? linkMatch[1]! : "";
 
-    // Extract merchant image — try absolute URL first, then site-relative path.
-    // We skip 1×1 tracking pixels (width/height="1") and data: URLs.
-    const imgMatch =
-      block.match(
-        /<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/www\.americanexpress\.lk\/[^"]+)"/i,
-      ) ??
-      block.match(
-        /<img(?![^>]*(?:width|height)="1")[^>]+src="(\/content\/[^"]+)"/i,
-      ) ??
-      block.match(
-        /<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/(?!data:)[^"]+\.(jpg|jpeg|png|webp|gif)[^"]*)"/i,
-      );
-    const imageUrl = imgMatch
-      ? imgMatch[1]!.startsWith("http")
-        ? imgMatch[1]!
-        : `${BASE_URL}${imgMatch[1]!}`
+    // Extract merchant image.
+    // AmEx LK sometimes uses CSS background-image instead of <img> tags inside
+    // .alloffer-image, so we try multiple patterns in priority order.
+    const rawImageUrl: string =
+      // 1. <img> with AmEx absolute URL
+      block.match(/<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/www\.americanexpress\.lk\/[^"]+)"/i)?.[1] ??
+      // 2. <img> with site-relative /content/ path (AEM CMS)
+      block.match(/<img(?![^>]*(?:width|height)="1")[^>]+src="(\/content\/[^"]+)"/i)?.[1] ??
+      // 3. CSS background-image with absolute URL (double or single quotes inside url())
+      block.match(/background(?:-image)?\s*:\s*url\(["']?(https?:\/\/[^"')]+)["']?\)/i)?.[1] ??
+      // 4. CSS background-image with site-relative path
+      block.match(/background(?:-image)?\s*:\s*url\(["']?(\/content\/[^"')]+)["']?\)/i)?.[1] ??
+      // 5. Any other absolute <img> with image extension
+      block.match(/<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp|gif)[^"]*)"/i)?.[1] ??
+      "";
+
+    const imageUrl = rawImageUrl
+      ? rawImageUrl.startsWith("http")
+        ? rawImageUrl
+        : `${BASE_URL}${rawImageUrl}`
       : "";
 
     cards.push({ merchant, discountText, validityText, detailUrl, imageUrl });
