@@ -24,15 +24,12 @@ import { fetchHtmlSessioned } from "../utils/http";
 
 const DETAIL_URL = "https://www.americanexpress.lk/en/offers/dining-offers/pizza-hut";
 
-const IMG_URL = "https://www.americanexpress.lk/content/dam/amex/lk/en/offers/dining/pizza-hut.jpg";
-
-/** Category listing page with one offer card including an offer image */
+/** Category listing page with one offer card */
 const CATEGORY_HTML = `
 <html><body>
 <div class="alloffer-box">
   <a href="${DETAIL_URL}" class="alloffer-box-inner">
     <div class="alloffer-image">
-      <img src="${IMG_URL}" alt="Pizza Hut offer" />
       <div class="value-limit"><span>Up to 25% Savings</span></div>
     </div>
     <div class="alloffer-text">
@@ -136,32 +133,10 @@ describe("amex scraper (HTTP)", () => {
     });
   });
 
-  // Image extraction — merchantLogoUrl is populated from <img> in alloffer-image
-  it("extracts merchantLogoUrl from offer card image", async () => {
+  // merchantLogoUrl is always undefined for AmEx — category pages use generic
+  // stock photos, so OfferImage.tsx falls back to Clearbit brand logos instead.
+  it("merchantLogoUrl is undefined (Clearbit handles logo resolution)", async () => {
     vi.mocked(fetchHtmlSessioned).mockResolvedValue(CATEGORY_HTML);
-
-    const offers = await scrape();
-
-    expect(offers.length).toBeGreaterThan(0);
-    expect(offers[0]!.merchantLogoUrl).toBe(IMG_URL);
-  });
-
-  // No image in HTML — merchantLogoUrl should be undefined (not empty string)
-  it("sets merchantLogoUrl to undefined when no image is present", async () => {
-    const noImageHtml = `
-<html><body>
-<div class="alloffer-box">
-  <a href="${DETAIL_URL}" class="alloffer-box-inner">
-    <div class="alloffer-image">
-      <div class="value-limit"><span>20% Off</span></div>
-    </div>
-    <div class="alloffer-text">
-      <div class="alloffer-heading">KFC</div>
-    </div>
-  </a>
-</div>
-</body></html>`;
-    vi.mocked(fetchHtmlSessioned).mockResolvedValue(noImageHtml);
 
     const offers = await scrape();
 
