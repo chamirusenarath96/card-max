@@ -7,7 +7,7 @@ import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -20,7 +20,7 @@ export function OfferCardExpanded({ offer }: Props) {
   const badgeLabel = getBadgeLabel(offer.offerType, offer.discountPercentage);
 
   return (
-    <div className="group relative h-full">
+    <div className="group relative h-full" data-testid="offer-card">
       {/* Glowing border on hover */}
       <div
         aria-hidden
@@ -29,11 +29,7 @@ export function OfferCardExpanded({ offer }: Props) {
       />
 
       <Card className="relative h-full overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-xl">
-        <a
-          href={`/offers/${offer._id}`}
-          data-testid="offer-card"
-          className="flex h-full flex-col md:flex-row"
-        >
+        <div className="flex h-full flex-col md:flex-row">
           {/* ── Image ──────────────────────────────────────────────────── */}
           <div className="relative m-3 flex-shrink-0 overflow-hidden rounded-xl bg-muted/40 md:m-4 md:w-72">
             <div className="relative aspect-[4/3] md:aspect-auto md:h-full md:min-h-[220px]">
@@ -134,16 +130,21 @@ export function OfferCardExpanded({ offer }: Props) {
               </Badge>
             </div>
 
-            <div
+            {/* CTA — opens original bank offer page in new tab */}
+            <a
+              href={offer.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="offer-view-link"
               className={cn(
-                buttonVariants({ variant: "outline" }),
-                "inline-flex self-start font-semibold",
+                "inline-flex items-center gap-2 self-start rounded-md border border-border/60 bg-muted/40 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted",
               )}
             >
               View Offer Details
-            </div>
+              <ExternalLink className="size-4 shrink-0 opacity-60" aria-hidden />
+            </a>
           </CardContent>
-        </a>
+        </div>
       </Card>
     </div>
   );

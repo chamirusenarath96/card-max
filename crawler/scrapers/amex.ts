@@ -20,15 +20,15 @@ const BASE_URL = "https://www.americanexpress.lk";
 // Known category listing URLs — all publicly accessible via plain HTTP
 const CATEGORY_URLS: Array<{ url: string; category: OfferInput["category"] }> = [
   { url: `${BASE_URL}/en/offers/dining-offers`, category: "dining" },
-  { url: `${BASE_URL}/en/offers/wellness-offers`, category: "health" },
+  { url: `${BASE_URL}/en/offers/wellness-offers`, category: "wellness" },
   { url: `${BASE_URL}/en/offers/supermarket-offers`, category: "groceries" },
-  { url: `${BASE_URL}/en/offers/lodging-offers`, category: "travel" },
-  { url: `${BASE_URL}/en/offers/homecare-offers`, category: "shopping" },
-  { url: `${BASE_URL}/en/offers/clothing-offers`, category: "shopping" },
+  { url: `${BASE_URL}/en/offers/lodging-offers`, category: "lodging" },
+  { url: `${BASE_URL}/en/offers/homecare-offers`, category: "homecare" },
+  { url: `${BASE_URL}/en/offers/clothing-offers`, category: "clothing" },
   { url: `${BASE_URL}/en/offers/online-offers`, category: "online" },
   { url: `${BASE_URL}/en/offers/travel-offers`, category: "travel" },
-  { url: `${BASE_URL}/en/offers/healthcare`, category: "health" },
-  { url: `${BASE_URL}/en/offers/installment-offers`, category: "other" },
+  { url: `${BASE_URL}/en/offers/healthcare`, category: "healthcare" },
+  { url: `${BASE_URL}/en/offers/installment-offers`, category: "installments" },
   { url: `${BASE_URL}/en/offers/special-offers`, category: "other" },
 ];
 
@@ -75,6 +75,7 @@ export async function scrape(): Promise<OfferInput[]> {
             bankDisplayName: "American Express (NTB)",
             title: card.merchant.substring(0, 300),
             merchant: card.merchant.substring(0, 200),
+            merchantLogoUrl: card.imageUrl || undefined,
             ...discount,
             category,
             validFrom,
@@ -120,6 +121,7 @@ type OfferCard = {
   discountText: string;
   validityText: string;
   detailUrl: string;
+  imageUrl: string;
 };
 
 /**
@@ -157,7 +159,25 @@ function parseOfferCards(html: string): OfferCard[] {
     const linkMatch = block.match(/href="(https?:\/\/www\.americanexpress\.lk\/en\/offers\/[^"#?]+)"/i);
     const detailUrl = linkMatch ? linkMatch[1]! : "";
 
-    cards.push({ merchant, discountText, validityText, detailUrl });
+    // Extract merchant image — try absolute URL first, then site-relative path.
+    // We skip 1×1 tracking pixels (width/height="1") and data: URLs.
+    const imgMatch =
+      block.match(
+        /<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/www\.americanexpress\.lk\/[^"]+)"/i,
+      ) ??
+      block.match(
+        /<img(?![^>]*(?:width|height)="1")[^>]+src="(\/content\/[^"]+)"/i,
+      ) ??
+      block.match(
+        /<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/(?!data:)[^"]+\.(jpg|jpeg|png|webp|gif)[^"]*)"/i,
+      );
+    const imageUrl = imgMatch
+      ? imgMatch[1]!.startsWith("http")
+        ? imgMatch[1]!
+        : `${BASE_URL}${imgMatch[1]!}`
+      : "";
+
+    cards.push({ merchant, discountText, validityText, detailUrl, imageUrl });
   }
 
   return cards;
@@ -200,13 +220,17 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
 function detectCategory(merchant: string, offerText: string): OfferInput["category"] | undefined {
   const text = `${merchant} ${offerText}`.toLowerCase();
   if (/dining|restaurant|food|pizza|burger|cafe/.test(text)) return "dining";
-  if (/hotel|resort|travel|flight|airline|holiday|lodging/.test(text)) return "travel";
+  if (/hotel|resort|lodging|accommodation|stay/.test(text)) return "lodging";
+  if (/travel|flight|airline|holiday/.test(text)) return "travel";
   if (/fuel|petrol/.test(text)) return "fuel";
   if (/grocery|supermarket|keells|cargills/.test(text)) return "groceries";
   if (/cinema|entertainment|movie/.test(text)) return "entertainment";
-  if (/hospital|pharmacy|health|medical|wellness/.test(text)) return "health";
+  if (/wellness|spa|beauty|salon/.test(text)) return "wellness";
+  if (/hospital|pharmacy|health|medical|clinic/.test(text)) return "healthcare";
   if (/online|e-commerce|digital/.test(text)) return "online";
-  if (/shopping|retail|fashion|clothing|boutique/.test(text)) return "shopping";
+  if (/clothing|fashion|apparel|wear/.test(text)) return "clothing";
+  if (/home|furniture|appliance|hardware/.test(text)) return "homecare";
+  if (/shopping|retail|boutique/.test(text)) return "shopping";
   return undefined;
 }
 

@@ -21,6 +21,7 @@ export interface SuggestionItem {
   discountLabel?: string;
   category: string;
   offerType: string;
+  sourceUrl: string;
 }
 
 export function useSearchSuggestions(query: string) {

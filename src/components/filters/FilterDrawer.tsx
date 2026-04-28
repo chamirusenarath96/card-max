@@ -23,13 +23,18 @@ const BANKS = Object.entries(BANK_METADATA) as [Bank, (typeof BANK_METADATA)[Ban
 
 const CATEGORIES: { value: string; label: string }[] = [
   { value: "dining", label: "Dining" },
-  { value: "shopping", label: "Shopping" },
-  { value: "travel", label: "Travel" },
-  { value: "fuel", label: "Fuel" },
   { value: "groceries", label: "Groceries" },
-  { value: "entertainment", label: "Entertainment" },
-  { value: "health", label: "Health" },
+  { value: "travel", label: "Travel" },
+  { value: "lodging", label: "Lodging" },
+  { value: "shopping", label: "Shopping" },
+  { value: "clothing", label: "Clothing" },
+  { value: "homecare", label: "Home Care" },
   { value: "online", label: "Online" },
+  { value: "wellness", label: "Wellness" },
+  { value: "healthcare", label: "Healthcare" },
+  { value: "fuel", label: "Fuel" },
+  { value: "entertainment", label: "Entertainment" },
+  { value: "installments", label: "Installments" },
   { value: "other", label: "Other" },
 ];
 

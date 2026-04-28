@@ -17,6 +17,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "image.pollinations.ai" },
       // Clearbit logo API (free merchant logos by domain)
       { protocol: "https", hostname: "logo.clearbit.com" },
+      // AmEx Sri Lanka offer images (hosted on americanexpress.lk CDN)
+      { protocol: "https", hostname: "www.americanexpress.lk" },
     ],
   },
 };

@@ -43,10 +43,10 @@ const CATEGORY_MAP: Record<string, OfferInput["category"]> = {
   supermarket: "groceries",
   entertainment: "entertainment",
   cinema: "entertainment",
-  health: "health",
-  pharmacy: "health",
-  medical: "health",
-  wellness: "health",
+  health: "healthcare",
+  pharmacy: "healthcare",
+  medical: "healthcare",
+  wellness: "wellness",
   online: "online",
   "e-commerce": "online",
 };
@@ -203,7 +203,7 @@ function detectCategoryFromText(text: string): OfferInput["category"] {
   if (/fuel|petrol/.test(lower)) return "fuel";
   if (/grocery|supermarket/.test(lower)) return "groceries";
   if (/cinema|entertainment|movie/.test(lower)) return "entertainment";
-  if (/hospital|pharmacy|health|medical/.test(lower)) return "health";
+  if (/hospital|pharmacy|health|medical/.test(lower)) return "healthcare";
   if (/online|e.commerce/.test(lower)) return "online";
   return "other";
 }

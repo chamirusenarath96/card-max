@@ -13,10 +13,15 @@ import {
   UtensilsCrossed,
   ShoppingBag,
   Plane,
+  BedDouble,
+  Home,
+  Shirt,
   Fuel,
   ShoppingCart,
   Tv,
-  Heart,
+  Sparkles,
+  HeartPulse,
+  CreditCard,
   Globe,
   Tag,
 } from "lucide-react";
@@ -31,10 +36,15 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
   dining:        { Icon: UtensilsCrossed, gradient: "from-orange-400 to-red-500" },
   shopping:      { Icon: ShoppingBag,     gradient: "from-pink-400 to-purple-500" },
   travel:        { Icon: Plane,           gradient: "from-sky-400 to-blue-600" },
+  lodging:       { Icon: BedDouble,       gradient: "from-indigo-400 to-blue-600" },
+  homecare:      { Icon: Home,            gradient: "from-amber-400 to-orange-500" },
+  clothing:      { Icon: Shirt,           gradient: "from-fuchsia-400 to-pink-600" },
   fuel:          { Icon: Fuel,            gradient: "from-yellow-400 to-orange-500" },
   groceries:     { Icon: ShoppingCart,    gradient: "from-green-400 to-emerald-600" },
   entertainment: { Icon: Tv,              gradient: "from-violet-400 to-purple-600" },
-  health:        { Icon: Heart,           gradient: "from-rose-400 to-red-600" },
+  wellness:      { Icon: Sparkles,        gradient: "from-lime-400 to-green-500" },
+  healthcare:    { Icon: HeartPulse,      gradient: "from-rose-400 to-red-600" },
+  installments:  { Icon: CreditCard,      gradient: "from-cyan-400 to-teal-600" },
   online:        { Icon: Globe,           gradient: "from-teal-400 to-cyan-600" },
   other:         { Icon: Tag,             gradient: "from-slate-400 to-gray-600" },
 };
@@ -94,7 +104,11 @@ export function OfferImage({ offer, sizes, imgClassName }: Props) {
       sizes={sizes ?? "(max-width: 768px) 100vw, 33vw"}
       className={imgClassName ?? "object-contain p-3"}
       onError={advanceStage}
-      unoptimized={stage === "clearbit"} // Clearbit redirects; skip Next.js optimisation
+      // Skip Next.js image optimisation for all external URLs:
+      // - "primary" (bank CDN images) — bank servers often block Vercel's optimisation
+      //   server IPs, so let the browser fetch directly instead.
+      // - "clearbit" — Clearbit redirects; optimisation breaks redirect following.
+      unoptimized
     />
   );
 }
