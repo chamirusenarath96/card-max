@@ -254,6 +254,18 @@ function pushValidOffers(
 // ── HTML parsing helpers ─────────────────────────────────────────────────────
 
 /**
+ * Returns true when a URL looks like an actual image rather than a homepage URL.
+ * NTB's og:image is misconfigured and returns just "https://www.nationstrust.com"
+ * (no path, no image extension) — this guard discards such values.
+ */
+function isLikelyImageUrl(url: string): boolean {
+  return (
+    /\.(jpg|jpeg|png|webp|gif|svg|ico)(\?.*)?$/i.test(url) ||
+    /\/(image|img|media|photo|banner|logo|upload|content|thumb)/i.test(url)
+  );
+}
+
+/**
  * Extract the best available image URL from a campaign page.
  * Priority: og:image → twitter:image → first prominent <img> → undefined.
  */
@@ -262,13 +274,15 @@ function extractPageImage(html: string): string | undefined {
   const ogMatch =
     html.match(/<meta\b[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
     html.match(/<meta\b[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-  if (ogMatch?.[1] && /^https?:\/\//i.test(ogMatch[1])) return ogMatch[1];
+  if (ogMatch?.[1] && /^https?:\/\//i.test(ogMatch[1]) && isLikelyImageUrl(ogMatch[1]))
+    return ogMatch[1];
 
   // twitter:image
   const twMatch =
     html.match(/<meta\b[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i) ??
     html.match(/<meta\b[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-  if (twMatch?.[1] && /^https?:\/\//i.test(twMatch[1])) return twMatch[1];
+  if (twMatch?.[1] && /^https?:\/\//i.test(twMatch[1]) && isLikelyImageUrl(twMatch[1]))
+    return twMatch[1];
 
   // First absolute <img> with a promotional-looking path
   const imgRe = /<img\b[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp|gif)[^"']*)["']/gi;
