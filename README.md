@@ -1,6 +1,6 @@
 # card-max
 
-> Sri Lankan credit card offers aggregator — scrapes all current deals from Commercial Bank, Sampath Bank, HNB, and Nations Trust Bank into one searchable, filterable feed.
+> Sri Lankan credit card offers aggregator — scrapes all current deals from Commercial Bank, Sampath Bank, HNB, Nations Trust Bank, and American Express (NTB) into one searchable, filterable feed.
 
 **Live:** https://card-max.vercel.app &nbsp;|&nbsp; **Stack:** Next.js 16 · MongoDB Atlas · GitHub Actions · Vercel
 
@@ -64,8 +64,8 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Crawler (Node.js / tsx)                       │
 │                                                                 │
-│  combank.ts   sampath.ts    hnb.ts       ntb.ts                 │
-│  (HTML scrape) (REST API)  (REST API)  (HTML + session)         │
+│  combank.ts   sampath.ts   hnb.ts    ntb.ts     amex.ts         │
+│  (HTML scrape) (REST API) (REST API) (HTTP+PW) (HTTP scrape)    │
 │        └──────────┴────────────┴────────────┘                  │
 │                          │                                      │
 │              crawler/utils/parseDiscount.ts                     │
@@ -80,7 +80,7 @@
 │                   MongoDB Atlas M0 (free)                       │
 │                                                                 │
 │  Collection: offers                                             │
-│  ~250 documents · 4 compound indexes                            │
+│  ~700 documents · 4 compound indexes                            │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ reads from
                            ▼
@@ -144,8 +144,8 @@ Each bank website is different. The crawler selects the appropriate strategy per
 |----------|-------------|----------------|
 | **REST API client** | Bank exposes a public JSON API | Sampath, HNB |
 | **2-phase HTML scrape** | Server-rendered HTML listing → detail pages | ComBank |
-| **Session-based HTML scrape** | Bot-protection (Incapsula) requires cookies | NTB |
-| **Playwright (future)** | JavaScript SPA — content only visible after JS runs | HNB fallback, NTB fallback |
+| **Plain HTTP HTML scrape** | Server-rendered HTML, category pages | AmEx NTB |
+| **HTTP-first + Playwright fallback** | Incapsula bot-protection; HTTP works from residential IPs | NTB |
 | **Agentic / LLM-assisted (future)** | Unstructured layouts, no consistent selectors | Any |
 
 ### Per-Bank Strategies
@@ -242,15 +242,49 @@ Step 3: GET each campaign detail page (max 3 concurrent)
 Upsert to MongoDB
 ```
 
-**Why this approach:** NTB uses Incapsula bot protection that returns a challenge page
-to plain HTTP requests. The session warm-up acquires a valid session cookie. This works
-for basic bot detection but not JavaScript challenges (which require a real browser).
+**Why this approach:** NTB uses Incapsula bot protection. The HTTP-first path works from
+residential/GitHub Actions IPs in many cases. When blocked, Crawlee's PlaywrightCrawler
+launches real Chromium with randomised browser fingerprints and handles the JS challenge
+by waiting for actual content selectors (`waitForSelector`) instead of the unreliable
+`networkidle` state (Incapsula's challenge JS polls the network continuously, which
+causes `networkidle` to never fire).
 
-**Current status:** NTB returns 0 offers because Incapsula requires JavaScript execution
-(not just cookies). The scraper degrades gracefully without throwing.
+**Current status:** HTTP-first path typically scrapes 121+ offers. Crawlee fallback
+activates automatically if Incapsula blocks the HTTP path. Both paths extract the best
+available image from each campaign page (og:image → twitter:image → prominent `<img>`).
 
-**Roadmap fix:** Use Playwright to render the NTB pages in a real browser. Playwright
-can handle JS challenges and is already in our dev dependencies.
+#### AmEx (American Express NTB) — Plain HTTP Category Scrape
+
+```
+Phase 1: For each of 11 known category URLs under americanexpress.lk/en/offers/*
+   │  (dining, wellness, supermarket, lodging, homecare, clothing,
+   │   online, travel, healthcare, installments, special)
+   │  Using session cookies for Incapsula bypass
+   ▼
+Phase 2: Parse each .alloffer-box block
+   │  merchant = .alloffer-heading
+   │  discountText = .value-limit span
+   │  validityText = "Valid till/from" text
+   │  detailUrl = <a href> within the block
+   │  imageUrl = 5-pattern extraction chain:
+   │    1. <img src="https://www.americanexpress.lk/...">
+   │    2. <img src="/content/...">  (AEM CMS relative path)
+   │    3. CSS background-image: url("https://...") inline style
+   │    4. CSS background-image: url("/content/...")
+   │    5. Any absolute <img> with image extension (.jpg/.png/.webp)
+   ▼
+Upsert to MongoDB — 271 offers across 11 categories
+```
+
+**Why this approach:** americanexpress.lk is server-side rendered — plain HTTP works.
+Offers are organised by category listing pages. The scraper iterates all known category
+URLs, extracts offer blocks with regex, and handles both `<img>` tags and CSS
+`background-image` inline styles for merchant images (the site uses both).
+
+**Image resolution chain (display time):** When no scraped `merchantLogoUrl` is stored,
+`OfferImage.tsx` falls back to `logo.clearbit.com/{domain}` using the `MERCHANT_DOMAINS`
+map in `crawler/utils/logo.ts` (40+ curated Sri Lankan merchant domains). If Clearbit
+also fails, a gradient icon with the category symbol and merchant name is shown.
 
 ### Crawler Pipeline
 
@@ -411,7 +445,7 @@ All types, validation, and MongoDB model are derived from it.
 ```typescript
 interface Offer {
   _id: string;
-  bank: "commercial_bank" | "sampath_bank" | "hnb" | "nations_trust_bank";
+  bank: "commercial_bank" | "sampath_bank" | "hnb" | "nations_trust_bank" | "amex_ntb";
   bankDisplayName: string;
   title: string;
   description?: string;
@@ -422,10 +456,12 @@ interface Offer {
   discountPercentage?: number; // populated for percentage and cashback
   discountLabel?: string;      // original human-readable string
 
-  category: "dining" | "shopping" | "travel" | "fuel"
-          | "groceries" | "entertainment" | "health" | "online" | "other";
+  // 14 categories — aligned with AmEx NTB taxonomy
+  category: "dining" | "shopping" | "travel" | "lodging" | "homecare"
+          | "clothing" | "fuel" | "groceries" | "entertainment"
+          | "wellness" | "healthcare" | "installments" | "online" | "other";
   merchant: string;
-  merchantLogoUrl?: string;
+  merchantLogoUrl?: string;   // scraped URL → Clearbit → category icon fallback
 
   validFrom?: Date;
   validUntil?: Date;
@@ -466,7 +502,12 @@ src/
 │       └── health/
 │           └── route.ts      GET /api/health — DB connectivity check
 └── components/
-    ├── OfferCard.tsx         Individual offer card (Server Component)
+    ├── cards/
+    │   ├── OfferCard.tsx         Offer card dispatcher (compact/default/expanded)
+    │   ├── OfferCardDefault.tsx  Default card with "View Offer Details" external link
+    │   ├── OfferCardCompact.tsx  Compact card variant
+    │   ├── OfferCardExpanded.tsx Expanded card variant
+    │   └── OfferImage.tsx        3-stage image fallback (scraped → Clearbit → icon)
     ├── OfferGrid.tsx         Responsive grid + empty state (Server Component)
     └── FilterBar.tsx         Bank chips + category dropdown (Client Component)
 ```
@@ -487,9 +528,10 @@ The full OpenAPI 3.1 specification lives at [`specs/api/openapi.yaml`](specs/api
 
 ```
 Query params (all optional, all combinable):
-  bank           commercial_bank | sampath_bank | hnb | nations_trust_bank
-  category       dining | shopping | travel | fuel | groceries |
-                 entertainment | health | online | other
+  bank           commercial_bank | sampath_bank | hnb | nations_trust_bank | amex_ntb
+  category       dining | shopping | travel | lodging | homecare | clothing |
+                 fuel | groceries | entertainment | wellness | healthcare |
+                 installments | online | other
   offerType      percentage | cashback | bogo | installment |
                  fixed_amount | points | free_item | other
   minDiscount    0–100  (only meaningful for percentage / cashback types)
@@ -841,6 +883,7 @@ The `run-migration` Claude skill (`.claude/commands/run-migration.md`) has the f
 | File | What it does | Status |
 |------|-------------|--------|
 | `migrate-installment-offers.ts` | Re-classifies `offerType="percentage"` + `discountPercentage=0` → `offerType="installment"` (96 records fixed 2026-04-17) | ✅ Applied |
+| `migrate-categories-v2.ts` | Renames `category="health"` → `"healthcare"` to align with the updated 14-value CategorySchema (23 records fixed 2026-04-28) | ✅ Applied |
 
 ---
 
@@ -1090,7 +1133,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 #### 🔧 Crawler & data
 
 - [x] **Playwright fallback** for NTB (and any future bot-protected site) — HTTP-first + Crawlee `PlaywrightCrawler` fallback using `waitForSelector` to handle Incapsula JS-challenge redirect
-- [x] **Better merchant image resolution** — explore Google Custom Search API, DuckDuckGo image search, or an open-source logo DB (Brandfetch, Clearbit v2) to get higher-quality merchant images; update `crawler/utils/logo.ts`
+- [x] **Better merchant image resolution** — Clearbit Logo API as primary fallback with 40+ curated Sri Lankan merchant domains in `crawler/utils/logo.ts`; Brandfetch API as secondary fallback; scraped OG/twitter images from NTB campaign pages; CSS `background-image` extraction from AmEx cards; `unoptimized` flag on all external images to bypass Vercel CDN IP blocking by bank firewalls
 - [x] **AmEx offers** from Nations Trust Bank — `americanexpress.lk` scraper added; 271 offers verified across 11 categories (dining, wellness, supermarket, lodging, homecare, clothing, online, travel, healthcare, installments, special)
 - [ ] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base)
 - [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
@@ -1098,7 +1141,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 
 #### 🖥️ Frontend features
 
-- [ ] **Offer detail page** — dedicated `src/app/offers/[id]/page.tsx` showing full offer description, validity dates, terms & conditions, price history chart (track `discountPercentage` over time), and a prominent CTA linking to the bank's credit card page
+- [x] **Offer external link UX** — removed internal offer detail page; each card now has an explicit "View Offer Details" button (`<a target="_blank">`) that opens the original bank offer URL directly; simpler UX with no additional page route or DB lookup required
 - [x] **Save filter presets** — "Save current filters" button stores the active filter combination in a React context (+ `localStorage` for persistence across sessions); saved presets appear as one-click chips above the filter bar
 - [x] **Dark mode** — toggle in the header; use `next-themes` with `ThemeProvider` wrapping `<body>`; all components already use shadcn semantic tokens (`bg-background`, `text-foreground`) so the switch requires minimal per-component changes
 - [ ] **Search UX overhaul (spec 017)** — (1) Remove hardcoded default search suggestions; show only live typeahead results from the API. (2) Animated placeholder in the hero search bar that types a sample query (e.g. "dining offers at Keells…"), pauses, backspaces, and cycles through a set of example queries — using a CSS/JS typewriter loop. (3) Partial-page refresh: when the user applies a filter, changes a search term, or navigates a pagination page, only the offers grid section (`<OfferGrid>`) re-renders via React Server Component streaming — the header, filter bar, and hero section stay mounted and do not flash. (4) Add a floating scroll-down chevron button on the right side of the viewport that animates into view when the user is above the offer grid, and a scroll-to-top button that appears once the user scrolls past the grid — both with smooth-scroll behaviour and fade-in/out animation.
