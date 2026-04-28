@@ -13,7 +13,7 @@ import { parseDiscount } from "../utils/parseDiscount";
 
 const API_URL = "https://venus.hnb.lk/api/get_all_pcard_promotions";
 const SOURCE_URL = "https://www.hnb.lk/personal/cards/credit-cards";
-const THUMB_BASE = "https://venus.hnb.lk";
+const THUMB_BASE = "https://www.hnb.lk";
 
 interface HnbPromotion {
   id: number;

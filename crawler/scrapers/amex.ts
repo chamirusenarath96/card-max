@@ -75,7 +75,8 @@ export async function scrape(): Promise<OfferInput[]> {
             bankDisplayName: "American Express (NTB)",
             title: card.merchant.substring(0, 300),
             merchant: card.merchant.substring(0, 200),
-            merchantLogoUrl: card.imageUrl || undefined,
+            // AmEx category pages use generic stock photos (not merchant logos).
+            // OfferImage.tsx falls back to Clearbit for proper brand logos.
             ...discount,
             category,
             validFrom,
@@ -121,7 +122,6 @@ type OfferCard = {
   discountText: string;
   validityText: string;
   detailUrl: string;
-  imageUrl: string;
 };
 
 /**
@@ -131,10 +131,6 @@ type OfferCard = {
 function parseOfferCards(html: string): OfferCard[] {
   const cards: OfferCard[] = [];
 
-  // Match each alloffer-box block
-  const boxRe = /<div[^>]*class="[^"]*alloffer-box[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?=<div[^>]*class="[^"]*alloffer-box|<\/div>)/gi;
-
-  // Simpler approach: extract all .alloffer-heading merchants and pair with surrounding context
   const merchantRe = /alloffer-heading">\s*([\s\S]*?)\s*<\/div>/gi;
   let m: RegExpExecArray | null;
 
@@ -142,46 +138,20 @@ function parseOfferCards(html: string): OfferCard[] {
     const merchant = cleanText(m[1]!);
     if (!merchant || merchant.length < 2) continue;
 
-    // Extract surrounding block (2000 chars before and after the heading for context)
     const blockStart = Math.max(0, m.index - 1500);
     const blockEnd = Math.min(html.length, m.index + 500);
     const block = html.substring(blockStart, blockEnd);
 
-    // Extract discount from value-limit span immediately before the heading in this block
     const discountMatch = block.match(/value-limit">\s*<span>\s*([^<]+)\s*<\/span>/i);
     const discountText = discountMatch ? cleanText(discountMatch[1]!) : "";
 
-    // Extract validity text
     const validityMatch = block.match(/Valid\s+(?:till|until|from|through)[^<]{5,60}/i);
     const validityText = validityMatch ? validityMatch[0].trim() : "";
 
-    // Extract detail link (href within the block)
     const linkMatch = block.match(/href="(https?:\/\/www\.americanexpress\.lk\/en\/offers\/[^"#?]+)"/i);
     const detailUrl = linkMatch ? linkMatch[1]! : "";
 
-    // Extract merchant image.
-    // AmEx LK sometimes uses CSS background-image instead of <img> tags inside
-    // .alloffer-image, so we try multiple patterns in priority order.
-    const rawImageUrl: string =
-      // 1. <img> with AmEx absolute URL
-      block.match(/<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/www\.americanexpress\.lk\/[^"]+)"/i)?.[1] ??
-      // 2. <img> with site-relative /content/ path (AEM CMS)
-      block.match(/<img(?![^>]*(?:width|height)="1")[^>]+src="(\/content\/[^"]+)"/i)?.[1] ??
-      // 3. CSS background-image with absolute URL (double or single quotes inside url())
-      block.match(/background(?:-image)?\s*:\s*url\(["']?(https?:\/\/[^"')]+)["']?\)/i)?.[1] ??
-      // 4. CSS background-image with site-relative path
-      block.match(/background(?:-image)?\s*:\s*url\(["']?(\/content\/[^"')]+)["']?\)/i)?.[1] ??
-      // 5. Any other absolute <img> with image extension
-      block.match(/<img(?![^>]*(?:width|height)="1")[^>]+src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp|gif)[^"]*)"/i)?.[1] ??
-      "";
-
-    const imageUrl = rawImageUrl
-      ? rawImageUrl.startsWith("http")
-        ? rawImageUrl
-        : `${BASE_URL}${rawImageUrl}`
-      : "";
-
-    cards.push({ merchant, discountText, validityText, detailUrl, imageUrl });
+    cards.push({ merchant, discountText, validityText, detailUrl });
   }
 
   return cards;
