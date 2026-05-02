@@ -58,6 +58,9 @@ describe("crawler run pipeline", () => {
     vi.doMock("./scrapers/amex", () => ({
       scrape: vi.fn().mockResolvedValue([]),
     }));
+    vi.doMock("./scrapers/boc", () => ({
+      scrape: vi.fn().mockResolvedValue([]),
+    }));
 
     // Dynamic import triggers main() which runs the pipeline
     await import("./run");
@@ -73,8 +76,8 @@ describe("crawler run pipeline", () => {
     // exit(1) because combank failed (hasError=true)
     expect(exitSpy).toHaveBeenCalledWith(1);
 
-    // sampath, hnb, ntb, amex each ran their upsert (4 calls with empty arrays)
-    expect(upsertMock).toHaveBeenCalledTimes(4);
+    // sampath, hnb, ntb, amex, boc each ran their upsert (5 calls with empty arrays)
+    expect(upsertMock).toHaveBeenCalledTimes(5);
 
     // Structured JSON summary was logged to stdout (AC8)
     const summaryCall = logSpy.mock.calls.find(
@@ -83,7 +86,7 @@ describe("crawler run pipeline", () => {
     expect(summaryCall).toBeDefined();
     const summary = JSON.parse(summaryCall![0] as string);
     expect(summary.errors).toBe(1);
-    expect(summary.summaries).toHaveLength(5);
+    expect(summary.summaries).toHaveLength(6);
 
     const combankEntry = summary.summaries.find(
       (s: { bank: string }) => s.bank === "commercial_bank"
@@ -128,6 +131,9 @@ describe("crawler run pipeline", () => {
       scrape: vi.fn().mockResolvedValue([]),
     }));
     vi.doMock("./scrapers/amex", () => ({
+      scrape: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("./scrapers/boc", () => ({
       scrape: vi.fn().mockResolvedValue([]),
     }));
 

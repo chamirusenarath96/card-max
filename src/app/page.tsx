@@ -83,6 +83,8 @@ const BANK_LABEL: Record<string, string> = {
   sampath_bank: "Sampath Bank",
   hnb: "HNB",
   nations_trust_bank: "Nations Trust Bank",
+  amex_ntb: "American Express (NTB)",
+  boc: "Bank of Ceylon",
 };
 
 export default async function HomePage({ searchParams }: PageProps) {

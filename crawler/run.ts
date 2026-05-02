@@ -14,6 +14,7 @@ import * as sampath from "./scrapers/sampath";
 import * as hnb from "./scrapers/hnb";
 import * as ntb from "./scrapers/ntb";
 import * as amex from "./scrapers/amex";
+import * as boc from "./scrapers/boc";
 import type { OfferInput } from "../specs/data/offer.schema";
 
 interface ScraperModule {
@@ -31,6 +32,7 @@ const SCRAPERS: ScraperConfig[] = [
   { name: "hnb", module: hnb },
   { name: "nations_trust_bank", module: ntb },
   { name: "amex_ntb", module: amex },
+  { name: "boc", module: boc },
 ];
 
 interface RunSummary {

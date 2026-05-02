@@ -39,12 +39,9 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-category")).toHaveTextContent("Groceries");
   });
 
-  it("View Offer Details button links to the original offer source URL in a new tab", () => {
+  it("does not render an external link (links removed in favour of inline description)", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    const link = screen.getByTestId("offer-view-link");
-    expect(link).toHaveAttribute("href", BASE_OFFER.sourceUrl);
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByTestId("offer-view-link")).toBeNull();
   });
 
   it("shows offer type badge with percentage for percentage offers", () => {
@@ -64,9 +61,14 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-merchant")).toHaveTextContent("Keells Super");
   });
 
-  it("shows View Offer Details button in default size", () => {
+  it("shows description when present", () => {
+    render(<OfferCard offer={{ ...BASE_OFFER, description: "Up to 15% off on dining." }} />);
+    expect(screen.getByTestId("offer-description")).toHaveTextContent("Up to 15% off on dining.");
+  });
+
+  it("does not render description element when description is absent", () => {
     render(<OfferCard offer={BASE_OFFER} />);
-    expect(screen.getByTestId("offer-view-link")).toHaveTextContent("View Offer Details");
+    expect(screen.queryByTestId("offer-description")).toBeNull();
   });
 
   it("shows expiry badge when offer expires within 7 days", () => {
