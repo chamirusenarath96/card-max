@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
@@ -7,8 +8,9 @@ import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const DESC_LIMIT = 70;
 
 interface Props {
   offer: Offer;
@@ -18,9 +20,18 @@ export function OfferCardCompact({ offer }: Props) {
   const bankMeta = BANK_METADATA[offer.bank];
   const expiry = getExpiryInfo(offer.validUntil);
   const badgeLabel = getBadgeLabel(offer.offerType, offer.discountPercentage);
+  const [descExpanded, setDescExpanded] = useState(false);
+
+  const desc = offer.description ?? "";
+  const descTruncated = desc.length > DESC_LIMIT && !descExpanded
+    ? desc.slice(0, DESC_LIMIT).trimEnd() + "…"
+    : desc;
 
   return (
-    <div className="group relative h-full" data-testid="offer-card">
+    <div
+      className={cn("group relative h-full", offer.isExpired && "opacity-50 grayscale")}
+      data-testid="offer-card"
+    >
       {/* Glowing border on hover */}
       <div
         aria-hidden
@@ -71,11 +82,30 @@ export function OfferCardCompact({ offer }: Props) {
             </h3>
 
             <p
-              className="mb-2 line-clamp-1 flex-grow text-[11px] text-muted-foreground"
+              className="mb-1.5 line-clamp-1 text-[11px] text-muted-foreground"
               data-testid="offer-title"
             >
               {offer.title}
             </p>
+
+            {/* Description with Show more/less */}
+            {desc && (
+              <div className="mb-2 flex-grow">
+                <p className="text-[10px] text-muted-foreground" data-testid="offer-description">
+                  {descTruncated}
+                </p>
+                {desc.length > DESC_LIMIT && (
+                  <button
+                    type="button"
+                    onClick={() => setDescExpanded((v) => !v)}
+                    className="mt-0.5 text-[9px] font-semibold text-primary hover:underline"
+                    data-testid="offer-desc-toggle"
+                  >
+                    {descExpanded ? "Show less" : "Show more"}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Discount */}
             <DiscountDisplay
@@ -84,20 +114,8 @@ export function OfferCardCompact({ offer }: Props) {
               className="mb-2"
             />
 
-            {/* CTA */}
-            <a
-              href={offer.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="offer-view-link"
-              className="mb-2 flex w-full items-center justify-center gap-1 rounded border border-border/60 bg-muted/40 px-2 py-1.5 text-[10px] font-semibold text-foreground transition-colors hover:bg-muted"
-            >
-              View Offer Details
-              <ExternalLink className="size-2.5 shrink-0 opacity-60" aria-hidden />
-            </a>
-
             {/* Bank + category */}
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="mt-auto flex flex-wrap items-center gap-1">
               <Badge
                 className="border-0 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white"
                 style={{ backgroundColor: `${bankMeta.color}dd` }}

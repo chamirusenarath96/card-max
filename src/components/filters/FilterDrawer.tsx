@@ -56,6 +56,7 @@ interface Props {
   activeFrom?: string;
   activeTo?: string;
   activeSort?: string;
+  includeExpired?: string;
 }
 
 export function FilterDrawer({
@@ -65,6 +66,7 @@ export function FilterDrawer({
   activeFrom,
   activeTo,
   activeSort,
+  includeExpired,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -124,6 +126,8 @@ export function FilterDrawer({
 
   const currentSort = activeSort ?? "latest";
 
+  const isExpiredOn = includeExpired === "true";
+
   const activeCount = [
     activeBank,
     activeCategory,
@@ -131,6 +135,7 @@ export function FilterDrawer({
     activeFrom,
     activeTo,
     activeSort && activeSort !== "latest" ? activeSort : null,
+    isExpiredOn ? "expired" : null,
   ].filter(Boolean).length;
 
   return (
@@ -175,6 +180,23 @@ export function FilterDrawer({
         </SheetHeader>
 
         <div className="flex-1 space-y-0 overflow-y-auto">
+          {/* Expired Offers Toggle */}
+          <section className="border-b px-6 py-5">
+            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Expired Offers
+            </Label>
+            <Button
+              type="button"
+              data-testid="expired-toggle"
+              variant={isExpiredOn ? "default" : "outline"}
+              aria-pressed={isExpiredOn}
+              className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+              onClick={() => setParam("includeExpired", isExpiredOn ? null : "true")}
+            >
+              {isExpiredOn ? "Hiding expired" : "Show expired offers"}
+            </Button>
+          </section>
+
           {/* Sort */}
           <section className="px-6 py-5">
             <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">

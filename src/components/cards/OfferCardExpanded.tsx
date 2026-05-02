@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
@@ -7,8 +8,9 @@ import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const DESC_LIMIT = 200;
 
 interface Props {
   offer: Offer;
@@ -18,9 +20,18 @@ export function OfferCardExpanded({ offer }: Props) {
   const bankMeta = BANK_METADATA[offer.bank];
   const expiry = getExpiryInfo(offer.validUntil);
   const badgeLabel = getBadgeLabel(offer.offerType, offer.discountPercentage);
+  const [descExpanded, setDescExpanded] = useState(false);
+
+  const desc = offer.description ?? "";
+  const descTruncated = desc.length > DESC_LIMIT && !descExpanded
+    ? desc.slice(0, DESC_LIMIT).trimEnd() + "…"
+    : desc;
 
   return (
-    <div className="group relative h-full" data-testid="offer-card">
+    <div
+      className={cn("group relative h-full", offer.isExpired && "opacity-50 grayscale")}
+      data-testid="offer-card"
+    >
       {/* Glowing border on hover */}
       <div
         aria-hidden
@@ -69,16 +80,29 @@ export function OfferCardExpanded({ offer }: Props) {
             </h3>
 
             <p
-              className="mb-3 flex-grow text-sm text-muted-foreground"
+              className="mb-2 text-sm text-muted-foreground"
               data-testid="offer-title"
             >
               {offer.title}
             </p>
 
-            {offer.description && (
-              <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">
-                {offer.description}
-              </p>
+            {/* Description with Show more/less */}
+            {desc && (
+              <div className="mb-3 flex-grow">
+                <p className="text-sm text-muted-foreground" data-testid="offer-description">
+                  {descTruncated}
+                </p>
+                {desc.length > DESC_LIMIT && (
+                  <button
+                    type="button"
+                    onClick={() => setDescExpanded((v) => !v)}
+                    className="mt-1 text-xs font-semibold text-primary hover:underline"
+                    data-testid="offer-desc-toggle"
+                  >
+                    {descExpanded ? "Show less" : "Show more"}
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Discount — percentage in accent, descriptor word softer */}
@@ -113,7 +137,7 @@ export function OfferCardExpanded({ offer }: Props) {
             </div>
 
             {/* Bank + category row */}
-            <div className="mb-4 flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <Badge
                 className="border-0 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
                 style={{ backgroundColor: `${bankMeta.color}dd` }}
@@ -129,20 +153,6 @@ export function OfferCardExpanded({ offer }: Props) {
                 {CATEGORY_LABELS[offer.category] ?? offer.category}
               </Badge>
             </div>
-
-            {/* CTA — opens original bank offer page in new tab */}
-            <a
-              href={offer.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="offer-view-link"
-              className={cn(
-                "inline-flex items-center gap-2 self-start rounded-md border border-border/60 bg-muted/40 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted",
-              )}
-            >
-              View Offer Details
-              <ExternalLink className="size-4 shrink-0 opacity-60" aria-hidden />
-            </a>
           </CardContent>
         </div>
       </Card>
