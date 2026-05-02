@@ -28,6 +28,7 @@ interface PageProps {
     sort?: string;
     q?: string;
     page?: string;
+    includeExpired?: string;
   }>;
 }
 
@@ -52,6 +53,7 @@ async function fetchOffers(params: {
   sort?: string;
   q?: string;
   page?: string;
+  includeExpired?: string;
 }): Promise<ApiResponse> {
   const query = new URLSearchParams();
   if (params.bank) query.set("bank", params.bank);
@@ -62,6 +64,7 @@ async function fetchOffers(params: {
   if (params.sort) query.set("sort", params.sort);
   if (params.q) query.set("q", params.q);
   if (params.page) query.set("page", params.page);
+  if (params.includeExpired === "true") query.set("includeExpired", "true");
   query.set("limit", "20");
 
   const res = await fetch(`${getBaseUrl()}/api/offers?${query}`, {
@@ -80,6 +83,8 @@ const BANK_LABEL: Record<string, string> = {
   sampath_bank: "Sampath Bank",
   hnb: "HNB",
   nations_trust_bank: "Nations Trust Bank",
+  amex_ntb: "American Express (NTB)",
+  boc: "Bank of Ceylon",
 };
 
 export default async function HomePage({ searchParams }: PageProps) {
@@ -89,7 +94,8 @@ export default async function HomePage({ searchParams }: PageProps) {
   const hasActiveFilters =
     params.bank || params.category || params.offerType ||
     params.activeFrom || params.activeTo ||
-    (params.sort && params.sort !== "latest");
+    (params.sort && params.sort !== "latest") ||
+    params.includeExpired === "true";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -209,6 +215,7 @@ export default async function HomePage({ searchParams }: PageProps) {
                 activeFrom={params.activeFrom}
                 activeTo={params.activeTo}
                 activeSort={params.sort}
+                includeExpired={params.includeExpired}
               />
             </Suspense>
           </div>

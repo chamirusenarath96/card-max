@@ -174,6 +174,10 @@ const MERCHANT_DOMAINS: Record<string, string> = {
   ltl:                 "ltnow.lk",
   laugfspetroleum:     "laugfs.com",
 
+  // BOC / Banks
+  boc:                 "boc.lk",
+  bankofceylon:        "boc.lk",
+
   // Entertainment / Leisure
   scope:               "scopecinemas.com",
   scopecinemas:        "scopecinemas.com",
