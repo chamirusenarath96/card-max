@@ -1137,7 +1137,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 - [x] **AmEx offers** from Nations Trust Bank — `americanexpress.lk` scraper added; 271 offers verified across 11 categories (dining, wellness, supermarket, lodging, homecare, clothing, online, travel, healthcare, installments, special)
 - [x] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base) — HTML scrapers added; both banks available as filter options in the frontend
 - [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
-- [ ] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting
+- [x] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting
 
 #### 🖥️ Frontend features
 
