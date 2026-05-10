@@ -1157,7 +1157,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 #### 🔒 Security & reliability
 
 - [x] **IP-based rate limiting** — add `src/middleware.ts` using Vercel's Edge Runtime; bucket requests per IP with a sliding-window counter stored in Vercel KV (Redis-compatible); limits: 60 req/min for `/api/offers`, 20 req/min for `/api/search`; return `429` with `Retry-After` header on breach
-- [ ] **Security CI step** — add `.github/workflows/security.yml` running `npm audit --audit-level=high` + [Trivy](https://github.com/aquasecurity/trivy) filesystem scan on every PR; block merges on HIGH/CRITICAL vulnerabilities; schedule a weekly full scan; report findings as PR annotations using `aquasecurity/trivy-action`
+- [x] **Security CI step** — add `.github/workflows/security.yml` running `npm audit --audit-level=high` + [Trivy](https://github.com/aquasecurity/trivy) filesystem scan on every PR; block merges on HIGH/CRITICAL vulnerabilities; schedule a weekly full scan; report findings as PR annotations using `aquasecurity/trivy-action`
 
 ---
 
