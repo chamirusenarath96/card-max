@@ -8,6 +8,11 @@
  *   4. Asserting on the JSON response body and status code
  *
  * This is a pure unit test — no network, no database.
+ *
+ * Atlas Search path (spec 013): OfferModel.aggregate() is called when q is
+ * provided. Integration tests for relevance ranking require a real Atlas Search
+ * index and are approximated here with mocks.
+ * TODO: integration test needs real DB
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -15,6 +20,7 @@ import { NextRequest } from "next/server";
 // ── vi.hoisted ensures these variables are initialised before vi.mock hoisting ─
 
 const {
+  mockAggregate,
   mockLean,
   mockSkip,
   mockSort,
@@ -28,7 +34,8 @@ const {
   const mockSort = vi.fn(() => ({ skip: mockSkip }));
   const mockFind = vi.fn((/* filter */) => ({ sort: mockSort }));
   const mockCount = vi.fn();
-  return { mockLean, mockSkip, mockSort, mockFind, mockCount };
+  const mockAggregate = vi.fn();
+  return { mockAggregate, mockLean, mockSkip, mockSort, mockFind, mockCount };
 });
 
 vi.mock("@/lib/db/connect", () => ({
@@ -39,6 +46,7 @@ vi.mock("@/lib/models/offer.model", () => ({
   OfferModel: {
     find: mockFind,
     countDocuments: mockCount,
+    aggregate: mockAggregate,
   },
 }));
 
@@ -91,6 +99,8 @@ describe("GET /api/offers", () => {
     vi.clearAllMocks();
     mockLean.mockResolvedValue([makeOffer()]);
     mockCount.mockResolvedValue(1);
+    // aggregate is NOT set up here — each Atlas Search test configures its own mock
+    // so that mockResolvedValueOnce queues don't cross-contaminate tests
   });
 
   // ── Happy-path ────────────────────────────────────────────────────────────
@@ -259,13 +269,137 @@ describe("GET /api/offers", () => {
     expect(filterArg.isExpired).toBeUndefined();
   });
 
-  // ── Full-text search ──────────────────────────────────────────────────────
+  // ── Atlas Search (spec 013) ───────────────────────────────────────────────
 
-  it("adds $text search when q param is provided", async () => {
+  // AC5: no q → uses find() not aggregate()
+  it("uses find() not aggregate() when q is absent", async () => {
+    await GET(makeRequest());
+    expect(mockFind).toHaveBeenCalled();
+    expect(mockAggregate).not.toHaveBeenCalled();
+  });
+
+  // AC5: empty q string treated as absent
+  it("uses find() when q is an empty string", async () => {
+    await GET(makeRequest({ q: "" }));
+    expect(mockFind).toHaveBeenCalled();
+    expect(mockAggregate).not.toHaveBeenCalled();
+  });
+
+  // AC2: q present → Atlas Search aggregate pipeline used, not find()
+  // TODO: integration test needs real DB to verify actual relevance ranking
+  it("uses aggregate() not find() when q is provided (Atlas Search path)", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer()])
+      .mockResolvedValueOnce([{ total: 1 }]);
+
+    const res = await GET(makeRequest({ q: "pizza" }));
+    expect(res.status).toBe(200);
+    expect(mockAggregate).toHaveBeenCalled();
+    expect(mockFind).not.toHaveBeenCalled();
+  });
+
+  // AC2: aggregate pipeline includes $search stage with correct index name
+  it("calls aggregate with $search stage on offers_search index", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer()])
+      .mockResolvedValueOnce([{ total: 1 }]);
+
     await GET(makeRequest({ q: "pizza" }));
+
+    const firstCallPipeline = mockAggregate.mock.calls[0]![0] as unknown[];
+    const searchStage = firstCallPipeline[0] as Record<string, unknown>;
+    expect(searchStage).toHaveProperty("$search");
+    const searchBody = searchStage["$search"] as Record<string, unknown>;
+    expect(searchBody.index).toBe("offers_search");
+  });
+
+  // AC3: typo query uses fuzzy matching (terms ≥ 4 chars)
+  // TODO: integration test needs real DB to verify Atlas Search fuzzy results
+  it("includes fuzzy config in $search stage for terms of 4+ characters", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer()])
+      .mockResolvedValueOnce([{ total: 1 }]);
+
+    await GET(makeRequest({ q: "piza" })); // 4-char typo query
+
+    const pipeline = mockAggregate.mock.calls[0]![0] as unknown[];
+    const searchStage = pipeline[0] as Record<string, unknown>;
+    const compound = (searchStage["$search"] as Record<string, unknown>)
+      .compound as Record<string, unknown>;
+    const shouldClauses = compound.should as Array<Record<string, unknown>>;
+    const firstClause = shouldClauses[0]!.text as Record<string, unknown>;
+    expect(firstClause).toHaveProperty("fuzzy");
+    expect((firstClause.fuzzy as Record<string, unknown>).maxEdits).toBe(1);
+  });
+
+  it("does not include fuzzy config for short terms (< 4 characters)", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer()])
+      .mockResolvedValueOnce([{ total: 1 }]);
+
+    await GET(makeRequest({ q: "KFC" })); // 3-char query — no fuzzy
+
+    const pipeline = mockAggregate.mock.calls[0]![0] as unknown[];
+    const searchStage = pipeline[0] as Record<string, unknown>;
+    const compound = (searchStage["$search"] as Record<string, unknown>)
+      .compound as Record<string, unknown>;
+    const shouldClauses = compound.should as Array<Record<string, unknown>>;
+    const firstClause = shouldClauses[0]!.text as Record<string, unknown>;
+    expect(firstClause).not.toHaveProperty("fuzzy");
+  });
+
+  // AC4: bank filter alongside text search — $match stage carries the filter
+  // TODO: integration test needs real DB to verify combined filter + Atlas Search
+  it("passes bank filter via $match stage alongside Atlas Search", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer({ bank: "hnb" })])
+      .mockResolvedValueOnce([{ total: 1 }]);
+
+    const res = await GET(makeRequest({ q: "pizza", bank: "hnb" }));
+    expect(res.status).toBe(200);
+
+    // The $match stage (second stage) should carry the bank filter
+    const pipeline = mockAggregate.mock.calls[0]![0] as unknown[];
+    const matchStage = pipeline[1] as Record<string, unknown>;
+    expect(matchStage).toHaveProperty("$match");
+    expect((matchStage["$match"] as Record<string, unknown>).bank).toBe("hnb");
+  });
+
+  // AC6: total count from Atlas Search count pipeline (not countDocuments)
+  // TODO: integration test needs real DB to verify Atlas Search count accuracy
+  it("returns total from Atlas Search count pipeline when q is provided", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer()])
+      .mockResolvedValueOnce([{ total: 42 }]); // Atlas Search reports 42 results
+
+    const res = await GET(makeRequest({ q: "pizza" }));
+    const body = await res.json();
+    expect(body.pagination.total).toBe(42);
+    // countDocuments should NOT be called on the search path
+    expect(mockCount).not.toHaveBeenCalled();
+  });
+
+  // Fallback: Atlas Search index not found → falls back to $text
+  it("falls back to $text search when Atlas Search returns MongoServerError index not found", async () => {
+    const mongoError = Object.assign(new Error("index not found"), {
+      name: "MongoServerError",
+    });
+    mockAggregate.mockRejectedValue(mongoError);
+
+    const res = await GET(makeRequest({ q: "pizza" }));
+    expect(res.status).toBe(200);
+    // Fallback path uses find() with $text filter
     expect(mockFind).toHaveBeenCalledWith(
       expect.objectContaining({ $text: { $search: "pizza" } })
     );
+  });
+
+  // Non-MongoServerError re-thrown as 500
+  it("returns 500 when Atlas Search throws a non-index error", async () => {
+    mockAggregate.mockRejectedValue(new Error("network timeout"));
+
+    const res = await GET(makeRequest({ q: "pizza" }));
+    expect(res.status).toBe(500);
   });
 
   // ── Pagination ────────────────────────────────────────────────────────────
