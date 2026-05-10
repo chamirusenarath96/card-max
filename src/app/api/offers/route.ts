@@ -1,6 +1,7 @@
 /**
  * GET /api/offers
  * Spec: specs/features/001-offer-listing.md + specs/api/openapi.yaml
+ * Search: Atlas Search ($search aggregation) — spec 013
  *
  * Supported query params (all optional):
  *   bank           – filter by bank enum
@@ -12,7 +13,7 @@
  *   activeFrom     – ISO date; start of validity overlap window
  *   activeTo       – ISO date; end of validity overlap window
  *   includeExpired – "true" to include expired offers
- *   q              – full-text search
+ *   q              – full-text search (Atlas Search when available, $text fallback)
  *   sort           – "latest" (default, createdAt desc) | "expiringSoon" (validUntil asc, within 3 days)
  *   page / limit   – pagination (default 1 / 20)
  */
@@ -111,11 +112,6 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Full-text search
-    if (q && q.trim()) {
-      filter.$text = { $search: q.trim() };
-    }
-
     // Sort order: "expiringSoon" = validUntil asc, "latest" = createdAt desc
     const sortOrder: Record<string, 1 | -1> = sort === "expiringSoon"
       ? { validUntil: 1 }
@@ -124,15 +120,107 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const tQuery = Date.now();
-    const [raw, total] = await Promise.all([
-      OfferModel.find(filter)
-        .sort(sortOrder)
-        .skip(skip)
-        .limit(limit)
-        .select("-__v")
-        .lean(),
-      OfferModel.countDocuments(filter),
-    ]);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let raw: any[];
+    let total: number;
+
+    if (q && q.trim()) {
+      const term = q.trim();
+      // Apply fuzzy matching only for terms long enough that typos are plausible
+      const fuzzy = term.length >= 4 ? { maxEdits: 1 as const } : undefined;
+
+      // Atlas Search compound query with weighted field boosting (spec 013)
+      const searchStage = {
+        $search: {
+          index: "offers_search",
+          compound: {
+            should: [
+              {
+                text: {
+                  query: term,
+                  path: "title",
+                  ...(fuzzy ? { fuzzy } : {}),
+                  score: { boost: { value: 3 } },
+                },
+              },
+              {
+                text: {
+                  query: term,
+                  path: "merchant",
+                  ...(fuzzy ? { fuzzy } : {}),
+                  score: { boost: { value: 2 } },
+                },
+              },
+              {
+                text: {
+                  query: term,
+                  path: "description",
+                  ...(fuzzy ? { fuzzy } : {}),
+                  score: { boost: { value: 1 } },
+                },
+              },
+            ],
+            minimumShouldMatch: 1,
+          },
+        },
+      };
+
+      // Sort: Atlas Search score first (relevance), then tiebreak by sort preference.
+      // Cast required: Mongoose's Meta type predates Atlas Search ("textScore"|"indexKey" only).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const searchSort = { score: { $meta: "searchScore" }, ...sortOrder } as any;
+
+      try {
+        const [searchRaw, countResult] = await Promise.all([
+          OfferModel.aggregate([
+            searchStage,
+            { $match: filter },
+            { $sort: searchSort },
+            { $skip: skip },
+            { $limit: limit },
+            { $project: { __v: 0 } },
+          ]),
+          OfferModel.aggregate([
+            searchStage,
+            { $match: filter },
+            { $count: "total" },
+          ]),
+        ]);
+        raw = searchRaw;
+        total = (countResult as Array<{ total?: number }>)[0]?.total ?? 0;
+      } catch (err) {
+        // Atlas Search index not yet built — fall back to legacy $text search
+        if (
+          err instanceof Error &&
+          err.name === "MongoServerError" &&
+          err.message.includes("index not found")
+        ) {
+          console.warn("[api/offers] Atlas Search index unavailable, falling back to $text");
+          filter.$text = { $search: term };
+          const [fallbackRaw, fallbackTotal] = await Promise.all([
+            OfferModel.find(filter).sort(sortOrder).skip(skip).limit(limit).select("-__v").lean(),
+            OfferModel.countDocuments(filter),
+          ]);
+          raw = fallbackRaw;
+          total = fallbackTotal;
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      const [findRaw, findTotal] = await Promise.all([
+        OfferModel.find(filter)
+          .sort(sortOrder)
+          .skip(skip)
+          .limit(limit)
+          .select("-__v")
+          .lean(),
+        OfferModel.countDocuments(filter),
+      ]);
+      raw = findRaw;
+      total = findTotal;
+    }
 
     const data = raw.map((doc) => ({
       ...doc,

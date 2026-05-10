@@ -71,9 +71,6 @@ const OfferSchema = new Schema<Offer>(
   }
 );
 
-// Text index for keyword search (spec 003)
-OfferSchema.index({ title: "text", description: "text", merchant: "text" });
-
 // Compound index for upsert matching (bank + merchant + title = unique offer identity)
 OfferSchema.index({ bank: 1, merchant: 1, title: 1 }, { unique: false });
 
