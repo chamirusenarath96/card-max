@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -26,9 +27,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const publisherId = process.env.NEXT_PUBLIC_ADSENSE_PUBLISHER_ID;
+  const adsenseEnabled = process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true";
+
   return (
     <html lang="en" suppressHydrationWarning className={cn("h-full antialiased", geist.variable, geistMono.variable)}>
       <body className="min-h-full flex flex-col font-sans">
+        {adsenseEnabled && publisherId && (
+          <Script
+            id="adsense-script"
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${publisherId}`}
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+          />
+        )}
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

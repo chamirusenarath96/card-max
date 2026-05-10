@@ -5,11 +5,45 @@ import { Search } from "lucide-react";
 import { OfferCard } from "./OfferCard";
 import { OfferCardSkeleton } from "./OfferCardSkeleton";
 import { CardSizeToggle } from "./CardSizeToggle";
+import { AdUnit } from "@/components/ads/AdUnit";
 import { PaginationControls } from "../layout/PaginationControls";
 import type { PaginationData } from "../layout/PaginationControls";
 import type { Offer } from "../../../specs/data/offer.schema";
 import type { CardSize } from "./offer-card-shared";
 import { Card, CardContent } from "@/components/ui/card";
+
+const AD_INTERVAL = 8;
+
+function buildGridItems(offers: Offer[], size: CardSize): React.ReactNode[] {
+  const adsenseEnabled = process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true";
+  const adSlotGrid = process.env.NEXT_PUBLIC_ADSENSE_SLOT_GRID ?? "";
+
+  const items: React.ReactNode[] = [];
+  offers.forEach((offer, index) => {
+    items.push(
+      <OfferCard
+        key={offer._id ?? `${offer.bank}-${offer.merchant}-${offer.title}`}
+        offer={offer}
+        size={size}
+      />,
+    );
+    const position = index + 1;
+    const isAdPosition = position % AD_INTERVAL === 0;
+    const isLastCard = position === offers.length;
+    if (adsenseEnabled && isAdPosition && !isLastCard) {
+      items.push(
+        <div
+          key={`ad-${position}`}
+          className="col-span-full min-h-[90px]"
+          data-testid="grid-ad-unit"
+        >
+          <AdUnit slotId={adSlotGrid} format="horizontal" />
+        </div>,
+      );
+    }
+  });
+  return items;
+}
 
 export type { PaginationData as Pagination };
 
@@ -53,13 +87,7 @@ export function OfferGrid({ offers, pagination, isLoading }: Props) {
       </div>
 
       <div data-testid="offer-grid" className={GRID_CLASS[cardSize]}>
-        {offers.map((offer) => (
-          <OfferCard
-            key={offer._id ?? `${offer.bank}-${offer.merchant}-${offer.title}`}
-            offer={offer}
-            size={cardSize}
-          />
-        ))}
+        {buildGridItems(offers, cardSize)}
       </div>
 
       {pagination ? <PaginationControls pagination={pagination} /> : null}
