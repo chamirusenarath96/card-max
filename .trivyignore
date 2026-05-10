@@ -1,0 +1,8 @@
+# CVE-2026-31808: file-type (via crawlee) — MEDIUM, fix requires crawlee downgrade (breaking)
+CVE-2026-31808
+
+# CVE-2026-32630: file-type (via crawlee) — MEDIUM, fix requires crawlee downgrade (breaking)
+CVE-2026-32630
+
+# CVE-2026-41305: postcss bundled in next.js — MEDIUM, no actionable fix within next@16.x
+CVE-2026-41305
