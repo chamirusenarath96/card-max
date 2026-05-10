@@ -3,9 +3,9 @@
 ## Status
 - [x] Spec drafted
 - [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 People's Bank and Bank of Ceylon are two of Sri Lanka's largest state-owned banks
@@ -165,14 +165,14 @@ The existing `run.ts` upsert logic deduplicates by `sourceUrl`. No changes neede
 as long as each offer has a unique, stable `sourceUrl`.
 
 ## Acceptance Criteria
-- [ ] AC1: `"peoples_bank"` and `"bank_of_ceylon"` added to `BankSchema` enum
-- [ ] AC2: Migration script runs without error on existing data
-- [ ] AC3: `crawler/scrapers/peoples_bank.ts` exports `scrape()` returning `OfferInput[]`
-- [ ] AC4: `crawler/scrapers/boc.ts` exports `scrape()` returning `OfferInput[]`
+- [x] AC1: `"peoples_bank"` and `"bank_of_ceylon"` added to `BankSchema` enum
+- [x] AC2: Migration script runs without error on existing data
+- [x] AC3: `crawler/scrapers/peoples_bank.ts` exports `scrape()` returning `OfferInput[]`
+- [x] AC4: `crawler/scrapers/boc.ts` exports `scrape()` returning `OfferInput[]`
 - [ ] AC5: Both scrapers return ≥ 1 offer in a live run against the respective bank websites
-- [ ] AC6: Both scrapers handle HTTP errors gracefully (return `[]`, no throw)
-- [ ] AC7: `crawler/run.ts` includes both scrapers in the run sequence
-- [ ] AC8: Both banks appear as filter options in the frontend filter bar
+- [x] AC6: Both scrapers handle HTTP errors gracefully (return `[]`, no throw)
+- [x] AC7: `crawler/run.ts` includes both scrapers in the run sequence
+- [x] AC8: Both banks appear as filter options in the frontend filter bar
 
 ## Test Cases
 

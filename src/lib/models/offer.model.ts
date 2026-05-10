@@ -10,7 +10,7 @@ const OfferSchema = new Schema<Offer>(
     bank: {
       type: String,
       required: true,
-      enum: ["commercial_bank", "sampath_bank", "hnb", "nations_trust_bank", "amex_ntb"],
+      enum: ["commercial_bank", "sampath_bank", "hnb", "nations_trust_bank", "amex_ntb", "peoples_bank", "bank_of_ceylon"],
       index: true,
     },
     bankDisplayName: { type: String, required: true },

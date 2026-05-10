@@ -72,6 +72,8 @@ Copy `.env.example` to `.env.local` and fill in:
 | HNB | hnb.lk (API: venus.hnb.lk) | `crawler/scrapers/hnb.ts` |
 | Nations Trust Bank | nationstrust.com | `crawler/scrapers/ntb.ts` |
 | American Express (NTB) | americanexpress.lk | `crawler/scrapers/amex.ts` |
+| People's Bank | peoplesbank.lk | `crawler/scrapers/peoples_bank.ts` |
+| Bank of Ceylon | boc.lk | `crawler/scrapers/boc.ts` |
 
 ## Offer Type System
 Every offer is classified into one of 8 offer types stored in the `offerType` field.
