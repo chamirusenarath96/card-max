@@ -1135,7 +1135,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 - [x] **Playwright fallback** for NTB (and any future bot-protected site) — HTTP-first + Crawlee `PlaywrightCrawler` fallback using `waitForSelector` to handle Incapsula JS-challenge redirect
 - [x] **Better merchant image resolution** — Clearbit Logo API as primary fallback with 40+ curated Sri Lankan merchant domains in `crawler/utils/logo.ts`; Brandfetch API as secondary fallback; scraped OG/twitter images from NTB campaign pages; CSS `background-image` extraction from AmEx cards; `unoptimized` flag on all external images to bypass Vercel CDN IP blocking by bank firewalls
 - [x] **AmEx offers** from Nations Trust Bank — `americanexpress.lk` scraper added; 271 offers verified across 11 categories (dining, wellness, supermarket, lodging, homecare, clothing, online, travel, healthcare, installments, special)
-- [ ] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base)
+- [x] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base) — HTML scrapers added; both banks available as filter options in the frontend
 - [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
 - [ ] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting
 

@@ -12,6 +12,8 @@ export const BankSchema = z.enum([
   "hnb",
   "nations_trust_bank",
   "amex_ntb",
+  "peoples_bank",
+  "bank_of_ceylon",
 ]);
 
 export const CategorySchema = z.enum([
@@ -182,5 +184,15 @@ export const BANK_METADATA: Record<
     displayName: "American Express (NTB)",
     color: "#016FD0",
     website: "https://www.americanexpress.lk",
+  },
+  peoples_bank: {
+    displayName: "People's Bank",
+    color: "#B22222",
+    website: "https://www.peoplesbank.lk",
+  },
+  bank_of_ceylon: {
+    displayName: "Bank of Ceylon",
+    color: "#006B3F",
+    website: "https://www.boc.lk",
   },
 };
