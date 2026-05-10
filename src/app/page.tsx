@@ -3,6 +3,7 @@ import { FilterBar } from "@/components/filters";
 import { FilterPresetChips } from "@/components/filters/FilterPresetChips";
 import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
+import { AdUnit } from "@/components/ads/AdUnit";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -173,7 +174,7 @@ export default async function HomePage({ searchParams }: PageProps) {
         </section>
 
         {/* ── Offer grid ───────────────────────────────────────────────── */}
-        <section className="mx-auto max-w-screen-xl px-6 py-14">
+        <section className="mx-auto max-w-screen-xl px-6 py-14 xl:flex xl:gap-8">
           {/* Saved filter preset chips — client-side only, above filter bar */}
           <Suspense fallback={null}>
             <FilterPresetChips />
@@ -213,7 +214,23 @@ export default async function HomePage({ searchParams }: PageProps) {
             </Suspense>
           </div>
 
-          <OfferGrid offers={offers} pagination={pagination} />
+          <div className="min-w-0 flex-1">
+            <OfferGrid offers={offers} pagination={pagination} />
+          </div>
+
+          {/* Sidebar ad — desktop only (≥ 1280px) */}
+          {process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true" && (
+            <aside
+              data-testid="sidebar-ad"
+              className="hidden min-h-[250px] w-[300px] shrink-0 xl:block"
+            >
+              <AdUnit
+                slotId={process.env.NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR ?? ""}
+                format="rectangle"
+                className="sticky top-24 min-h-[250px]"
+              />
+            </aside>
+          )}
         </section>
 
         {/* ── CTA ──────────────────────────────────────────────────────── */}

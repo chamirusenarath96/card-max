@@ -1,5 +1,5 @@
 import { render, screen } from "@/test-utils";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { OfferGrid } from "./OfferGrid";
 import type { Offer } from "../../../specs/data/offer.schema";
 
@@ -8,6 +8,10 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
 }));
+
+beforeEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const MOCK_OFFER: Offer = {
   _id: "abc123",
@@ -58,5 +62,43 @@ describe("OfferGrid", () => {
   it("shows skeleton while loading", () => {
     render(<OfferGrid offers={[]} isLoading />);
     expect(screen.getByTestId("offer-skeleton")).toBeInTheDocument();
+  });
+
+  it("injects grid ad unit after the 8th card when ADSENSE_ENABLED is true", () => {
+    vi.stubEnv("NEXT_PUBLIC_ADSENSE_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_ADSENSE_PUBLISHER_ID", "ca-pub-1234567890");
+    const nineOffers: Offer[] = Array.from({ length: 9 }, (_, i) => ({
+      ...MOCK_OFFER,
+      _id: `id-${i}`,
+      merchant: `Merchant ${i}`,
+      title: `Offer ${i}`,
+    }));
+    render(<OfferGrid offers={nineOffers} />);
+    expect(screen.getByTestId("grid-ad-unit")).toBeInTheDocument();
+  });
+
+  it("does not inject grid ad unit when ADSENSE_ENABLED is false", () => {
+    vi.stubEnv("NEXT_PUBLIC_ADSENSE_ENABLED", "false");
+    const nineOffers: Offer[] = Array.from({ length: 9 }, (_, i) => ({
+      ...MOCK_OFFER,
+      _id: `id-${i}`,
+      merchant: `Merchant ${i}`,
+      title: `Offer ${i}`,
+    }));
+    render(<OfferGrid offers={nineOffers} />);
+    expect(screen.queryByTestId("grid-ad-unit")).not.toBeInTheDocument();
+  });
+
+  it("does not inject grid ad unit when there are fewer than 9 cards", () => {
+    vi.stubEnv("NEXT_PUBLIC_ADSENSE_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_ADSENSE_PUBLISHER_ID", "ca-pub-1234567890");
+    const fewOffers: Offer[] = Array.from({ length: 5 }, (_, i) => ({
+      ...MOCK_OFFER,
+      _id: `id-${i}`,
+      merchant: `Merchant ${i}`,
+      title: `Offer ${i}`,
+    }));
+    render(<OfferGrid offers={fewOffers} />);
+    expect(screen.queryByTestId("grid-ad-unit")).not.toBeInTheDocument();
   });
 });

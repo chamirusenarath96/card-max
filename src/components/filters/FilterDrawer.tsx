@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import type { Bank } from "../../../specs/data/offer.schema";
+import { AdUnit } from "@/components/ads/AdUnit";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -175,6 +176,16 @@ export function FilterDrawer({
         </SheetHeader>
 
         <div className="flex-1 space-y-0 overflow-y-auto">
+          {/* Drawer ad unit — top of drawer, above filters */}
+          {process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true" && (
+            <div className="min-h-[90px] px-6 pt-4" data-testid="drawer-ad-unit">
+              <AdUnit
+                slotId={process.env.NEXT_PUBLIC_ADSENSE_SLOT_DRAWER ?? ""}
+                format="horizontal"
+              />
+            </div>
+          )}
+
           {/* Sort */}
           <section className="px-6 py-5">
             <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">

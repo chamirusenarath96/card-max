@@ -2,10 +2,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
+- [x] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Monetise the site's traffic by displaying contextually relevant ads from Google AdSense.
