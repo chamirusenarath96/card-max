@@ -1148,7 +1148,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 
 #### 💰 Monetisation
 
-- [ ] **Google AdSense integration** — place `<AdUnit>` components in: (1) between offer grid rows (every 8 cards), (2) sidebar on desktop, (3) top of the filter drawer; apply via `next/script` Strategy `"afterInteractive"`; measure RPM/CTR in AdSense dashboard and correlate with Vercel Analytics page views to optimise placement
+- [x] **Google AdSense integration** — place `<AdUnit>` components in: (1) between offer grid rows (every 8 cards), (2) sidebar on desktop, (3) top of the filter drawer; apply via `next/script` Strategy `"afterInteractive"`; measure RPM/CTR in AdSense dashboard and correlate with Vercel Analytics page views to optimise placement
 
 #### ⚡ Performance & quality
 
