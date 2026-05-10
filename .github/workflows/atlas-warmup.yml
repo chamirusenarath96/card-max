@@ -1,0 +1,40 @@
+name: Atlas Warmup
+
+on:
+  schedule:
+    - cron: "*/4 * * * *" # every 4 minutes — just under the ~5 min Atlas M0 idle timeout
+  workflow_dispatch:
+
+concurrency:
+  group: atlas-warmup
+  cancel-in-progress: true
+
+jobs:
+  warmup:
+    name: Ping health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true # transient failures are expected and harmless
+
+    steps:
+      - name: Ping /api/health
+        run: |
+          if [ -z "$VERCEL_APP_URL" ]; then
+            echo "VERCEL_APP_URL not configured — skipping warmup."
+            exit 0
+          fi
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            "${VERCEL_APP_URL}/api/health")
+
+          echo "Health check status: $STATUS"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed with status $STATUS"
+            exit 1
+          fi
+
+          echo "Atlas connection warm — status $STATUS"
+        env:
+          VERCEL_APP_URL: ${{ vars.VERCEL_APP_URL }}
