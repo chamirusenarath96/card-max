@@ -17,6 +17,8 @@
     "smoke:scrapers": "tsx scripts/smoke-test-scrapers.ts"
   },
   "dependencies": {
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "crawlee": "^3.16.0",
