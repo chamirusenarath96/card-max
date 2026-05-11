@@ -14,47 +14,42 @@ import { fetchHtml } from "../utils/http";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
-/** Mimics a People's Bank promotions page using the .promotion-item card pattern. */
+/**
+ * Mimics the current People's Bank promotion page using .promotion-card tiles.
+ * Note: inner content must not have nested <div>s because the card regex
+ * stops at the first </div> followed by <div or </.
+ */
 const CARD_HTML = `
 <html><body>
-  <div class="promotions-listing">
-    <div class="promotion-item">
-      <div class="promo-image">
-        <img src="https://www.peoplesbank.lk/images/promotions/pizza-hut.jpg" alt="Pizza Hut">
-      </div>
-      <div class="promo-content">
-        <h3>15% off at Pizza Hut for People's Bank Credit Cardholders</h3>
-        <p>Enjoy 15% discount on dine-in and takeaway orders at all Pizza Hut outlets island-wide.</p>
-        <p>Valid till 31 December 2026</p>
-      </div>
-    </div>
-    <div class="promotion-item">
-      <div class="promo-image">
-        <img src="https://www.peoplesbank.lk/images/promotions/keells.jpg" alt="Keells">
-      </div>
-      <div class="promo-content">
-        <h3>10% off at Keells Super Supermarkets</h3>
-        <p>Get 10% savings on groceries at all Keells Super outlets island-wide.</p>
-        <p>Valid from 01 January 2026 to 30 June 2026</p>
-      </div>
-    </div>
-  </div>
+<div class="promotions-wrapper"><div class="promotion-card">
+<span class="discount-badge">15% off</span>
+<img src="https://www.peoplesbank.lk/images/promotions/pizza-hut.jpg" alt="Pizza Hut">
+<h3><a href="/pizza-hut-offer">Pizza Hut</a></h3>
+<p>Enjoy 15% discount on dine-in and takeaway orders at all Pizza Hut outlets island-wide.</p>
+<p>Valid till 31 December 2026</p>
+</div>
+<div class="promotion-card">
+<span class="discount-badge">10% off</span>
+<img src="https://www.peoplesbank.lk/images/promotions/keells.jpg" alt="Keells">
+<h3><a href="/keells-offer">Keells Super</a></h3>
+<p>Get 10% savings on groceries at all Keells Super outlets island-wide.</p>
+<p>Valid from 01 January 2026 to 30 June 2026</p>
+</div>
+</div>
 </body></html>
 `;
 
-/** Article-based layout (WordPress pattern). */
-const ARTICLE_HTML = `
+/** Heading-based layout — exercises parseViaHeadings fallback. */
+const HEADING_HTML = `
 <html><body>
   <main>
-    <article class="promo-post">
-      <h3>Buy 1 Get 1 Free at Barista Coffee</h3>
-      <p>Complimentary coffee for People's Bank cardholders. Valid till 31 March 2026.</p>
-    </article>
+    <h3>Buy 1 Get 1 Free at Barista Coffee</h3>
+    <p>Complimentary coffee for People's Bank cardholders. Valid till 31 March 2026.</p>
   </main>
 </body></html>
 `;
 
-/** Table-based layout (older bank sites). */
+/** Table-based layout — exercises parseViaTableRows fallback. */
 const TABLE_HTML = `
 <html><body>
   <table>
@@ -92,7 +87,7 @@ describe("peoples_bank scraper", () => {
     });
   });
 
-  it("parses offer title and merchant from .promotion-item cards", async () => {
+  it("parses offer title and merchant from .promotion-card tiles", async () => {
     vi.mocked(fetchHtml).mockResolvedValue(CARD_HTML);
 
     const offers = await scrape();
@@ -129,7 +124,7 @@ describe("peoples_bank scraper", () => {
     expect(keells?.validUntil).toBeInstanceOf(Date);
   });
 
-  it("classifies percentage discount correctly", async () => {
+  it("classifies percentage discount correctly from discount-badge", async () => {
     vi.mocked(fetchHtml).mockResolvedValue(CARD_HTML);
 
     const offers = await scrape();
@@ -139,8 +134,17 @@ describe("peoples_bank scraper", () => {
     expect(pizzaHut?.discountPercentage).toBe(15);
   });
 
-  it("falls back to parsing <article> elements", async () => {
-    vi.mocked(fetchHtml).mockResolvedValue(ARTICLE_HTML);
+  it("deduplicates offers seen across multiple category pages", async () => {
+    vi.mocked(fetchHtml).mockResolvedValue(CARD_HTML);
+
+    const offers = await scrape();
+
+    const pizzaHutOffers = offers.filter((o) => o.title.includes("Pizza Hut"));
+    expect(pizzaHutOffers.length).toBe(1);
+  });
+
+  it("falls back to parsing heading elements", async () => {
+    vi.mocked(fetchHtml).mockResolvedValue(HEADING_HTML);
 
     const offers = await scrape();
 
