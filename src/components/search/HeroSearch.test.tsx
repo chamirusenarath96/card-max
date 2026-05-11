@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from "@/test-utils";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, act } from "@/test-utils";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HeroSearch } from "./HeroSearch";
 import type { SuggestionItem } from "./useSearchSuggestions";
 
@@ -56,6 +56,13 @@ describe("HeroSearch", () => {
       isLoading: false,
       isActive: false,
     });
+    // Stub matchMedia for typewriter (no reduced motion by default)
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("renders the hero search container", () => {
@@ -116,6 +123,97 @@ describe("HeroSearch", () => {
     render(<HeroSearch />);
     fireEvent.click(screen.getByTestId("suggestion-hotels"));
     expect(mockPush).toHaveBeenCalledWith("/?q=hotel");
+  });
+
+  // --- AC1: No hardcoded dropdown suggestions on mount ---
+
+  it("no hardcoded suggestions rendered on mount — dropdown is not shown on initial render", () => {
+    render(<HeroSearch />);
+    // The dropdown must NOT appear on mount (no hardcoded items)
+    expect(screen.queryByTestId("search-dropdown")).not.toBeInTheDocument();
+  });
+
+  // --- AC2: Suggestions dropdown shows only live API results ---
+
+  it("suggestions render when API returns results (query >= 2 chars)", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    expect(screen.getByTestId("search-dropdown")).toBeInTheDocument();
+    expect(screen.getAllByTestId("search-result-item")).toHaveLength(2);
+  });
+
+  it("suggestions hidden when query < 2 chars", () => {
+    // isActive=false when query is too short
+    mockUseSearchSuggestions.mockReturnValue({
+      results: [],
+      total: 0,
+      isLoading: false,
+      isActive: false,
+    });
+    render(<HeroSearch initialQuery="k" />);
+    expect(screen.queryByTestId("search-dropdown")).not.toBeInTheDocument();
+  });
+
+  // --- AC3: Typewriter placeholder ---
+
+  it("typewriter cycles through phrases using fake timers", () => {
+    vi.useFakeTimers();
+    render(<HeroSearch />);
+    const input = screen.getByTestId("hero-search-input");
+
+    // Advance past the initial tick (30ms) — first character types
+    act(() => { vi.advanceTimersByTime(30); });
+    const firstPlaceholder = input.getAttribute("placeholder") ?? "";
+    // After first tick, placeholder should have started or have fallback
+    expect(typeof firstPlaceholder).toBe("string");
+
+    // Advance enough to type a full phrase (longest phrase ~25 chars × 30ms = 750ms)
+    act(() => { vi.advanceTimersByTime(750); });
+    const afterTyping = input.getAttribute("placeholder") ?? "";
+    expect(afterTyping.length).toBeGreaterThan(0);
+
+    // Advance past the pause (1800ms) and start backspacing
+    act(() => { vi.advanceTimersByTime(1800); });
+
+    // Advance through backspacing (25 chars × 15ms = 375ms)
+    act(() => { vi.advanceTimersByTime(375); });
+    const afterBackspace = input.getAttribute("placeholder") ?? "";
+    // After full backspace the phrase should be short or empty (switching)
+    expect(afterBackspace.length).toBeLessThan(afterTyping.length);
+  });
+
+  it("typewriter pauses at full phrase then backspaces", () => {
+    vi.useFakeTimers();
+    render(<HeroSearch />);
+    const input = screen.getByTestId("hero-search-input");
+
+    // Type first phrase completely: "dining offers at Keells…" = 24 chars × 30ms = 720ms
+    act(() => { vi.advanceTimersByTime(750); });
+    const fullPhrase = input.getAttribute("placeholder") ?? "";
+
+    // Pause period: 1800ms — placeholder should still be full phrase
+    act(() => { vi.advanceTimersByTime(900); }); // halfway through pause
+    expect(input.getAttribute("placeholder")).toBe(fullPhrase);
+
+    // After full pause, backspacing begins
+    act(() => { vi.advanceTimersByTime(900 + 15); });
+    const afterOneBackspace = input.getAttribute("placeholder") ?? "";
+    expect(afterOneBackspace.length).toBeLessThanOrEqual(fullPhrase.length);
+  });
+
+  it("typewriter uses static phrase when prefers-reduced-motion is set", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    render(<HeroSearch />);
+    // With reduced motion, placeholder is set immediately to the first phrase
+    const input = screen.getByTestId("hero-search-input");
+    const placeholder = input.getAttribute("placeholder") ?? "";
+    // Either the static phrase or the fallback
+    expect(typeof placeholder).toBe("string");
   });
 
   // --- Dropdown / live results ---

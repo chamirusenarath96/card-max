@@ -101,4 +101,27 @@ describe("OfferGrid", () => {
     render(<OfferGrid offers={fewOffers} />);
     expect(screen.queryByTestId("grid-ad-unit")).not.toBeInTheDocument();
   });
+
+  // AC4: offer grid re-renders without remounting surrounding header
+  it("offer grid re-renders without remounting header (AC4)", () => {
+    const { rerender } = render(
+      <div>
+        <header data-testid="page-header">Header</header>
+        <OfferGrid offers={[]} />
+      </div>,
+    );
+
+    const headerNode = screen.getByTestId("page-header");
+
+    rerender(
+      <div>
+        <header data-testid="page-header">Header</header>
+        <OfferGrid offers={[MOCK_OFFER]} pagination={{ page: 1, limit: 20, total: 1, totalPages: 1 }} />
+      </div>,
+    );
+
+    // The header DOM node must be the exact same element — not remounted
+    expect(screen.getByTestId("page-header")).toBe(headerNode);
+    expect(screen.getByTestId("offer-grid")).toBeInTheDocument();
+  });
 });

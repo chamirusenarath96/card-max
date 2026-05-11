@@ -17,7 +17,63 @@ const SUGGESTION_CHIPS: { label: string; params: Record<string, string> }[] = [
   { label: "Supermarkets", params: { q: "supermarket" } },
 ];
 
-const EXAMPLE_QUERIES = ['"pizza"', '"cashback"', '"dining"', '"hotels"'];
+const TYPEWRITER_PHRASES = [
+  "dining offers at Keells…",
+  "cashback on fuel…",
+  "HNB credit card deals…",
+  "hotels with 20% off…",
+  "BOGO at Odel…",
+];
+
+function useTypewriter(phrases: string[]): string {
+  const [displayed, setDisplayed] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || phrases.length === 0) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      setDisplayed(phrases[0] ?? "");
+      return;
+    }
+
+    let phraseIndex = 0;
+    let charIndex = 0;
+    let isDeleting = false;
+    let tid: ReturnType<typeof setTimeout>;
+
+    function tick() {
+      const phrase = phrases[phraseIndex];
+      if (!phrase) return;
+
+      if (!isDeleting) {
+        charIndex++;
+        setDisplayed(phrase.slice(0, charIndex));
+        if (charIndex >= phrase.length) {
+          isDeleting = true;
+          tid = setTimeout(tick, 1800);
+        } else {
+          tid = setTimeout(tick, 30);
+        }
+      } else {
+        charIndex--;
+        setDisplayed(phrase.slice(0, charIndex));
+        if (charIndex === 0) {
+          isDeleting = false;
+          phraseIndex = (phraseIndex + 1) % phrases.length;
+          tid = setTimeout(tick, 30);
+        } else {
+          tid = setTimeout(tick, 15);
+        }
+      }
+    }
+
+    tid = setTimeout(tick, 30);
+    return () => clearTimeout(tid);
+  }, [phrases]);
+
+  return displayed;
+}
 
 interface Props {
   initialQuery?: string;
@@ -32,21 +88,10 @@ export function HeroSearch({ initialQuery = "" }: Props) {
   const urlQuery = searchParams.get("q") ?? initialQuery;
   const [query, setQuery] = useState(urlQuery);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [placeholder, setPlaceholder] = useState("Search offers, merchants, or banks...");
   const containerRef = useRef<HTMLDivElement>(null);
   const { results, total, isLoading, isActive } = useSearchSuggestions(query);
 
-  // Shorter placeholder on small screens where input width is limited
-  useEffect(() => {
-    function updatePlaceholder() {
-      setPlaceholder(
-        window.innerWidth < 640 ? "Search offers..." : "Search offers, merchants, or banks...",
-      );
-    }
-    updatePlaceholder();
-    window.addEventListener("resize", updatePlaceholder);
-    return () => window.removeEventListener("resize", updatePlaceholder);
-  }, []);
+  const typewriterText = useTypewriter(TYPEWRITER_PHRASES);
 
   // Sync local input whenever the URL q param changes (e.g. SearchDrawer navigated)
   useEffect(() => {
@@ -139,7 +184,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
               }
             }}
             onFocus={() => isActive && setDropdownOpen(true)}
-            placeholder={placeholder}
+            placeholder={typewriterText || "Search offers, merchants, or banks…"}
             className="h-14 rounded-full border-border bg-background pl-12 pr-12 text-base shadow-md focus-visible:ring-primary/50"
             aria-label="Search offers"
             aria-expanded={dropdownOpen}
@@ -159,7 +204,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
             </button>
           )}
 
-          {/* Live results dropdown — shows as you type */}
+          {/* Live results dropdown — shows only when query >= 2 chars and API has results */}
           {dropdownOpen && (
             <div
               data-testid="search-dropdown"
@@ -233,7 +278,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
 
       {/* Example hint */}
       <p className="text-sm text-muted-foreground" data-testid="hero-search-hint">
-        Try searching for {EXAMPLE_QUERIES.join(", ")}
+        Try: dining, cashback, hotels, or a bank name
       </p>
 
       {/* Suggestion chips */}
