@@ -1,11 +1,12 @@
 name: Setup Node & Install
-description: Checkout, set up Node 22, and install npm dependencies
+description: >
+  Set up Node 22 with npm cache and install npm dependencies.
+  Must be called AFTER actions/checkout@v4 in the job — local composite
+  actions require the repository to already be checked out on the runner.
 
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-
     - uses: actions/setup-node@v4
       with:
         node-version: "22"
