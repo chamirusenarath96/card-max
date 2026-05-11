@@ -30,6 +30,7 @@ interface PageProps {
     sort?: string;
     q?: string;
     page?: string;
+    includeExpired?: string;
   }>;
 }
 
@@ -47,6 +48,7 @@ type SearchParams = {
   sort?: string;
   q?: string;
   page?: string;
+  includeExpired?: string;
 };
 
 function getBaseUrl(): string {
@@ -66,6 +68,7 @@ async function fetchOffers(params: SearchParams): Promise<ApiResponse> {
   if (params.sort) query.set("sort", params.sort);
   if (params.q) query.set("q", params.q);
   if (params.page) query.set("page", params.page);
+  if (params.includeExpired) query.set("includeExpired", params.includeExpired);
   query.set("limit", "20");
 
   const res = await fetch(`${getBaseUrl()}/api/offers?${query}`, {
@@ -84,6 +87,8 @@ const BANK_LABEL: Record<string, string> = {
   sampath_bank: "Sampath Bank",
   hnb: "HNB",
   nations_trust_bank: "Nations Trust Bank",
+  amex_ntb: "American Express",
+  bank_of_ceylon: "Bank of Ceylon",
 };
 
 function OfferGridSkeleton() {
@@ -111,6 +116,7 @@ async function OfferGridSection({ params }: { params: SearchParams }) {
   const hasActiveFilters =
     params.bank || params.category || params.offerType ||
     params.activeFrom || params.activeTo ||
+    params.includeExpired === "true" ||
     (params.sort && params.sort !== "latest");
 
   return (
@@ -144,11 +150,12 @@ async function OfferGridSection({ params }: { params: SearchParams }) {
             activeFrom={params.activeFrom}
             activeTo={params.activeTo}
             activeSort={params.sort}
+            includeExpired={params.includeExpired === "true"}
           />
         </Suspense>
       </div>
 
-      <div className="min-w-0 flex-1" data-testid="offer-grid-section">
+      <div data-testid="offer-grid-section">
         <OfferGrid offers={offers} pagination={pagination} />
       </div>
     </>
@@ -239,13 +246,15 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
         </section>
 
-        {/* ── Offer grid ───────────────────────────────────────────────── */}
-        <section className="mx-auto max-w-screen-xl px-6 py-14 xl:flex xl:gap-8">
-          {/* Saved filter preset chips — client-side only, above filter bar */}
+        {/* ── Saved filter preset chips — full-width above grid ────────── */}
+        <div className="mx-auto max-w-screen-xl px-6 pt-6">
           <Suspense fallback={null}>
             <FilterPresetChips />
           </Suspense>
+        </div>
 
+        {/* ── Offer grid ───────────────────────────────────────────────── */}
+        <section className="mx-auto max-w-screen-xl px-6 py-8 xl:flex xl:gap-8">
           <div className="min-w-0 flex-1">
             <Suspense fallback={<OfferGridSkeleton />}>
               <OfferGridSection params={params} />

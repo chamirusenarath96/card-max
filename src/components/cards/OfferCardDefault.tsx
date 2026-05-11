@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
@@ -7,8 +8,9 @@ import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const DESC_LIMIT = 120;
 
 interface Props {
   offer: Offer;
@@ -18,13 +20,22 @@ export function OfferCardDefault({ offer }: Props) {
   const bankMeta = BANK_METADATA[offer.bank];
   const expiry = getExpiryInfo(offer.validUntil);
   const badgeLabel = getBadgeLabel(offer.offerType, offer.discountPercentage);
+  const [descExpanded, setDescExpanded] = useState(false);
+
+  const desc = offer.description ?? "";
+  const isLong = desc.length > DESC_LIMIT;
+  const shownDesc = isLong && !descExpanded ? `${desc.slice(0, DESC_LIMIT)}…` : desc;
 
   return (
     /**
      * Outer wrapper handles the hover glow — kept separate from the Card so
      * the Card's overflow-hidden doesn't clip the box-shadow.
+     * Expired offers get muted with opacity + grayscale.
      */
-    <div className="group relative h-full" data-testid="offer-card">
+    <div
+      className={cn("group relative h-full", offer.isExpired && "opacity-50 grayscale")}
+      data-testid="offer-card"
+    >
       {/* Glowing border — fades in on hover using bank brand colour */}
       <div
         aria-hidden
@@ -78,11 +89,33 @@ export function OfferCardDefault({ offer }: Props) {
 
             {/* Title */}
             <p
-              className="mb-3 line-clamp-2 flex-grow text-xs text-muted-foreground"
+              className="mb-3 line-clamp-2 text-xs text-muted-foreground"
               data-testid="offer-title"
             >
               {offer.title}
             </p>
+
+            {/* Description with Show more/less toggle */}
+            {desc && (
+              <div className="mb-3">
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="offer-description"
+                >
+                  {shownDesc}
+                </p>
+                {isLong && (
+                  <button
+                    type="button"
+                    onClick={() => setDescExpanded((v) => !v)}
+                    className="mt-0.5 text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+                    data-testid="desc-toggle"
+                  >
+                    {descExpanded ? "Show less" : "Show more"}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Discount — percentage in accent, descriptor word softer */}
             <DiscountDisplay
@@ -103,22 +136,8 @@ export function OfferCardDefault({ offer }: Props) {
               </p>
             )}
 
-            {/* CTA — opens original bank offer page in new tab */}
-            <a
-              href={offer.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="offer-view-link"
-              className={cn(
-                "mb-3 mt-auto flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted",
-              )}
-            >
-              View Offer Details
-              <ExternalLink className="size-3 shrink-0 opacity-60" aria-hidden />
-            </a>
-
             {/* Bottom row — bank + category */}
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="mt-auto flex flex-wrap items-center gap-1.5">
               <Badge
                 className={cn(
                   "border-0 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white",

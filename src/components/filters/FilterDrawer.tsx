@@ -57,6 +57,7 @@ interface Props {
   activeFrom?: string;
   activeTo?: string;
   activeSort?: string;
+  includeExpired?: boolean;
 }
 
 export function FilterDrawer({
@@ -66,6 +67,7 @@ export function FilterDrawer({
   activeFrom,
   activeTo,
   activeSort,
+  includeExpired,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -132,6 +134,7 @@ export function FilterDrawer({
     activeFrom,
     activeTo,
     activeSort && activeSort !== "latest" ? activeSort : null,
+    includeExpired ? "expired" : null,
   ].filter(Boolean).length;
 
   return (
@@ -363,6 +366,23 @@ export function FilterDrawer({
                 </Button>
               ))}
             </div>
+          </section>
+
+          {/* Include Expired */}
+          <section className="px-6 py-5">
+            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Expired Offers
+            </Label>
+            <Button
+              type="button"
+              data-testid="include-expired-toggle"
+              variant={includeExpired ? "default" : "outline"}
+              aria-pressed={includeExpired}
+              className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+              onClick={() => setParam("includeExpired", includeExpired ? null : "true")}
+            >
+              {includeExpired ? "Showing expired offers" : "Include expired offers"}
+            </Button>
           </section>
         </div>
       </SheetContent>
