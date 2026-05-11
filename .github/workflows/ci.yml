@@ -22,15 +22,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
+      - uses: ./.github/actions/setup
 
       - name: npm audit (High+Critical)
         run: npm audit --audit-level=high
@@ -60,15 +52,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Validate workflow YAML files
+        run: |
+          for f in .github/workflows/*.yml .github/actions/setup/action.yml; do
+            python3 -c "import sys, json; import yaml; yaml.safe_load(open('$f'))" && echo "$f: valid"
+          done
 
       - name: Lint
         run: npm run lint
@@ -90,15 +80,7 @@ jobs:
     environment: Production
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
+      - uses: ./.github/actions/setup
 
       - name: Build (for E2E server)
         run: npm run build
@@ -128,15 +110,7 @@ jobs:
     environment: Production
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
+      - uses: ./.github/actions/setup
 
       - name: Run migrations
         run: npm run migrate
@@ -179,12 +153,7 @@ jobs:
       issues: write    # create failure issue
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
+      - uses: ./.github/actions/setup
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest

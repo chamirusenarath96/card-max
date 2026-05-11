@@ -701,7 +701,20 @@ E2E tests are in `e2e/`. They launch a real Chromium browser against
 
 ## CI / Continuous Integration
 
-Everything — CI checks, deployment, and cache invalidation — is defined in a single workflow file: `.github/workflows/ci.yml`.
+Everything — CI checks, deployment, and cache invalidation — is defined in `.github/workflows/ci.yml`. Shared setup steps (checkout, Node 22, `npm ci`) are extracted into a reusable composite action at `.github/actions/setup/action.yml` so updating the Node version or install flags only requires a change in one place.
+
+### Current Workflow Summary
+
+| Workflow file | Trigger | Uses composite action |
+|---|---|---|
+| `ci.yml` | push/PR to master | ✅ all 5 jobs |
+| `crawler.yml` | daily 20:30 UTC + manual | ❌ inline setup |
+| `dashboard.yml` | push to master / after CI | ❌ inline setup |
+| `atlas-warmup.yml` | every 4 min + manual | N/A (no npm ci) |
+| `warmup.yml` | every 5 min + manual | N/A (no npm ci) |
+| `scraper-smoke.yml` | manual only | ❌ inline setup |
+
+**Composite action** — `.github/actions/setup/action.yml` encapsulates `actions/checkout@v4`, `actions/setup-node@v4` (Node 22, npm cache), and `npm ci`. Each job in `ci.yml` references it with a single `uses: ./.github/actions/setup` step instead of three repeated steps. Updating the Node version or install flags requires a change in exactly one place.
 
 ### When the pipeline runs
 
@@ -718,14 +731,24 @@ Push to master                         Pull request
       │                                      │
       ▼                                      ▼
 ┌─────────────────────────────────────────────────────┐
+│  Job 0 — "Security Audit" (parallel with Job 1)    │
+│                                                     │
+│  ./.github/actions/setup  ← composite action       │
+│  npm audit --audit-level=high                       │
+│  trivy filesystem scan → SARIF upload               │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
 │  Job 1 — "Lint, Type Check & Test"                  │
 │  Runs on: ubuntu-latest (no secrets needed)         │
 │                                                     │
-│  1. npm ci                                          │
-│  2. npm run lint        ESLint                      │
-│  3. npm run type-check  tsc --noEmit                │
-│  4. npm run test        Vitest unit tests           │
-│  5. npm run build       next build                  │
+│  ./.github/actions/setup  ← composite action       │
+│    (checkout + Node 22 + npm ci)                    │
+│  validate workflow YAML files                       │
+│  npm run lint        ESLint                         │
+│  npm run type-check  tsc --noEmit                   │
+│  npm run test        Vitest unit tests              │
+│  npm run build       next build                     │
 └──────────────────┬──────────────────────────────────┘
                    │ needs: ci
                    ▼
@@ -733,12 +756,12 @@ Push to master                         Pull request
 │  Job 2 — "E2E Tests"                                │
 │  environment: Production (MONGODB_URI secret)       │
 │                                                     │
-│  1. npm ci                                          │
-│  2. npm run build       rebuild (.next doesn't      │
-│                         carry over between VMs)     │
-│  3. playwright install chromium                     │
-│  4. npm run test:e2e    Playwright tests             │
-│  5. Upload report on failure                        │
+│  ./.github/actions/setup  ← composite action       │
+│  npm run build       rebuild (.next doesn't         │
+│                      carry over between VMs)        │
+│  playwright install chromium                        │
+│  npm run test:e2e    Playwright tests               │
+│  Upload report on failure                           │
 └──────────────────┬──────────────────────────────────┘
                    │ needs: [ci, e2e]
                    │ if: push event only (not PRs)
@@ -747,10 +770,10 @@ Push to master                         Pull request
 │  Job 3 — "Run DB Migrations"                        │
 │  environment: Production (MONGODB_URI secret)       │
 │                                                     │
-│  1. npm ci                                          │
-│  2. npm run migrate     runs all scripts/           │
-│                         migrate-*.ts in order       │
-│  3. On failure → create GitHub Issue + block deploy │
+│  ./.github/actions/setup  ← composite action       │
+│  npm run migrate     runs all scripts/              │
+│                      migrate-*.ts in order          │
+│  On failure → create GitHub Issue + block deploy    │
 └──────────────────┬──────────────────────────────────┘
                    │ needs: [ci, e2e, migrate]
                    │ if: push event only (not PRs)
@@ -759,17 +782,21 @@ Push to master                         Pull request
 │  Job 4 — "Deploy to Production"                     │
 │  environment: Production (Vercel secrets)           │
 │                                                     │
-│  1. vercel pull --environment=production            │
-│  2. vercel build                                    │
-│  3. vercel deploy --prebuilt  → preview URL         │
-│  4. vercel promote <url>      → card-max.vercel.app │
-│  5. curl /api/revalidate      → bust ISR cache      │
-│  6. Post commit comment with production URL         │
-│  7. On failure → create GitHub Issue                │
+│  ./.github/actions/setup  ← composite action       │
+│  vercel pull --environment=production               │
+│  vercel build                                       │
+│  vercel deploy --prebuilt  → preview URL            │
+│  vercel promote <url>      → card-max.vercel.app    │
+│  curl /api/revalidate      → bust ISR cache         │
+│  Post commit comment with production URL            │
+│  On failure → create GitHub Issue                   │
 └─────────────────────────────────────────────────────┘
 ```
 
-**Why four jobs?**
+**Composite setup action:** All five jobs share `.github/actions/setup` which handles `actions/checkout@v4`, `actions/setup-node@v4` (Node 22, npm cache), and `npm ci`. Updating the Node version or install flags requires a change in exactly one file.
+
+**Why five jobs?**
+- Job 0 runs in parallel with Job 1 — security audit never blocks fast feedback
 - Job 1 is fast (no secrets, no browser) — fails early if lint or tests break
 - Job 2 needs secrets and a real browser — only runs if Job 1 is green
 - Job 3 applies DB schema changes before the new code goes live — ensures the DB is in the expected shape when the deploy completes; blocks deploy on failure
