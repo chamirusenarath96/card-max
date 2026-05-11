@@ -7,9 +7,9 @@
  * that return zero results from the DB (bank=commercial_bank&category=fuel).
  *
  * First-run baseline generation (Linux CI):
- *   npx playwright test e2e/visual.spec.ts --update-snapshots=missing
+ *   npx playwright test e2e/visual.spec.ts --project=chromium --update-snapshots=missing
  * Regenerate after intentional UI change:
- *   npx playwright test e2e/visual.spec.ts --update-snapshots=all
+ *   npx playwright test e2e/visual.spec.ts --project=chromium --update-snapshots=all
  */
 import { test, expect } from "@playwright/test";
 
@@ -35,7 +35,7 @@ const MOCK_OFFER = {
   createdAt: "2026-01-01T00:00:00.000Z",
 };
 
-/** Cancel CSS / JS animations so screenshots are deterministic. */
+/** Cancel CSS animations so screenshots are deterministic. */
 async function cancelAnimations(page: import("@playwright/test").Page) {
   await page.evaluate(() =>
     document.getAnimations().forEach((a) => a.cancel()),
@@ -43,6 +43,13 @@ async function cancelAnimations(page: import("@playwright/test").Page) {
 }
 
 test.describe("Visual regression", () => {
+  test.beforeEach(async ({ page }) => {
+    // Disable reduced-motion to stop the JS typewriter in HeroSearch.
+    // useTypewriter() checks window.matchMedia("prefers-reduced-motion: reduce")
+    // and returns a static value when true, preventing the setTimeout loop.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
   test("offer grid matches baseline", async ({ page }) => {
     // Page fetches offers server-side; mock intercept is for any client-side calls.
     // waitForLoadState("networkidle") ensures merchant images are fully loaded.
@@ -59,7 +66,7 @@ test.describe("Visual regression", () => {
     await page.goto("/");
     const grid = page.getByTestId("offer-grid");
     const empty = page.getByTestId("empty-state");
-    await expect(grid.or(empty)).toBeVisible({ timeout: 15000 });
+    await expect(grid.or(empty).first()).toBeVisible({ timeout: 15000 });
     await page.waitForLoadState("networkidle");
     await cancelAnimations(page);
     await expect(grid).toHaveScreenshot("offer-grid.png", {
@@ -90,6 +97,8 @@ test.describe("Visual regression", () => {
   });
 
   test("hero search bar matches baseline", async ({ page }) => {
+    // reducedMotion is set in beforeEach — the typewriter shows its first phrase
+    // immediately and stops, making the placeholder text stable for screenshots.
     await page.route("**/api/offers**", (route) =>
       route.fulfill({
         status: 200,
@@ -114,7 +123,6 @@ test.describe("Visual regression", () => {
     // page.tsx fetches server-side; Playwright route intercepts don't affect SSR.
     // Navigate with filters guaranteed to return no results from the DB
     // (commercial_bank + fuel has no overlap in the real dataset).
-    // The route mock handles any client-side re-fetches after navigation.
     await page.route("**/api/offers**", (route) =>
       route.fulfill({
         status: 200,
@@ -129,9 +137,8 @@ test.describe("Visual regression", () => {
     await page.waitForLoadState("networkidle");
     const empty = page.getByTestId("empty-state");
     const grid = page.getByTestId("offer-grid");
-    // Accept both states (resilient SSR pattern): empty-state if DB has no results,
-    // offer-grid if DB unexpectedly has offers for this filter.
-    await expect(empty.or(grid)).toBeVisible({ timeout: 15000 });
+    // Accept both states (resilient SSR pattern).
+    await expect(empty.or(grid).first()).toBeVisible({ timeout: 15000 });
     await cancelAnimations(page);
     if (await empty.isVisible()) {
       await expect(empty).toHaveScreenshot("empty-state.png", {
@@ -142,6 +149,10 @@ test.describe("Visual regression", () => {
 });
 
 test.describe("Structural sanity", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
   test("critical data-testid elements are visible", async ({ page }) => {
     await page.route("**/api/offers**", (route) =>
       route.fulfill({
@@ -160,15 +171,16 @@ test.describe("Structural sanity", () => {
     await expect(page.getByTestId("hero-search")).toBeVisible();
   });
 
-  test("pagination-controls renders when DB has multiple pages", async ({ page }) => {
+  test("pagination-controls renders when DB has multiple pages", async ({
+    page,
+  }) => {
     // PaginationControls returns null when totalPages <= 1.
-    // This test verifies it can render; actual visibility depends on DB state.
+    // Verify it renders correctly by checking either it or the grid is visible.
     await page.goto("/");
     await page.waitForLoadState("networkidle");
-    // Resilient SSR check: pagination is visible if DB has >20 active offers
+    // Both offer-grid and pagination-controls may be present — use .first() for strict mode
     const pagination = page.getByTestId("pagination-controls");
     const grid = page.getByTestId("offer-grid");
-    // Either pagination is visible (multiple pages) or we just have the grid (single page)
-    await expect(grid.or(pagination)).toBeVisible({ timeout: 10000 });
+    await expect(grid.or(pagination).first()).toBeVisible({ timeout: 10000 });
   });
 });
