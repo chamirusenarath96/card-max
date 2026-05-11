@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Aggregate and visualise test results from all four CI suites — Vitest unit/component,
