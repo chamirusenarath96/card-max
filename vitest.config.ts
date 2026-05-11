@@ -8,7 +8,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
     globals: true,
-    include: ["src/**/*.test.{ts,tsx}", "crawler/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "crawler/**/*.test.ts", "scripts/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

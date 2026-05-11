@@ -1,0 +1,90 @@
+name: CI Dashboard
+
+on:
+  push:
+    branches: [master]
+  workflow_run:
+    workflows: ["CI / Deploy"]
+    types: [completed]
+
+concurrency:
+  group: dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-dashboard:
+    name: Build & Publish Dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: write   # required for gh-pages push
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Step 1: Vitest with Allure output ────────────────────────────────────
+      - name: Run unit tests with Allure reporter
+        run: npm run test -- --reporter=allure-vitest/reporter --reporter=default
+        env:
+          ALLURE_RESULTS_DIR: allure-results/unit
+
+      # ── Step 2: Playwright E2E with Allure reporter ───────────────────────────
+      - name: Build for E2E
+        run: npm run build
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests with Allure reporter
+        run: npx playwright test --reporter=allure-playwright
+        if: always()
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          ALLURE_RESULTS_DIR: allure-results/e2e
+
+      # ── Step 3: Generate Allure HTML reports ──────────────────────────────────
+      - name: Generate Allure unit report
+        if: always()
+        run: |
+          npm install -g allure-commandline
+          allure generate allure-results/unit --output dashboard/allure-unit --clean
+
+      - name: Generate Allure E2E report
+        if: always()
+        run: allure generate allure-results/e2e --output dashboard/allure-e2e --clean
+
+      # ── Step 4: Download latest LHCI artefact ─────────────────────────────────
+      - name: Download Lighthouse report artefact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          name: lighthouse-report-*
+          path: dashboard/lighthouse
+          search_artifacts: true
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      # ── Step 5: Generate index.html ───────────────────────────────────────────
+      - name: Generate dashboard index
+        if: always()
+        run: node scripts/build-dashboard-index.js
+
+      # ── Step 6: Publish to gh-pages ───────────────────────────────────────────
+      - name: Deploy to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dashboard
+          keep_files: false
