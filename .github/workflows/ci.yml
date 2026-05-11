@@ -210,10 +210,20 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      - name: Promote to production
+        run: |
+          vercel promote ${{ steps.deploy.outputs.preview_url }} \
+            --scope=${{ secrets.VERCEL_ORG_ID }} \
+            --yes \
+            --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Run Lighthouse CI
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci autorun --collect.url="${{ steps.deploy.outputs.preview_url }}" --collect.numberOfRuns=3
+          lhci autorun --collect.url="https://card-max.vercel.app" --collect.numberOfRuns=3
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         timeout-minutes: 10
@@ -225,16 +235,6 @@ jobs:
           name: lighthouse-report-${{ github.sha }}
           path: .lighthouseci/
           retention-days: 14
-
-      - name: Promote to production
-        run: |
-          vercel promote ${{ steps.deploy.outputs.preview_url }} \
-            --scope=${{ secrets.VERCEL_ORG_ID }} \
-            --yes \
-            --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Invalidate ISR cache
         run: |
