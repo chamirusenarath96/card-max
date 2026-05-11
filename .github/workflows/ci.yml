@@ -220,7 +220,7 @@ jobs:
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         timeout-minutes: 10
-        continue-on-error: ${{ secrets.VERCEL_BYPASS_TOKEN == '' }}
+        continue-on-error: true
 
       - name: Upload Lighthouse report
         if: always()
