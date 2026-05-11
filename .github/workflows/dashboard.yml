@@ -19,6 +19,7 @@ jobs:
 
     permissions:
       contents: write   # required for gh-pages push
+      actions: read     # required for workflow runs API (spec 028)
 
     steps:
       - uses: actions/checkout@v4
@@ -75,12 +76,21 @@ jobs:
           if_no_artifact_found: warn
         continue-on-error: true
 
-      # ── Step 5: Generate index.html ───────────────────────────────────────────
+      # ── Step 5: Fetch cron job run summaries ─────────────────────────────────
+      - name: Fetch cron job run summaries
+        if: always()
+        run: node scripts/fetch-cron-summary.js
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      # ── Step 6: Generate index.html ───────────────────────────────────────────
       - name: Generate dashboard index
         if: always()
         run: node scripts/build-dashboard-index.js
 
-      # ── Step 6: Publish to gh-pages ───────────────────────────────────────────
+      # ── Step 7: Publish to gh-pages ───────────────────────────────────────────
       - name: Deploy to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v4
