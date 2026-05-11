@@ -2,10 +2,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
+- [x] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Polish the hero search bar and offer grid interaction into a fluid experience: remove

@@ -4,6 +4,7 @@ import { FilterPresetChips } from "@/components/filters/FilterPresetChips";
 import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
 import { AdUnit } from "@/components/ads/AdUnit";
+import { ScrollControls } from "@/components/layout/ScrollControls";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -37,14 +38,7 @@ interface ApiResponse {
   pagination: Pagination;
 }
 
-function getBaseUrl(): string {
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL)
-    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return `http://localhost:${process.env.PORT ?? 3000}`;
-}
-
-async function fetchOffers(params: {
+type SearchParams = {
   bank?: string;
   category?: string;
   offerType?: string;
@@ -53,7 +47,16 @@ async function fetchOffers(params: {
   sort?: string;
   q?: string;
   page?: string;
-}): Promise<ApiResponse> {
+};
+
+function getBaseUrl(): string {
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL)
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return `http://localhost:${process.env.PORT ?? 3000}`;
+}
+
+async function fetchOffers(params: SearchParams): Promise<ApiResponse> {
   const query = new URLSearchParams();
   if (params.bank) query.set("bank", params.bank);
   if (params.category) query.set("category", params.category);
@@ -83,14 +86,77 @@ const BANK_LABEL: Record<string, string> = {
   nations_trust_bank: "Nations Trust Bank",
 };
 
-export default async function HomePage({ searchParams }: PageProps) {
-  const params = await searchParams;
+function OfferGridSkeleton() {
+  return (
+    <div>
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <Skeleton className="mb-2 h-9 w-48 rounded-lg" />
+          <Skeleton className="h-4 w-32 rounded" />
+        </div>
+        <Skeleton className="h-11 w-40 rounded-lg" />
+      </div>
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-48 rounded-2xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function OfferGridSection({ params }: { params: SearchParams }) {
   const { data: offers, pagination } = await fetchOffers(params);
 
   const hasActiveFilters =
     params.bank || params.category || params.offerType ||
     params.activeFrom || params.activeTo ||
     (params.sort && params.sort !== "latest");
+
+  return (
+    <>
+      <div
+        className="mb-8 flex flex-wrap items-center justify-between gap-4"
+        data-testid="filter-section"
+      >
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
+            {params.q
+              ? `Results for "${params.q}"`
+              : params.bank
+                ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
+                : hasActiveFilters
+                  ? "Filtered Offers"
+                  : "All Offers"}
+          </h2>
+          <p className="mt-1.5 text-sm font-medium text-muted-foreground">
+            {pagination.total !== undefined
+              ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
+              : "Browsing offers"}
+          </p>
+        </div>
+
+        <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
+          <FilterBar
+            activeBank={params.bank}
+            activeCategory={params.category}
+            activeOfferType={params.offerType}
+            activeFrom={params.activeFrom}
+            activeTo={params.activeTo}
+            activeSort={params.sort}
+          />
+        </Suspense>
+      </div>
+
+      <div className="min-w-0 flex-1" data-testid="offer-grid-section">
+        <OfferGrid offers={offers} pagination={pagination} />
+      </div>
+    </>
+  );
+}
+
+export default async function HomePage({ searchParams }: PageProps) {
+  const params = await searchParams;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -180,42 +246,10 @@ export default async function HomePage({ searchParams }: PageProps) {
             <FilterPresetChips />
           </Suspense>
 
-          {/* Results heading + inline filter trigger */}
-          <div
-            className="mb-8 flex flex-wrap items-center justify-between gap-4"
-            data-testid="filter-section"
-          >
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
-                {params.q
-                  ? `Results for "${params.q}"`
-                  : params.bank
-                    ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
-                    : hasActiveFilters
-                      ? "Filtered Offers"
-                      : "All Offers"}
-              </h2>
-              <p className="mt-1.5 text-sm font-medium text-muted-foreground">
-                {pagination.total !== undefined
-                  ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
-                  : "Browsing offers"}
-              </p>
-            </div>
-
-            <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
-              <FilterBar
-                activeBank={params.bank}
-                activeCategory={params.category}
-                activeOfferType={params.offerType}
-                activeFrom={params.activeFrom}
-                activeTo={params.activeTo}
-                activeSort={params.sort}
-              />
-            </Suspense>
-          </div>
-
           <div className="min-w-0 flex-1">
-            <OfferGrid offers={offers} pagination={pagination} />
+            <Suspense fallback={<OfferGridSkeleton />}>
+              <OfferGridSection params={params} />
+            </Suspense>
           </div>
 
           {/* Sidebar ad — desktop only (≥ 1280px) */}
@@ -266,6 +300,9 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
         </div>
       </footer>
+
+      {/* ── Floating scroll controls ──────────────────────────────────────── */}
+      <ScrollControls />
     </div>
   );
 }
