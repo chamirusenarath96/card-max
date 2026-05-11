@@ -69,11 +69,8 @@ test.describe("Visual regression", () => {
     await expect(grid.or(empty).first()).toBeVisible({ timeout: 15000 });
     await page.waitForLoadState("networkidle");
     await cancelAnimations(page);
-    // Clip to first 800px so the comparison is stable regardless of total offer count
-    // (SSR renders live DB data; offer count varies between CI runs).
     await expect(grid).toHaveScreenshot("offer-grid.png", {
       maxDiffPixelRatio: 0.002,
-      clip: { x: 0, y: 0, width: 1232, height: 800 },
     });
   });
 
