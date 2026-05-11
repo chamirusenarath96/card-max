@@ -2,19 +2,33 @@
  * Bank of Ceylon (boc.lk) offer scraper
  * Spec: specs/features/011-new-banks.md
  *
- * Strategy: Fetch the credit cards promotions page via plain HTTP and parse
- * offer articles/cards. BOC uses a Joomla CMS with SSR.
- * Offer blocks are rendered as <a class="swiper-slide product"> elements with
- * <h4> merchant names, <div class="offer"> discount text, and a highligh-box
- * table for expiration dates.
- * On any error: log and return [] — never crash the crawl.
+ * Strategy: Iterate over BOC's category listing pages and parse offer tiles.
+ * Each page at /personal-banking/card-offers/{slug} renders offers as
+ * <a class="swiper-slide product unique"> elements with:
+ *   - <h4> for merchant name
+ *   - <div class="offer"> for discount text
+ *   - <div class="description"> for description
+ *   - <img class="offer-logo"> for merchant logo
+ *   - A table with "Expiration date" row for validity
+ * On any error per category: log and continue — never crash the crawl.
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
-import { fetchHtml } from "../utils/http";
+import { fetchHtml, sleep } from "../utils/http";
 import { parseDiscount } from "../utils/parseDiscount";
 
 const BASE_URL = "https://www.boc.lk";
-const PROMOTIONS_URL = `${BASE_URL}/index.php/personal/cards/credit-cards`;
+
+const CATEGORIES: Array<{ slug: string; defaultCategory: OfferInput["category"] }> = [
+  { slug: "travel-and-leisure", defaultCategory: "travel" },
+  { slug: "dining", defaultCategory: "dining" },
+  { slug: "supermarkets", defaultCategory: "groceries" },
+  { slug: "health-beauty", defaultCategory: "wellness" },
+  { slug: "zero-plans", defaultCategory: "other" },
+  { slug: "online", defaultCategory: "online" },
+  { slug: "visa-offers", defaultCategory: "shopping" },
+  { slug: "mastercard-offers", defaultCategory: "shopping" },
+  { slug: "fashion-lifestyle", defaultCategory: "clothing" },
+];
 
 const MONTH_MAP: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4,
@@ -26,45 +40,49 @@ const MONTH_MAP: Record<string, number> = {
 
 export async function scrape(): Promise<OfferInput[]> {
   console.log("[boc] Starting scrape…");
-  const offers: OfferInput[] = [];
+  const allOffers: OfferInput[] = [];
 
-  try {
-    const html = await fetchHtml(PROMOTIONS_URL);
-    const cards = parseOfferCards(html);
-    console.log(`[boc] Found ${cards.length} offer cards`);
+  for (const { slug, defaultCategory } of CATEGORIES) {
+    const url = `${BASE_URL}/personal-banking/card-offers/${slug}`;
+    try {
+      const html = await fetchHtml(url);
+      const cards = parseOfferCards(html, url);
+      console.log(`[boc] ${slug}: found ${cards.length} offer cards`);
 
-    for (const card of cards) {
-      const discount = parseDiscount(card.discountText);
-      const category = detectCategory(card.title, card.discountText);
+      for (const card of cards) {
+        const discount = parseDiscount(card.discountText);
+        const category = detectCategory(card.title, card.discountText) ?? defaultCategory;
 
-      const raw: Partial<OfferInput> = {
-        bank: "bank_of_ceylon",
-        bankDisplayName: "Bank of Ceylon",
-        title: card.title.substring(0, 300),
-        merchant: card.title.substring(0, 100),
-        description: card.description?.substring(0, 300) || undefined,
-        merchantLogoUrl: card.imageUrl,
-        ...discount,
-        category,
-        validUntil: card.validUntil,
-        sourceUrl: card.sourceUrl || PROMOTIONS_URL,
-        scrapedAt: new Date(),
-      };
+        const raw: Partial<OfferInput> = {
+          bank: "bank_of_ceylon",
+          bankDisplayName: "Bank of Ceylon",
+          title: card.title.substring(0, 300),
+          merchant: card.title.substring(0, 100),
+          description: card.description?.substring(0, 300) || undefined,
+          merchantLogoUrl: card.imageUrl,
+          ...discount,
+          category,
+          validUntil: card.validUntil,
+          sourceUrl: card.sourceUrl || url,
+          scrapedAt: new Date(),
+        };
 
-      const result = OfferInputSchema.safeParse(raw);
-      if (result.success) {
-        offers.push(result.data);
-      } else {
-        console.warn("[boc] Offer failed validation:", result.error.flatten());
+        const result = OfferInputSchema.safeParse(raw);
+        if (result.success) {
+          allOffers.push(result.data);
+        } else {
+          console.warn("[boc] Offer failed validation:", result.error.flatten());
+        }
       }
+    } catch (err) {
+      console.error(`[boc] Failed to scrape category "${slug}":`, err);
     }
-  } catch (err) {
-    console.error("[boc] Scrape failed:", err);
-    return [];
+
+    await sleep(1000);
   }
 
-  console.log(`[boc] Done — ${offers.length} offers`);
-  return offers;
+  console.log(`[boc] Done — ${allOffers.length} offers`);
+  return allOffers;
 }
 
 // ── HTML parsing helpers ─────────────────────────────────────────────────────
@@ -79,14 +97,13 @@ type OfferCard = {
 };
 
 /**
- * Parse offer cards from the BOC credit cards page.
+ * Parse offer cards from a BOC category page.
  * BOC renders offers as <a class="swiper-slide product unique"> elements.
- * Falls back to heading-based extraction if that pattern is not found.
  */
-function parseOfferCards(html: string): OfferCard[] {
+function parseOfferCards(html: string, pageUrl: string): OfferCard[] {
   const cards: OfferCard[] = [];
 
-  // Pattern 1: BOC-specific swiper-slide product blocks
+  // BOC-specific swiper-slide product blocks
   // <a href="..." class="swiper-slide product unique">...</a>
   const blockRe = /<a\b([^>]*class="[^"]*\bproduct\b[^"]*"[^>]*)>([\s\S]*?)<\/a>/gi;
 
@@ -107,8 +124,8 @@ function parseOfferCards(html: string): OfferCard[] {
     const sourceUrl = rawHref.startsWith("http")
       ? rawHref
       : rawHref
-      ? `${BASE_URL}${rawHref}`
-      : PROMOTIONS_URL;
+        ? `${BASE_URL}${rawHref}`
+        : pageUrl;
 
     // Discount text from <div class="offer"> content
     const offerDivMatch = block.match(
@@ -122,7 +139,7 @@ function parseOfferCards(html: string): OfferCard[] {
     );
     const description = descMatch ? cleanText(descMatch[1]!) : undefined;
 
-    // Image URL from <img class="offer-logo"> or any img
+    // Image URL from <img> inside the block
     const imgMatch = block.match(/<img\b[^>]+src="([^"]+)"[^>]*>/i);
     const imageUrl = imgMatch ? imgMatch[1] : undefined;
 
@@ -132,34 +149,12 @@ function parseOfferCards(html: string): OfferCard[] {
     cards.push({ title, discountText, description, imageUrl, sourceUrl, validUntil });
   }
 
-  // Pattern 2: heading-based extraction fallback
-  if (cards.length === 0) {
-    const headingRe = /<h[2-5][^>]*>([\s\S]*?)<\/h[2-5]>/gi;
-    while ((m = headingRe.exec(html)) !== null) {
-      const title = cleanText(m[1]!);
-      if (!title || title.length < 5 || title.length > 250) continue;
-      if (!looksLikeOffer(title)) continue;
-
-      const ctxEnd = Math.min(html.length, m.index + 600);
-      const context = html.substring(m.index, ctxEnd);
-
-      const discountMatch = context.match(/(\d+%[^<]{0,60})/i);
-      const discountText = discountMatch ? cleanText(discountMatch[1]!) : "";
-
-      const imgMatch = context.match(/<img[^>]+src="(https?:\/\/[^"]+)"[^>]*>/i);
-      const imageUrl = imgMatch ? imgMatch[1] : undefined;
-
-      cards.push({ title, discountText, imageUrl, sourceUrl: PROMOTIONS_URL });
-    }
-  }
-
   return cards;
 }
 
 function parseExpirationDate(block: string): Date | undefined {
   // BOC table format: <td>Expiration date : </td><td>31 Dec 2026</td>
-  const expRe =
-    /expiration\s+date\s*:?\s*<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i;
+  const expRe = /expiration\s+date\s*:?\s*<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i;
   const expMatch = block.match(expRe);
   if (expMatch) {
     return parseDateString(cleanText(expMatch[1]!));
@@ -190,11 +185,7 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
   return isNaN(d.getTime()) ? undefined : d;
 }
 
-function looksLikeOffer(text: string): boolean {
-  return /\b(?:off|discount|cashback|offer|promo|free|save|deal|\d+%)\b/i.test(text);
-}
-
-function detectCategory(title: string, offerText: string): OfferInput["category"] {
+function detectCategory(title: string, offerText: string): OfferInput["category"] | null {
   const text = `${title} ${offerText}`.toLowerCase();
   if (/dining|restaurant|food|pizza|burger|cafe|bistro/.test(text)) return "dining";
   if (/hotel|resort|lodging|accommodation|stay/.test(text)) return "lodging";
@@ -208,7 +199,7 @@ function detectCategory(title: string, offerText: string): OfferInput["category"
   if (/clothing|fashion|apparel|wear/.test(text)) return "clothing";
   if (/home|furniture|appliance|hardware/.test(text)) return "homecare";
   if (/shopping|retail|boutique/.test(text)) return "shopping";
-  return "other";
+  return null;
 }
 
 function cleanText(html: string): string {

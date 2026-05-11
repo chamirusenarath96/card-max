@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Give users a dedicated page for a single offer so they can read the full details,
@@ -56,15 +56,15 @@ GET /api/offers/[id]
 - On mobile: single column; on desktop: two-column (image left, details right)
 
 ## Acceptance Criteria
-- [ ] AC1: `GET /api/offers/[id]` returns 200 with the offer when id exists
-- [ ] AC2: `GET /api/offers/[id]` returns 404 when id is unknown
-- [ ] AC3: `/offers/[id]` renders merchant name, discount label, validity, category, bank
-- [ ] AC4: "View Original Offer" button links to `offer.sourceUrl` and opens in new tab
-- [ ] AC5: "← All Offers" link navigates back to `/`
-- [ ] AC6: Offer card click navigates to `/offers/<id>` (not `sourceUrl`)
-- [ ] AC7: Search dropdown result click navigates to `/offers/<id>`
-- [ ] AC8: Loading skeleton shown while page is fetching
-- [ ] AC9: 404 page shown for unknown id
+- [x] AC1: `GET /api/offers/[id]` returns 200 with the offer when id exists
+- [x] AC2: `GET /api/offers/[id]` returns 404 when id is unknown
+- [~] AC3: `/offers/[id]` renders merchant name, discount label, validity, category, bank — superseded by spec 024 (external link approach)
+- [~] AC4: "View Original Offer" button links to `offer.sourceUrl` and opens in new tab — superseded by spec 024
+- [~] AC5: "← All Offers" link navigates back to `/` — superseded by spec 024
+- [~] AC6: Offer card click navigates to `/offers/<id>` (not `sourceUrl`) — superseded by spec 024 (cards link directly to sourceUrl)
+- [~] AC7: Search dropdown result click navigates to `/offers/<id>` — superseded by spec 024
+- [~] AC8: Loading skeleton shown while page is fetching — superseded by spec 024
+- [~] AC9: 404 page shown for unknown id — superseded by spec 024
 
 ## Test Cases
 
@@ -89,3 +89,4 @@ GET /api/offers/[id]
 ## Notes
 - Cards currently link to `offer.sourceUrl` with `target="_blank"` — change to `href="/offers/${offer._id}"` with no target
 - The `_id` field is `string | undefined` in the schema; it is always present on documents returned from MongoDB (serialised as string in the API route)
+- **Spec 024 supersedes this spec**: The internal `/offers/[id]` page route was not built. Instead, spec 024 implemented direct external links on all offer cards (`target="_blank"` to `sourceUrl`). The `GET /api/offers/[id]` endpoint (AC1–AC2) remains available for potential future use and is covered by unit tests in `src/app/api/offers/[id]/route.test.ts`.

@@ -39,14 +39,6 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-category")).toHaveTextContent("Groceries");
   });
 
-  it("View Offer Details button links to the original offer source URL in a new tab", () => {
-    render(<OfferCard offer={BASE_OFFER} />);
-    const link = screen.getByTestId("offer-view-link");
-    expect(link).toHaveAttribute("href", BASE_OFFER.sourceUrl);
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
-  });
-
   it("shows offer type badge with percentage for percentage offers", () => {
     render(<OfferCard offer={BASE_OFFER} />);
     expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("15% OFF");
@@ -64,11 +56,6 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-merchant")).toHaveTextContent("Keells Super");
   });
 
-  it("shows View Offer Details button in default size", () => {
-    render(<OfferCard offer={BASE_OFFER} />);
-    expect(screen.getByTestId("offer-view-link")).toHaveTextContent("View Offer Details");
-  });
-
   it("shows expiry badge when offer expires within 7 days", () => {
     const soon = new Date();
     soon.setDate(soon.getDate() + 3);
@@ -81,6 +68,37 @@ describe("OfferCard", () => {
     // We verify the card still renders without crashing.
     render(<OfferCard offer={BASE_OFFER} />);
     expect(screen.getByTestId("offer-card")).toBeInTheDocument();
+  });
+
+  it("shows description when offer has one", () => {
+    const offerWithDesc: Offer = {
+      ...BASE_OFFER,
+      description: "Get 15% off on all groceries every Tuesday with your Commercial Bank card.",
+    };
+    render(<OfferCard offer={offerWithDesc} />);
+    expect(screen.getByTestId("offer-description")).toBeInTheDocument();
+    expect(screen.getByTestId("offer-description")).toHaveTextContent("Get 15% off");
+  });
+
+  it("does not render description when offer has none", () => {
+    render(<OfferCard offer={BASE_OFFER} />);
+    expect(screen.queryByTestId("offer-description")).not.toBeInTheDocument();
+  });
+
+  it("shows Show more button for long descriptions", () => {
+    const longDesc = "A".repeat(200); // exceeds 120-char default limit
+    const offerWithLongDesc: Offer = {
+      ...BASE_OFFER,
+      description: longDesc,
+    };
+    render(<OfferCard offer={offerWithLongDesc} />);
+    expect(screen.getByTestId("desc-toggle")).toHaveTextContent("Show more");
+  });
+
+  it("applies grayscale styling to expired offers", () => {
+    render(<OfferCard offer={{ ...BASE_OFFER, isExpired: true }} />);
+    const card = screen.getByTestId("offer-card");
+    expect(card.className).toMatch(/grayscale/);
   });
 
   it('shows INSTALLMENT badge for percentage offer with 0% discount (legacy mis-classification)', () => {

@@ -17,6 +17,7 @@ interface Props {
   activeFrom?: string;
   activeTo?: string;
   activeSort?: string;
+  includeExpired?: boolean;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -60,6 +61,7 @@ export function FilterBar({
   activeFrom,
   activeTo,
   activeSort,
+  includeExpired,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -131,6 +133,13 @@ export function FilterBar({
       onRemove: removeDateParams,
     });
   }
+  if (includeExpired) {
+    chips.push({
+      key: "includeExpired",
+      label: "Including Expired",
+      onRemove: () => removeParam("includeExpired"),
+    });
+  }
 
   const activeFilters = {
     ...(activeBank ? { bank: activeBank } : {}),
@@ -139,6 +148,7 @@ export function FilterBar({
     ...(activeSort && activeSort !== "latest" ? { sort: activeSort } : {}),
     ...(activeFrom ? { activeFrom } : {}),
     ...(activeTo ? { activeTo } : {}),
+    ...(includeExpired ? { includeExpired: "true" } : {}),
   };
 
   return (
@@ -151,6 +161,7 @@ export function FilterBar({
           activeFrom={activeFrom}
           activeTo={activeTo}
           activeSort={activeSort}
+          includeExpired={includeExpired}
         />
 
         {chips.map((chip) => (
