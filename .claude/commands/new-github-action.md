@@ -228,7 +228,13 @@ git push origin <branch>
 
 ## Reference: Current Workflow Summary
 
-| File | Trigger | Jobs |
-|---|---|---|
-| `ci.yml` | push/PR to master | lint + type-check + test → build → E2E → deploy preview → promote |
-| `crawler.yml` | daily 2am UTC + manual | scrape all banks → upsert to MongoDB → revalidate cache |
+All jobs that need checkout + Node setup + `npm ci` use the composite action at `.github/actions/setup/action.yml`.
+
+| File | Trigger | Jobs | Uses composite action |
+|---|---|---|---|
+| `ci.yml` | push/PR to master | security (parallel) → lint/type-check/test/build → E2E → migrate → deploy | ✅ all 5 jobs |
+| `crawler.yml` | daily 20:30 UTC + manual | scrape all banks → upsert to MongoDB → revalidate cache | ❌ inline setup |
+| `dashboard.yml` | push to master / after CI | build Allure + Lighthouse dashboard → publish to gh-pages | ❌ inline setup |
+| `atlas-warmup.yml` | every 4 min + manual | ping `/api/health` to keep MongoDB Atlas connection warm | N/A (no npm ci) |
+| `warmup.yml` | every 5 min + manual | ping `/api/ping` to keep connection warm | N/A (no npm ci) |
+| `scraper-smoke.yml` | manual only | run scraper smoke tests against live bank sites | ❌ inline setup |
