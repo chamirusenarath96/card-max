@@ -96,7 +96,12 @@ jobs:
 
       - name: Generate missing visual regression baselines
         run: |
-          npx playwright test e2e/visual.spec.ts --update-snapshots=missing --reporter=list 2>&1 || true
+          npx playwright test e2e/visual.spec.ts \
+            --project=chromium \
+            --update-snapshots=missing \
+            --reporter=list 2>&1 || true
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
 
       - name: Commit generated baselines to branch (first-run only)
         run: |
