@@ -161,6 +161,7 @@ export function FilterDrawer({
 
       <SheetContent
         side="right"
+        data-testid="filter-drawer"
         className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md"
       >
         <SheetHeader className="flex flex-row items-center justify-between border-b px-6 py-4">
