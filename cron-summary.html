@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cron Job Health — card-max CI Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem 2rem; background: #0d1117; color: #e6edf3; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 2rem; }
+    a { color: #58a6ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #30363d; font-size: 0.875rem; }
+    th { background: #161b22; font-weight: 600; }
+    .success { color: #3fb950; }
+    .failure { color: #f85149; }
+    .note { color: #8b949e; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1 data-testid="cron-summary-title">Cron Job Health</h1>
+  <p class="subtitle" data-testid="cron-summary-back"><a href="./index.html">← Back to Dashboard</a></p>
+  <table data-testid="cron-summary-table">
+    <thead>
+      <tr>
+        <th>Workflow</th>
+        <th>Run #</th>
+        <th>Triggered (UTC)</th>
+        <th>Status</th>
+        <th>Log</th>
+      </tr>
+    </thead>
+    <tbody data-testid="cron-summary-tbody">
+    <tr>
+      <td>Daily Crawler</td>
+      <td>25699349312</td>
+      <td>2026-05-11 21:49 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25699349312">View log</a></td>
+    </tr>
+    <tr>
+      <td>Daily Crawler</td>
+      <td>25639913541</td>
+      <td>2026-05-10 21:12 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25639913541">View log</a></td>
+    </tr>
+    <tr>
+      <td>Daily Crawler</td>
+      <td>25611868454</td>
+      <td>2026-05-09 21:09 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25611868454">View log</a></td>
+    </tr>
+    <tr>
+      <td>Daily Crawler</td>
+      <td>25580623560</td>
+      <td>2026-05-08 21:33 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25580623560">View log</a></td>
+    </tr>
+    <tr>
+      <td>Daily Crawler</td>
+      <td>25523167701</td>
+      <td>2026-05-07 21:30 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25523167701">View log</a></td>
+    </tr>
+    <tr>
+      <td>Atlas Warmup</td>
+      <td>25703642221</td>
+      <td>2026-05-11 23:34 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25703642221">View log</a></td>
+    </tr>
+    <tr>
+      <td>Atlas Warmup</td>
+      <td>25701381967</td>
+      <td>2026-05-11 22:36 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25701381967">View log</a></td>
+    </tr>
+    <tr>
+      <td>Atlas Warmup</td>
+      <td>25698878831</td>
+      <td>2026-05-11 21:39 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25698878831">View log</a></td>
+    </tr>
+    <tr>
+      <td>Atlas Warmup</td>
+      <td>25694469036</td>
+      <td>2026-05-11 20:09 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25694469036">View log</a></td>
+    </tr>
+    <tr>
+      <td>Atlas Warmup</td>
+      <td>25689102508</td>
+      <td>2026-05-11 18:24 UTC</td>
+      <td class="success">✅ success</td>
+      <td><a href="https://github.com/chamirusenarath96/card-max/actions/runs/25689102508">View log</a></td>
+    </tr>
+    <tr>
+      <td>CI Dashboard</td>
+      <td colspan="4" class="note">No runs yet</td>
+    </tr>
+    <tr>
+      <td>Spec Writer (scheduled task)</td>
+      <td colspan="4" class="note">Not a GitHub Actions workflow — see scheduled task definition</td>
+    </tr>
+    <tr>
+      <td>Implementer (scheduled task)</td>
+      <td colspan="4" class="note">Not a GitHub Actions workflow — see scheduled task definition</td>
+    </tr>
+    </tbody>
+  </table>
+</body>
+</html>

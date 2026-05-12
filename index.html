@@ -20,7 +20,7 @@
 </head>
 <body>
   <h1 data-testid="dashboard-title">card-max CI Dashboard</h1>
-  <p class="subtitle" data-testid="dashboard-timestamp">Generated: 2026-05-12T00:01:37.001Z</p>
+  <p class="subtitle" data-testid="dashboard-timestamp">Generated: 2026-05-12T00:03:49.364Z</p>
 
   <section class="badges" data-testid="badges-section">
       <a href="https://github.com/chamirusenarath96/card-max/actions/workflows/ci.yml" target="_blank" rel="noopener noreferrer" data-testid="badge-ci.yml">
@@ -48,6 +48,11 @@
     <section class="panel panel--unavailable" data-testid="lighthouse-panel">
       <h2>Lighthouse CI</h2>
       <p class="unavailable" data-testid="lighthouse-unavailable">Not available — no Lighthouse artefact found for this run.</p>
+    </section>
+
+    <section class="panel" data-testid="cron-health-panel">
+      <h2>Cron Job Health</h2>
+      <p><a href="./cron-summary.html" target="_blank" rel="noopener noreferrer" data-testid="link-cron-summary">Open Cron Job Health</a></p>
     </section>
   </div>
 </body>
