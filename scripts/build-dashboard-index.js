@@ -107,6 +107,11 @@ ${badgesHtml}
     </section>
 
 ${lighthousePanel}
+
+    <section class="panel" data-testid="cron-health-panel">
+      <h2>Cron Job Health</h2>
+      <p><a href="./cron-summary.html" target="_blank" rel="noopener noreferrer" data-testid="link-cron-summary">Open Cron Job Health</a></p>
+    </section>
   </div>
 </body>
 </html>

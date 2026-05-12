@@ -85,4 +85,11 @@ describe("build-dashboard-index (Feature 025 — AC5)", () => {
     expect(html).toContain('data-testid="dashboard-timestamp"');
     expect(html).toContain("card-max CI Dashboard");
   });
+
+  it("index.html contains link to cron-summary.html (spec 028 — AC4)", () => {
+    runScript(tmpDir);
+    const html = fs.readFileSync(path.join(tmpDir, "index.html"), "utf8");
+    expect(html).toContain("cron-summary.html");
+    expect(html).toContain('data-testid="link-cron-summary"');
+  });
 });
