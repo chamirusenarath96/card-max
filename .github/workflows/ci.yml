@@ -235,6 +235,24 @@ jobs:
           path: .lighthouseci/
           retention-days: 14
 
+      - name: Install Lighthouse for user-flow audit
+        run: npm install --no-save lighthouse@^12
+
+      - name: Run Lighthouse user-flow audit
+        run: |
+          node scripts/lhci-user-flow.js
+        env:
+          TARGET_URL: ${{ steps.deploy.outputs.preview_url }}
+        timeout-minutes: 10
+
+      - name: Upload Lighthouse user-flow report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lhci-user-flow-${{ github.sha }}
+          path: .lighthouseci/user-flow/
+          retention-days: 14
+
       - name: Promote to production
         run: |
           vercel promote ${{ steps.deploy.outputs.preview_url }} \

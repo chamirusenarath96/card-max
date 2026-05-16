@@ -49,7 +49,7 @@ const WORKFLOWS = [
  * Builds the HTML string for the dashboard index page.
  * Exported for use in tests.
  */
-function buildHtml({ timestamp, lighthouseAvailable }) {
+function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable }) {
   const badgesHtml = WORKFLOWS.map(
     ({ file, label }) =>
       `      <a href="${workflowUrl(file)}" target="_blank" rel="noopener noreferrer" data-testid="badge-${file}">
@@ -65,6 +65,16 @@ function buildHtml({ timestamp, lighthouseAvailable }) {
     : `    <section class="panel panel--unavailable" data-testid="lighthouse-panel">
       <h2>Lighthouse CI</h2>
       <p class="unavailable" data-testid="lighthouse-unavailable">Not available — no Lighthouse artefact found for this run.</p>
+    </section>`;
+
+  const lhUserFlowPanel = lhUserFlowAvailable
+    ? `    <section class="panel" data-testid="lh-user-flow-panel">
+      <h2>Lighthouse User Flow</h2>
+      <p><a href="./lighthouse-user-flow/report.html" target="_blank" rel="noopener noreferrer" data-testid="link-lh-user-flow">Open User Flow Report</a></p>
+    </section>`
+    : `    <section class="panel panel--unavailable" data-testid="lh-user-flow-panel">
+      <h2>Lighthouse User Flow</h2>
+      <p class="unavailable" data-testid="lh-user-flow-unavailable">Not available — no user-flow artefact found for this run.</p>
     </section>`;
 
   return `<!DOCTYPE html>
@@ -108,6 +118,8 @@ ${badgesHtml}
 
 ${lighthousePanel}
 
+${lhUserFlowPanel}
+
     <section class="panel" data-testid="cron-health-panel">
       <h2>Cron Job Health</h2>
       <p><a href="./cron-summary.html" target="_blank" rel="noopener noreferrer" data-testid="link-cron-summary">Open Cron Job Health</a></p>
@@ -124,9 +136,10 @@ function main() {
   }
 
   const lighthouseAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse"));
+  const lhUserFlowAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse-user-flow"));
   const timestamp = new Date().toISOString();
 
-  const html = buildHtml({ timestamp, lighthouseAvailable });
+  const html = buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable });
 
   const outPath = path.join(DASHBOARD_DIR, "index.html");
   fs.writeFileSync(outPath, html, "utf8");
@@ -134,6 +147,9 @@ function main() {
   console.log(`Dashboard index written to ${outPath}`);
   console.log(
     `  Lighthouse panel: ${lighthouseAvailable ? "linked" : "unavailable placeholder"}`,
+  );
+  console.log(
+    `  User-flow panel: ${lhUserFlowAvailable ? "linked" : "unavailable placeholder"}`,
   );
 }
 
