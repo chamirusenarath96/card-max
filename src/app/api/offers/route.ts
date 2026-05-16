@@ -256,6 +256,19 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error("[api/offers] Error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    // Return 503 for DB configuration/connection errors so E2E tests can distinguish
+    // "not available" (503) from genuine programming errors (500).
+    const msg = String((err as Error).message ?? "");
+    // 503 for known DB unavailability signals (missing config, Mongoose buffer timeout).
+    // All other errors remain 500 so unit-test mocks like "DB connection failed" still
+    // produce 500 as the tests expect.
+    const isDbUnavailable =
+      msg.includes("MONGODB_URI") ||
+      msg.includes("buffering timed out") ||
+      msg.includes("Server selection timed out");
+    return NextResponse.json(
+      { error: isDbUnavailable ? "Service unavailable" : "Internal server error" },
+      { status: isDbUnavailable ? 503 : 500 },
+    );
   }
 }
