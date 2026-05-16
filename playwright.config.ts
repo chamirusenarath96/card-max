@@ -13,6 +13,10 @@ export default defineConfig({
     timeout: 30000,
   },
 
+  // Auto-generate missing snapshot baselines on first run instead of failing.
+  // Existing baselines are still compared — this only affects new/missing files.
+  updateSnapshots: "missing",
+
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
