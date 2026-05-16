@@ -92,4 +92,28 @@ describe("build-dashboard-index (Feature 025 — AC5)", () => {
     expect(html).toContain("cron-summary.html");
     expect(html).toContain('data-testid="link-cron-summary"');
   });
+
+  // ── spec 029 — AC9: Lighthouse user-flow panel ─────────────────────────────
+
+  it("index.html shows lh-user-flow-unavailable placeholder when no user-flow dir", () => {
+    runScript(tmpDir);
+    const html = fs.readFileSync(path.join(tmpDir, "index.html"), "utf8");
+    expect(html).toContain('data-testid="lh-user-flow-unavailable"');
+    expect(html).not.toContain('data-testid="link-lh-user-flow"');
+  });
+
+  it("index.html links to user-flow report when lighthouse-user-flow dir present", () => {
+    fs.mkdirSync(path.join(tmpDir, "lighthouse-user-flow"));
+    runScript(tmpDir);
+    const html = fs.readFileSync(path.join(tmpDir, "index.html"), "utf8");
+    expect(html).toContain('data-testid="link-lh-user-flow"');
+    expect(html).toContain("./lighthouse-user-flow/report.html");
+    expect(html).not.toContain('data-testid="lh-user-flow-unavailable"');
+  });
+
+  it("index.html always contains lh-user-flow-panel testid", () => {
+    runScript(tmpDir);
+    const html = fs.readFileSync(path.join(tmpDir, "index.html"), "utf8");
+    expect(html).toContain('data-testid="lh-user-flow-panel"');
+  });
 });

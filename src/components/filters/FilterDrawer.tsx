@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -162,21 +163,35 @@ export function FilterDrawer({
       <SheetContent
         side="right"
         data-testid="filter-drawer"
+        showCloseButton={false}
         className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md"
       >
         <SheetHeader className="flex flex-row items-center justify-between border-b px-6 py-4">
           <SheetTitle className="text-base font-semibold">Filters</SheetTitle>
-          {activeCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearAll}
-              className="h-8 gap-1.5 px-3 text-xs text-muted-foreground hover:text-destructive"
-            >
-              <X className="size-3.5" />
-              Clear all
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {activeCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAll}
+                data-testid="clear-all-filters"
+                className="h-8 gap-1.5 px-3 text-xs text-muted-foreground hover:text-destructive"
+              >
+                <X className="size-3.5" />
+                Clear all
+              </Button>
+            )}
+            <SheetClose asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                data-testid="filter-drawer-close"
+                aria-label="Close filters"
+              >
+                <X className="size-4" />
+              </Button>
+            </SheetClose>
+          </div>
         </SheetHeader>
 
         <div className="flex-1 space-y-0 overflow-y-auto">

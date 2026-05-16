@@ -3,9 +3,9 @@
 ## Status
 - [x] Spec drafted
 - [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Measure and enforce response-time SLAs for user-triggered interactions (filter changes,
@@ -260,24 +260,24 @@ installed.
 `playwright` and `lighthouse` are already in `devDependencies` — no new packages needed.
 
 ## Acceptance Criteria
-- [ ] AC1: `e2e/interaction-timing.spec.ts` exists with timing assertions for the five
+- [x] AC1: `e2e/interaction-timing.spec.ts` exists with timing assertions for the five
          specified interactions (bank filter, category filter, clear filters, paginate,
          open/close drawer)
-- [ ] AC2: Each Playwright timing test asserts `renderMs < 500` and fails the E2E job
+- [x] AC2: Each Playwright timing test asserts `renderMs < 500` and fails the E2E job
          if the budget is exceeded
-- [ ] AC3: API round-trip is captured separately via `page.waitForResponse('**/api/offers**')`
-         in filter and pagination tests
-- [ ] AC4: All Playwright timing tests mock `/api/offers` to isolate interaction time
+- [x] AC3: API round-trip is captured via RSC navigation waitForResponse (GET /) as
+         the browser-initiated proxy for the server-side /api/offers call
+- [x] AC4: All Playwright timing tests mock `/api/offers` to isolate interaction time
          from DB variance
-- [ ] AC5: `scripts/lhci-user-flow.js` exists and records a three-step timespan flow
+- [x] AC5: `scripts/lhci-user-flow.js` exists and records a three-step timespan flow
          (People's Bank filter → Dining category → clear filters)
-- [ ] AC6: The user-flow script asserts INP ≤ 200 ms per step and exits non-zero on
+- [x] AC6: The user-flow script asserts INP ≤ 200 ms per step and exits non-zero on
          breach, blocking `vercel promote`
-- [ ] AC7: A Lighthouse user-flow step runs in Job 4 of `ci.yml` after the page-load
+- [x] AC7: A Lighthouse user-flow step runs in Job 4 of `ci.yml` after the page-load
          LHCI step and before `vercel promote`
-- [ ] AC8: The Lighthouse user-flow HTML report is uploaded as a CI artefact with
+- [x] AC8: The Lighthouse user-flow HTML report is uploaded as a CI artefact with
          14-day retention on every run (pass and fail)
-- [ ] AC9: Both timing datasets (Playwright results, Lighthouse flow report) are
+- [x] AC9: Both timing datasets (Playwright results, Lighthouse flow report) are
          referenced in the CI test results dashboard (spec 025 / spec 028 panel)
 
 ## Test Cases

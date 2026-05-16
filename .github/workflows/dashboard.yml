@@ -76,6 +76,17 @@ jobs:
           if_no_artifact_found: warn
         continue-on-error: true
 
+      # ── Step 4b: Download latest Lighthouse user-flow artefact (spec 029) ──────
+      - name: Download Lighthouse user-flow artefact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          name: lhci-user-flow-*
+          path: dashboard/lighthouse-user-flow
+          search_artifacts: true
+          if_no_artifact_found: warn
+        continue-on-error: true
+
       # ── Step 5: Fetch cron job run summaries ─────────────────────────────────
       - name: Fetch cron job run summaries
         if: always()
