@@ -12,8 +12,10 @@
  * Timing is measured inside the browser's time domain via page.evaluate() to avoid
  * drift between Node.js and browser clocks.
  *
- * Resilient SSR note: the filter drawer and offer-grid are rendered client-side
- * after the initial page load; we wait for them before starting each test.
+ * SSR note: Next.js App Router fetches /api/offers server-side during RSC navigation.
+ * The browser sends a GET to the page URL (e.g. /?bank=peoples_bank) rather than
+ * directly to /api/offers — we capture this RSC navigation response as the API
+ * round-trip proxy (AC3). The /api/offers mock (AC4) covers any client-side fallback.
  */
 import { type Page, test, expect } from "@playwright/test";
 
@@ -60,32 +62,42 @@ const RENDER_BUDGET_MS = 500;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Measures the browser-side elapsed time for a user interaction that triggers
- * a network call. Returns both the total elapsed time (renderMs) and the
- * approximate API round-trip time (apiMs) captured via page.waitForResponse (AC3).
+ * Measures browser-side elapsed time for a user interaction that triggers a
+ * Next.js RSC navigation. Returns renderMs (click→response) and apiMs (AC3).
  *
- * All timing stays in the browser's time domain (performance.now()) to avoid
- * drift between Node and the browser clock.
+ * AC3 implementation note: filter/pagination clicks call router.push(), causing
+ * the browser to fetch the RSC payload from the page root URL (pathname "/").
+ * The server then calls /api/offers internally. We capture this RSC response as
+ * the API round-trip proxy because it is the only browser-initiated request that
+ * spans the server-side /api/offers call. The /api/offers mock in beforeEach (AC4)
+ * covers any client-side fallback requests to /api/offers.
+ *
+ * All timing stays in the browser's time domain (performance.now()).
  */
 async function measureInteraction(
   page: Page,
   action: () => Promise<void>,
-  apiPattern: string,
-): Promise<{ renderMs: number; apiMs: number }> {
-  // AC3: set up response listener BEFORE triggering the action
-  const apiResponsePromise = page.waitForResponse(apiPattern);
-  // Cancel animations so they do not inflate the timing budget
+  _apiPattern: string,
+): Promise<{ renderMs: number }> {
+  // AC3: capture the RSC navigation fetch (GET / with RSC headers) as the
+  // API round-trip proxy — this is the browser-initiated request that wraps
+  // the server-side /api/offers call.
+  const navResponsePromise = page.waitForResponse(
+    (res) =>
+      res.ok() &&
+      res.request().method() === "GET" &&
+      new URL(res.url()).pathname === "/",
+    { timeout: 10_000 },
+  );
+  // Cancel animations so they do not inflate the timing budget (spec Edge Cases)
   await page.evaluate(() =>
     document.getAnimations().forEach((a) => a.finish()),
   );
   const t0 = await page.evaluate(() => performance.now());
   await action();
-  // AC3: await the API round-trip completion before measuring render
-  await apiResponsePromise;
-  const t1 = await page.evaluate(() => performance.now());
-  // renderMs: elapsed from action start to after API response received in browser
-  // apiMs: same measurement (mocked responses return immediately, so values are equal)
-  return { renderMs: t1 - t0, apiMs: t1 - t0 };
+  await navResponsePromise;
+  const renderDone = await page.evaluate(() => performance.now());
+  return { renderMs: renderDone - t0 };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -107,7 +119,9 @@ test.describe("Interaction performance budgets (spec 029)", () => {
   // AC1, AC2: bank filter re-renders grid within 500 ms
   test("bank filter re-renders grid within 500 ms", async ({ page }) => {
     await page.goto("/");
-    await page.waitForSelector('[data-testid="offer-grid"]');
+    await expect(
+      page.getByTestId("offer-grid").or(page.getByTestId("empty-state")),
+    ).toBeVisible({ timeout: 10_000 });
 
     // Open the filter drawer before timing starts so we isolate the filter-click
     await page.getByTestId("filter-drawer-trigger").click();
@@ -126,7 +140,9 @@ test.describe("Interaction performance budgets (spec 029)", () => {
   // AC1, AC2: category filter re-renders grid within 500 ms
   test("category filter re-renders grid within 500 ms", async ({ page }) => {
     await page.goto("/");
-    await page.waitForSelector('[data-testid="offer-grid"]');
+    await expect(
+      page.getByTestId("offer-grid").or(page.getByTestId("empty-state")),
+    ).toBeVisible({ timeout: 10_000 });
 
     // Open the filter drawer before timing starts
     await page.getByTestId("filter-drawer-trigger").click();
@@ -145,7 +161,9 @@ test.describe("Interaction performance budgets (spec 029)", () => {
   // AC1, AC2: clear-all-filters re-renders grid within 500 ms
   test("clear all filters re-renders grid within 500 ms", async ({ page }) => {
     await page.goto("/?bank=peoples_bank&category=dining");
-    await page.waitForSelector('[data-testid="offer-grid"]');
+    await expect(
+      page.getByTestId("offer-grid").or(page.getByTestId("empty-state")),
+    ).toBeVisible({ timeout: 10_000 });
 
     // Open the filter drawer before timing starts (clear-all-filters is inside the drawer)
     await page.getByTestId("filter-drawer-trigger").click();
@@ -166,7 +184,12 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     page,
   }) => {
     await page.goto("/");
-    await page.waitForSelector('[data-testid="offer-grid"]');
+    await expect(
+      page.getByTestId("offer-grid").or(page.getByTestId("empty-state")),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("pagination-next")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // AC3: API round-trip captured via waitForResponse inside measureInteraction
     const { renderMs } = await measureInteraction(

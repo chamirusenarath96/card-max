@@ -71,22 +71,26 @@ if (require.main === module) {
 
     const flow = await startFlow(page, { name: 'User interaction flow' });
 
-    // Step 1: Apply People's Bank filter
+    // Open the filter drawer so bank/category filter buttons are accessible
+    await page.getByTestId('filter-drawer-trigger').click();
+    await page.waitForSelector('[data-testid="filter-drawer"]');
+
+    // Step 1: Apply People's Bank filter (RSC nav: browser GETs /?bank=peoples_bank)
     await flow.startTimespan({ stepName: "Apply People's Bank filter" });
     await page.getByTestId('bank-filter-peoples_bank').click();
-    await page.waitForResponse('**/api/offers**');
+    await page.waitForURL((url) => url.searchParams.has('bank'), { timeout: 10_000 });
     await flow.endTimespan();
 
-    // Step 2: Apply Dining category filter
+    // Step 2: Apply Dining category filter (RSC nav: browser GETs /?bank=…&category=dining)
     await flow.startTimespan({ stepName: 'Apply Dining category filter' });
     await page.getByTestId('category-chip-dining').click();
-    await page.waitForResponse('**/api/offers**');
+    await page.waitForURL((url) => url.searchParams.has('category'), { timeout: 10_000 });
     await flow.endTimespan();
 
-    // Step 3: Clear all filters
+    // Step 3: Clear all filters (RSC nav: browser GETs / with no params)
     await flow.startTimespan({ stepName: 'Clear all filters' });
     await page.getByTestId('clear-all-filters').click();
-    await page.waitForResponse('**/api/offers**');
+    await page.waitForURL((url) => !url.searchParams.has('bank') && !url.searchParams.has('category'), { timeout: 10_000 });
     await flow.endTimespan();
 
     const result = await flow.createFlowResult();
