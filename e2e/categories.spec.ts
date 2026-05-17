@@ -1,9 +1,13 @@
 /**
  * E2E tests for Dynamic Category Filters
- * Spec: specs/features/030-dynamic-category-filters.md  (AC7)
+ * Spec: specs/features/030-dynamic-category-filters.md  (AC7, AC8)
  *
  * These tests mock /api/categories and /api/offers so they run
  * without a live DB connection in CI.
+ *
+ * AC6 (SearchDrawer hides jump section when empty) is covered at the
+ * component level in SearchDrawer.test.tsx — SearchDrawer is not rendered
+ * on the main page so cannot be tested via E2E.
  */
 import { test, expect } from "@playwright/test";
 
@@ -66,8 +70,11 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
     await page.getByTestId("category-chip-groceries").click();
     // URL updated
     await expect(page).toHaveURL(/category=groceries/, { timeout: 5000 });
-    // The active-filter chip should appear in the filter bar
-    await expect(page.getByText("Groceries")).toBeVisible({ timeout: 5000 });
+    // The active-filter chip appears in the FilterBar with a unique remove button label.
+    // Use the aria-label to avoid matching the 20+ offer cards that also contain "Groceries".
+    await expect(page.getByLabel("Remove Groceries filter")).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test("AC8 — 'All' chip always present in FilterDrawer", async ({ page }) => {
@@ -89,25 +96,5 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
     await page.getByTestId("category-chip-all").click();
     // category param should be removed
     await expect(page).not.toHaveURL(/category=/, { timeout: 5000 });
-  });
-
-  test("AC6 — jump-category-section hidden when API returns empty", async ({
-    page,
-  }) => {
-    // Override categories route with empty result
-    await page.route("**/api/categories**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ data: [] }),
-      }),
-    );
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-
-    // Open search drawer
-    await page.getByTestId("search-drawer-trigger").click();
-    // The "Jump to category" section should not be visible
-    await expect(page.getByTestId("jump-category-section")).not.toBeVisible();
   });
 });
