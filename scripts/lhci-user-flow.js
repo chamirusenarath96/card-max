@@ -67,6 +67,22 @@ if (require.main === module) {
   /** Vercel deployment-protection bypass token (set in CI via VERCEL_BYPASS_TOKEN secret). */
   const BYPASS_TOKEN = process.env.VERCEL_BYPASS_TOKEN;
 
+  if (!BYPASS_TOKEN) {
+    console.warn(
+      '[lhci-flow] VERCEL_BYPASS_TOKEN is not set — x-vercel-protection-bypass header will be omitted.',
+    );
+    console.warn(
+      '[lhci-flow] If the deployment has protection enabled, generate a token at:',
+    );
+    console.warn(
+      '[lhci-flow]   Vercel dashboard → Project → Settings → Deployment Protection',
+      '→ Protection Bypass for Automation',
+    );
+    console.warn(
+      '[lhci-flow] Then add it as the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets.',
+    );
+  }
+
   (async () => {
     const browser = await chromium.launch({ headless: true });
     // Pass the Vercel deployment-protection bypass header so Playwright reaches
@@ -77,7 +93,22 @@ if (require.main === module) {
         : {},
     );
     const page = await context.newPage();
-    await page.goto(TARGET_URL);
+    await page.goto(TARGET_URL, { waitUntil: 'commit' });
+
+    // Fail fast when Vercel deployment protection redirects to the login page
+    // (happens when VERCEL_BYPASS_TOKEN is missing or wrong). Without this check
+    // the script would time out after 90 s instead of giving a clear error.
+    const landedUrl = page.url();
+    if (landedUrl.includes('vercel.com/login') || landedUrl.includes('vercel.com/sso')) {
+      console.error(
+        `[lhci-flow] Redirected to Vercel login: ${landedUrl}`,
+      );
+      console.error(
+        '[lhci-flow] Set the VERCEL_BYPASS_TOKEN secret in GitHub to bypass deployment protection.',
+      );
+      await browser.close();
+      process.exit(1);
+    }
 
     // Wait explicitly for the FilterBar to stream in after the Suspense boundary
     // resolves its server-side DB fetch. The default 30 s click timeout is not
