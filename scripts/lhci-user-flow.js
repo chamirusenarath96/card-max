@@ -64,9 +64,19 @@ if (require.main === module) {
   const { startFlow } = require('lighthouse/core/index.cjs');
   const { chromium } = require('playwright');
 
+  /** Vercel deployment-protection bypass token (set in CI via VERCEL_BYPASS_TOKEN secret). */
+  const BYPASS_TOKEN = process.env.VERCEL_BYPASS_TOKEN;
+
   (async () => {
     const browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+    // Pass the Vercel deployment-protection bypass header so Playwright reaches
+    // the actual app instead of being redirected to vercel.com/login.
+    const context = await browser.newContext(
+      BYPASS_TOKEN
+        ? { extraHTTPHeaders: { 'x-vercel-protection-bypass': BYPASS_TOKEN } }
+        : {},
+    );
+    const page = await context.newPage();
     await page.goto(TARGET_URL);
 
     // Wait explicitly for the FilterBar to stream in after the Suspense boundary

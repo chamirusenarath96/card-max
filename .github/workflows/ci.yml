@@ -246,6 +246,7 @@ jobs:
           node scripts/lhci-user-flow.js
         env:
           TARGET_URL: ${{ steps.deploy.outputs.preview_url }}
+          VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
         timeout-minutes: 10
 
       - name: Upload Lighthouse user-flow report
