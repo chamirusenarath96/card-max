@@ -47,7 +47,39 @@ const WORKFLOWS = [
 ];
 
 /**
+ * Recursively walks an Allure tree node and accumulates test statuses
+ * into the byFile map, keyed by the nearest ancestor whose name looks
+ * like a source file (ends in .ts / .tsx / .js).
+ *
+ * Handles both flat structures (unit: root > file > test) and deep
+ * structures (E2E: root > browser > spec > describe > test).
+ *
+ * @param {object} node       - Current Allure tree node
+ * @param {string} currentKey - Nearest file-like ancestor name seen so far
+ * @param {object} byFile     - Accumulator: filename → { passed, failed, broken, skipped }
+ */
+function walkNode(node, currentKey, byFile) {
+  const isFile = /\.(test|spec)\.(tsx?|js)$/.test(node.name);
+  const key = isFile ? node.name : currentKey;
+
+  if (node.status) {
+    // Leaf test node — accumulate into whichever file key is active.
+    const bucket = byFile[key] || (byFile[key] = { passed: 0, failed: 0, broken: 0, skipped: 0 });
+    const s = node.status;
+    if (s === "passed") bucket.passed++;
+    else if (s === "failed") bucket.failed++;
+    else if (s === "broken") bucket.broken++;
+    else if (s === "skipped") bucket.skipped++;
+  }
+
+  for (const child of node.children || []) {
+    walkNode(child, key, byFile);
+  }
+}
+
+/**
  * Reads an Allure suites.json file and returns per-suite pass/fail stats.
+ * Works for both unit test flat trees and deep E2E trees (browser > spec > describe > test).
  * @param {string} suitesJsonPath  Absolute path to the allure data/suites.json file.
  * @returns {object|null} Object with suites array and totals, or null if file missing.
  */
@@ -55,20 +87,22 @@ function readAllureSuites(suitesJsonPath) {
   if (!exists(suitesJsonPath)) return null;
   try {
     const raw = JSON.parse(fs.readFileSync(suitesJsonPath, "utf8"));
-    const suites = [];
-    for (const suite of raw.children || []) {
-      const counts = { passed: 0, failed: 0, broken: 0, skipped: 0 };
-      for (const test of suite.children || []) {
-        const s = test.status;
-        if (s === "passed") counts.passed++;
-        else if (s === "failed") counts.failed++;
-        else if (s === "broken") counts.broken++;
-        else if (s === "skipped") counts.skipped++;
-      }
-      const total = counts.passed + counts.failed + counts.broken + counts.skipped;
-      if (total === 0) continue;
-      suites.push({ name: suite.name, ...counts, total });
+
+    // Walk the entire tree, grouping by source file name.
+    const byFile = {};
+    for (const child of raw.children || []) {
+      walkNode(child, child.name, byFile);
     }
+
+    const suites = Object.entries(byFile)
+      .map(([name, counts]) => ({
+        name,
+        ...counts,
+        total: counts.passed + counts.failed + counts.broken + counts.skipped,
+      }))
+      .filter((s) => s.total > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     const totals = suites.reduce(
       (acc, s) => ({
         passed: acc.passed + s.passed,
