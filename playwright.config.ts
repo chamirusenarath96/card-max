@@ -7,15 +7,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  // In CI include allure-playwright with explicit outputFolder so dashboard.yml's
-  // `allure generate allure-results/e2e` finds results. The ALLURE_RESULTS_DIR env
-  // var is only respected when the reporter is actually loaded — not via --reporter CLI
-  // flag which the hardcoded "html" reporter was shadowing. (Fix: dashboard Allure bug)
+  // In CI add allure-playwright so the dashboard can generate the E2E Allure report.
+  // allure-playwright writes to allure-results/ by default (no custom dir needed —
+  // dashboard.yml generates the report immediately after this step, before the dir
+  // is reused by anything else). We keep "html" too for the Playwright report artefact.
   reporter: process.env.CI
-    ? [
-        ["allure-playwright", { outputFolder: "allure-results/e2e" }],
-        ["html"],
-      ]
+    ? [["allure-playwright"], ["html"]]
     : "html",
 
   expect: {
