@@ -4,11 +4,12 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { format } from "date-fns";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
-import type { Bank } from "../../../specs/data/offer.schema";
+import type { Bank, Category } from "../../../specs/data/offer.schema";
 import { FilterDrawer } from "./FilterDrawer";
 import { SavePresetPopover } from "./SavePresetPopover";
 import { Badge } from "@/components/ui/badge";
 import { useFilterPresets } from "@/hooks/useFilterPresets";
+import { CATEGORY_LABELS } from "@/lib/categoryLabels";
 
 interface Props {
   activeBank?: string;
@@ -19,23 +20,6 @@ interface Props {
   activeSort?: string;
   includeExpired?: boolean;
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  dining: "Dining",
-  shopping: "Shopping",
-  travel: "Travel",
-  lodging: "Lodging",
-  homecare: "Home Care",
-  clothing: "Clothing",
-  fuel: "Fuel",
-  groceries: "Groceries",
-  entertainment: "Entertainment",
-  wellness: "Wellness",
-  healthcare: "Healthcare",
-  installments: "Installments",
-  online: "Online",
-  other: "Other",
-};
 
 const OFFER_TYPE_LABELS: Record<string, string> = {
   percentage: "% Discount",
@@ -108,7 +92,7 @@ export function FilterBar({
   if (activeCategory) {
     chips.push({
       key: "category",
-      label: CATEGORY_LABELS[activeCategory] ?? activeCategory,
+      label: CATEGORY_LABELS[activeCategory as Category] ?? activeCategory,
       onRemove: () => removeParam("category"),
     });
   }

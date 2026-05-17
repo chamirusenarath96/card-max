@@ -90,8 +90,10 @@ async function measureInteraction(
     { timeout: 10_000 },
   );
   // Cancel animations so they do not inflate the timing budget (spec Edge Cases)
+  // Guard against infinite animations (e.g. Skeleton pulse) which throw
+  // InvalidStateError when finish() is called on them.
   await page.evaluate(() =>
-    document.getAnimations().forEach((a) => a.finish()),
+    document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* infinite animation */ } }),
   );
   const t0 = await page.evaluate(() => performance.now());
   await action();
@@ -103,7 +105,10 @@ async function measureInteraction(
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 test.describe("Interaction performance budgets (spec 029)", () => {
-  // AC4: mock /api/offers before each test to isolate from DB variance
+  // AC4: mock /api/offers before each test to isolate from DB variance.
+  // Also mock /api/categories so FilterDrawer skeletons never render —
+  // Skeleton uses an infinite CSS pulse animation that causes
+  // `a.finish()` (in measureInteraction) to throw InvalidStateError.
   test.beforeEach(async ({ page }) => {
     await page.route("**/api/offers**", (route) => {
       const url = route.request().url();
@@ -114,6 +119,18 @@ test.describe("Interaction performance budgets (spec 029)", () => {
         body: JSON.stringify(isPage2 ? PAGE2_RESPONSE : PAGE1_RESPONSE),
       });
     });
+    await page.route("**/api/categories**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [
+            { category: "dining", label: "Dining", count: 42 },
+            { category: "groceries", label: "Groceries", count: 31 },
+          ],
+        }),
+      }),
+    );
   });
 
   // AC1, AC2: bank filter re-renders grid within 500 ms
@@ -147,6 +164,8 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     // Open the filter drawer before timing starts
     await page.getByTestId("filter-drawer-trigger").click();
     await page.waitForSelector('[data-testid="filter-drawer"]');
+    // category-chip-dining is dynamic (from /api/categories) — wait for it to render
+    await page.waitForSelector('[data-testid="category-chip-dining"]', { timeout: 5000 });
 
     // AC3: API round-trip captured via waitForResponse inside measureInteraction
     const { renderMs } = await measureInteraction(

@@ -10,6 +10,7 @@ import { AdUnit } from "@/components/ads/AdUnit";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
   SheetClose,
@@ -20,25 +21,9 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useCategories } from "@/hooks/useCategories";
 
 const BANKS = Object.entries(BANK_METADATA) as [Bank, (typeof BANK_METADATA)[Bank]][];
-
-const CATEGORIES: { value: string; label: string }[] = [
-  { value: "dining", label: "Dining" },
-  { value: "groceries", label: "Groceries" },
-  { value: "travel", label: "Travel" },
-  { value: "lodging", label: "Lodging" },
-  { value: "shopping", label: "Shopping" },
-  { value: "clothing", label: "Clothing" },
-  { value: "homecare", label: "Home Care" },
-  { value: "online", label: "Online" },
-  { value: "wellness", label: "Wellness" },
-  { value: "healthcare", label: "Healthcare" },
-  { value: "fuel", label: "Fuel" },
-  { value: "entertainment", label: "Entertainment" },
-  { value: "installments", label: "Installments" },
-  { value: "other", label: "Other" },
-];
 
 const OFFER_TYPES: { value: string; label: string }[] = [
   { value: "percentage", label: "% Discount" },
@@ -73,6 +58,7 @@ export function FilterDrawer({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { data: categories, isLoading: categoriesLoading } = useCategories();
 
   function setParam(key: string, value: string | null) {
     const params = new URLSearchParams(searchParams.toString());
@@ -308,7 +294,7 @@ export function FilterDrawer({
           </section>
 
           {/* Category */}
-          <section className="px-6 py-5">
+          <section className="px-6 py-5" data-testid="category-section">
             <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Category
             </Label>
@@ -317,6 +303,7 @@ export function FilterDrawer({
               role="group"
               aria-label="Filter by category"
             >
+              {/* "All" chip is always present regardless of API state (AC8) */}
               <Button
                 type="button"
                 data-testid="category-chip-all"
@@ -326,21 +313,37 @@ export function FilterDrawer({
               >
                 All
               </Button>
-              {CATEGORIES.map((cat) => (
-                <Button
-                  key={cat.value}
-                  type="button"
-                  data-testid={`category-chip-${cat.value}`}
-                  variant={activeCategory === cat.value ? "default" : "outline"}
-                  aria-pressed={activeCategory === cat.value}
-                  className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                  onClick={() =>
-                    setParam("category", activeCategory === cat.value ? null : cat.value)
-                  }
-                >
-                  {cat.label}
-                </Button>
-              ))}
+
+              {/* Skeleton pills while the API is loading (AC4) */}
+              {categoriesLoading &&
+                Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    data-testid="category-skeleton"
+                    className="h-10 w-24 rounded-md"
+                  />
+                ))}
+
+              {/* Dynamic category pills from /api/categories (AC3) */}
+              {!categoriesLoading &&
+                categories.map((cat) => (
+                  <Button
+                    key={cat.category}
+                    type="button"
+                    data-testid={`category-chip-${cat.category}`}
+                    variant={activeCategory === cat.category ? "default" : "outline"}
+                    aria-pressed={activeCategory === cat.category}
+                    className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                    onClick={() =>
+                      setParam(
+                        "category",
+                        activeCategory === cat.category ? null : cat.category,
+                      )
+                    }
+                  >
+                    {cat.label}
+                  </Button>
+                ))}
             </div>
           </section>
 

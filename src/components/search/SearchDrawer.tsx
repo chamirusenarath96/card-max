@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, TrendingUp, LayoutGrid, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
   SheetContent,
@@ -13,6 +14,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useSearchSuggestions } from "./useSearchSuggestions";
+import { useCategories } from "@/hooks/useCategories";
 
 const QUICK_SEARCHES = [
   "dining deals",
@@ -23,17 +25,6 @@ const QUICK_SEARCHES = [
   "fuel discount",
   "online shopping",
   "installment plans",
-];
-
-const FILTER_JUMPS: { label: string; params: Record<string, string> }[] = [
-  { label: "Expiring Soon", params: { sort: "expiringSoon" } },
-  { label: "Dining", params: { category: "dining" } },
-  { label: "Shopping", params: { category: "shopping" } },
-  { label: "Online", params: { category: "online" } },
-  { label: "% Discount", params: { offerType: "percentage" } },
-  { label: "Cashback", params: { offerType: "cashback" } },
-  { label: "Fuel", params: { category: "fuel" } },
-  { label: "Travel", params: { category: "travel" } },
 ];
 
 interface Props {
@@ -50,6 +41,10 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
   const urlQuery = searchParams.get("q") ?? initialQuery;
   const [query, setQuery] = useState(urlQuery);
   const { results, total, isLoading, isActive } = useSearchSuggestions(query);
+
+  // Dynamic categories from /api/categories — top 6 by count (AC5, AC6)
+  const { data: allCategories, isLoading: categoriesLoading } = useCategories();
+  const topCategories = allCategories.slice(0, 6);
 
   // Sync local input whenever the URL q param changes (e.g. HeroSearch navigated)
   useEffect(() => {
@@ -259,26 +254,36 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
             </div>
           )}
 
-          {/* Jump to category — always visible */}
-          <div>
-            <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <LayoutGrid className="size-3" aria-hidden />
-              Jump to category
-            </p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Category shortcuts">
-              {FILTER_JUMPS.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  data-testid={`jump-${item.label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
-                  onClick={() => handleJump(item.params)}
-                  className="rounded-full bg-secondary px-3.5 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
-                >
-                  {item.label}
-                </button>
-              ))}
+          {/* Jump to category — dynamic from API, hidden when empty (AC5, AC6) */}
+          {(categoriesLoading || topCategories.length > 0) && (
+            <div data-testid="jump-category-section">
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <LayoutGrid className="size-3" aria-hidden />
+                Jump to category
+              </p>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Category shortcuts">
+                {/* Skeleton chips while loading */}
+                {categoriesLoading &&
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} data-testid="jump-category-skeleton" className="h-8 w-20 rounded-full" />
+                  ))}
+
+                {/* Dynamic category chips — top 6 by count */}
+                {!categoriesLoading &&
+                  topCategories.map((cat) => (
+                    <button
+                      key={cat.category}
+                      type="button"
+                      data-testid={`jump-${cat.category}`}
+                      onClick={() => handleJump({ category: cat.category })}
+                      className="rounded-full bg-secondary px-3.5 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80"
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

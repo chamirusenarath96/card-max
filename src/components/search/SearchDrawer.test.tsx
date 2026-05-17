@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SearchDrawer } from "./SearchDrawer";
 import type { SuggestionItem } from "./useSearchSuggestions";
+import type { UseCategoriesResult } from "@/hooks/useCategories";
 
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -20,6 +21,22 @@ const mockUseSearchSuggestions = vi.fn((_query: string) => ({
 vi.mock("./useSearchSuggestions", () => ({
   useSearchSuggestions: (query: string) => mockUseSearchSuggestions(query),
 }));
+
+const mockUseCategories = vi.fn<() => UseCategoriesResult>();
+
+vi.mock("@/hooks/useCategories", () => ({
+  useCategories: () => mockUseCategories(),
+}));
+
+const MOCK_CATEGORIES: UseCategoriesResult["data"] = [
+  { category: "dining", label: "Dining", count: 42 },
+  { category: "groceries", label: "Groceries", count: 31 },
+  { category: "online", label: "Online", count: 18 },
+  { category: "shopping", label: "Shopping", count: 14 },
+  { category: "travel", label: "Travel", count: 10 },
+  { category: "fuel", label: "Fuel", count: 8 },
+  { category: "wellness", label: "Wellness", count: 5 }, // 7th — should be capped
+];
 
 const MOCK_RESULTS = [
   {
@@ -54,6 +71,11 @@ describe("SearchDrawer", () => {
       total: 0,
       isLoading: false,
       isActive: false,
+    });
+    mockUseCategories.mockReturnValue({
+      data: MOCK_CATEGORIES,
+      isLoading: false,
+      error: false,
     });
   });
 
@@ -90,13 +112,61 @@ describe("SearchDrawer", () => {
     expect(screen.getByTestId("quick-search-cashback")).toBeInTheDocument();
   });
 
-  it("opening the drawer reveals category jump chips", () => {
+  // ── AC5: dynamic category chips (top 6) ──────────────────────────────────
+
+  it("AC5 — opening the drawer reveals dynamic category jump chips", async () => {
     render(<SearchDrawer />);
     fireEvent.click(screen.getByTestId("search-drawer-trigger"));
     expect(screen.getByTestId("jump-dining")).toBeInTheDocument();
     expect(screen.getByTestId("jump-shopping")).toBeInTheDocument();
-    expect(screen.getByTestId("jump-expiring-soon")).toBeInTheDocument();
+    expect(screen.getByTestId("jump-fuel")).toBeInTheDocument();
   });
+
+  it("AC5 — shows at most 6 category chips (top 6 by count)", () => {
+    render(<SearchDrawer />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    // MOCK_CATEGORIES has 7 items; only first 6 should appear
+    expect(screen.queryByTestId("jump-wellness")).not.toBeInTheDocument();
+    expect(screen.getByTestId("jump-fuel")).toBeInTheDocument(); // 6th
+  });
+
+  it("AC5 — category chips set correct URL params on click", () => {
+    render(<SearchDrawer />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    fireEvent.click(screen.getByTestId("jump-dining"));
+    expect(mockPush).toHaveBeenCalledWith("/?category=dining");
+  });
+
+  // ── AC6: hide section when API returns empty ──────────────────────────────
+
+  it("AC6 — hides the jump-category-section when API returns empty", () => {
+    mockUseCategories.mockReturnValue({ data: [], isLoading: false, error: false });
+
+    render(<SearchDrawer />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.queryByTestId("jump-category-section")).not.toBeInTheDocument();
+  });
+
+  it("AC6 — hides jump section when API errors (data is empty)", () => {
+    mockUseCategories.mockReturnValue({ data: [], isLoading: false, error: true });
+
+    render(<SearchDrawer />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.queryByTestId("jump-category-section")).not.toBeInTheDocument();
+  });
+
+  // ── Skeleton loading state ─────────────────────────────────────────────────
+
+  it("shows skeleton chips while categories are loading", () => {
+    mockUseCategories.mockReturnValue({ data: [], isLoading: true, error: false });
+
+    render(<SearchDrawer />);
+    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
+    expect(screen.getByTestId("jump-category-section")).toBeInTheDocument();
+    expect(screen.getAllByTestId("jump-category-skeleton").length).toBe(6);
+  });
+
+  // ── Other existing behaviour ───────────────────────────────────────────────
 
   it("shows initialQuery in the input when drawer opens", () => {
     render(<SearchDrawer initialQuery="pizza" />);
@@ -119,22 +189,6 @@ describe("SearchDrawer", () => {
     fireEvent.click(screen.getByTestId("quick-search-cashback"));
     expect(mockPush).toHaveBeenCalledWith("/?q=cashback");
   });
-
-  it("clicking 'Dining' jump navigates with category=dining", () => {
-    render(<SearchDrawer />);
-    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
-    fireEvent.click(screen.getByTestId("jump-dining"));
-    expect(mockPush).toHaveBeenCalledWith("/?category=dining");
-  });
-
-  it("clicking 'Expiring Soon' jump navigates with sort=expiringSoon", () => {
-    render(<SearchDrawer />);
-    fireEvent.click(screen.getByTestId("search-drawer-trigger"));
-    fireEvent.click(screen.getByTestId("jump-expiring-soon"));
-    expect(mockPush).toHaveBeenCalledWith("/?sort=expiringSoon");
-  });
-
-  // --- Inline results while typing ---
 
   it("hides popular searches and shows results section when isActive", () => {
     mockUseSearchSuggestions.mockReturnValue({
