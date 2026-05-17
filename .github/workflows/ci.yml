@@ -238,6 +238,9 @@ jobs:
       - name: Install Lighthouse for user-flow audit
         run: npm install --no-save lighthouse@^12
 
+      - name: Install Playwright browsers (for user-flow audit)
+        run: npx playwright install --with-deps chromium
+
       - name: Run Lighthouse user-flow audit
         run: |
           node scripts/lhci-user-flow.js
