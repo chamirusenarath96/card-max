@@ -33,11 +33,12 @@ jobs:
         run: npm ci
 
       # ── Step 1: Vitest → Allure unit report ──────────────────────────────────
-      # Pass --reporter=allure-vitest/reporter via CLI so allure-vitest writes JSON
-      # results to allure-results/ (its default dir). Config-based reporter options
-      # were unreliable; CLI flag is the canonical way to activate the reporter.
-      - name: Run unit tests with Allure reporter
-        run: npm run test -- --reporter=allure-vitest/reporter --reporter=verbose
+      # allure-vitest/reporter CLI flag does not write results reliably in this
+      # project (confirmed across 3 CI runs — allure-results/ is never created).
+      # Use Vitest's built-in JUnit reporter instead: allure-commandline natively
+      # reads JUnit XML and generates a full Allure report from it.
+      - name: Run unit tests with JUnit reporter
+        run: npm run test -- --reporter=junit --outputFile=allure-results/junit.xml
 
       - name: Install allure-commandline
         if: always()
