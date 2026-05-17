@@ -6,6 +6,12 @@ vi.mock("@/hooks/useFilterPresets", () => ({
   useFilterPresets: () => ({ presets: [], savePreset: vi.fn(), deletePreset: vi.fn() }),
 }));
 
+// FilterBar renders FilterDrawer which calls useCategories.
+// Return empty/loaded state so the drawer renders without a real fetch.
+vi.mock("@/hooks/useCategories", () => ({
+  useCategories: () => ({ data: [], isLoading: false, error: false }),
+}));
+
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
