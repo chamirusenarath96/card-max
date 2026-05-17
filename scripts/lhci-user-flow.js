@@ -93,29 +93,37 @@ if (require.main === module) {
         : {},
     );
     const page = await context.newPage();
-    await page.goto(TARGET_URL, { waitUntil: 'commit' });
+    await page.goto(TARGET_URL);
 
-    // Fail fast when Vercel deployment protection redirects to the login page
-    // (happens when VERCEL_BYPASS_TOKEN is missing or wrong). Without this check
-    // the script would time out after 90 s instead of giving a clear error.
-    const landedUrl = page.url();
-    if (landedUrl.includes('vercel.com/login') || landedUrl.includes('vercel.com/sso')) {
-      console.error(
-        `[lhci-flow] Redirected to Vercel login: ${landedUrl}`,
-      );
-      console.error(
-        '[lhci-flow] Set the VERCEL_BYPASS_TOKEN secret in GitHub to bypass deployment protection.',
-      );
-      await browser.close();
-      process.exit(1);
-    }
+    // Race between:
+    //   A) filter-drawer-trigger becoming visible (app loaded successfully), or
+    //   B) Vercel's client-side JS redirecting to vercel.com/login (protection
+    //      active, bypass token missing/wrong).
+    //
+    // Vercel protection redirects happen client-side AFTER page.goto() returns,
+    // so checking page.url() right after goto() always shows the original URL.
+    // Promise.race catches whichever event fires first and fails fast with a
+    // clear error instead of timing out after 90 s.
+    await Promise.race([
+      // A — happy path: app streamed in and the FilterBar is visible
+      page.getByTestId('filter-drawer-trigger').waitFor({ state: 'visible', timeout: 90_000 }),
 
-    // Wait explicitly for the FilterBar to stream in after the Suspense boundary
-    // resolves its server-side DB fetch. The default 30 s click timeout is not
-    // enough on Vercel cold-start + MongoDB Atlas connection time.
-    // filter-drawer-trigger lives inside <Suspense> wrapping OfferGridSection
-    // which is an async server component — page `load` fires before it streams.
-    await page.getByTestId('filter-drawer-trigger').waitFor({ state: 'visible', timeout: 90_000 });
+      // B — login redirect: Vercel protection bounced Playwright to the login page
+      page.waitForURL(
+        (url) => url.toString().includes('vercel.com/login') || url.toString().includes('vercel.com/sso'),
+        { timeout: 90_000 },
+      ).then(() => {
+        const loginUrl = page.url();
+        console.error(`[lhci-flow] Redirected to Vercel login: ${loginUrl}`);
+        console.error(
+          '[lhci-flow] Set the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets → Actions.',
+        );
+        console.error(
+          '[lhci-flow] Generate the token at: Vercel dashboard → Project → Settings → Deployment Protection.',
+        );
+        throw new Error('Vercel deployment protection login redirect');
+      }),
+    ]);
 
     const flow = await startFlow(page, { name: 'User interaction flow' });
 
