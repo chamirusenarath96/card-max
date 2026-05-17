@@ -2,9 +2,10 @@
  * Generates dashboard/index.html linking all CI report panels.
  *
  * Panels:
- *   - Allure unit test report  → ./allure-unit/index.html
- *   - Allure E2E report        → ./allure-e2e/index.html
+ *   - Allure unit test report  → ./allure-unit/index.html  (with per-suite breakdown)
+ *   - Allure E2E report        → ./allure-e2e/index.html   (with per-suite breakdown)
  *   - Lighthouse CI report     → ./lighthouse/ (may be absent)
+ *   - Lighthouse User Flow     → ./lighthouse-user-flow/ (may be absent)
  *   - GitHub Actions status badges (shields.io SVG)
  *
  * Run: node scripts/build-dashboard-index.js
@@ -46,16 +47,111 @@ const WORKFLOWS = [
 ];
 
 /**
+ * Reads an Allure suites.json file and returns per-suite pass/fail stats.
+ * @param {string} suitesJsonPath  Absolute path to the allure data/suites.json file.
+ * @returns {object|null} Object with suites array and totals, or null if file missing.
+ */
+function readAllureSuites(suitesJsonPath) {
+  if (!exists(suitesJsonPath)) return null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(suitesJsonPath, "utf8"));
+    const suites = [];
+    for (const suite of raw.children || []) {
+      const counts = { passed: 0, failed: 0, broken: 0, skipped: 0 };
+      for (const test of suite.children || []) {
+        const s = test.status;
+        if (s === "passed") counts.passed++;
+        else if (s === "failed") counts.failed++;
+        else if (s === "broken") counts.broken++;
+        else if (s === "skipped") counts.skipped++;
+      }
+      const total = counts.passed + counts.failed + counts.broken + counts.skipped;
+      if (total === 0) continue;
+      suites.push({ name: suite.name, ...counts, total });
+    }
+    const totals = suites.reduce(
+      (acc, s) => ({
+        passed: acc.passed + s.passed,
+        failed: acc.failed + s.failed,
+        broken: acc.broken + s.broken,
+        skipped: acc.skipped + s.skipped,
+        total: acc.total + s.total,
+      }),
+      { passed: 0, failed: 0, broken: 0, skipped: 0, total: 0 }
+    );
+    return { suites, totals };
+  } catch {
+    return null;
+  }
+}
+
+/** Strips path prefix and .test.ts/.spec.ts suffix for a clean label. */
+function suiteName(raw) {
+  return raw
+    .replace(/^(src\/|crawler\/|scripts\/|e2e\/)/, "")
+    .replace(/\.(test|spec)\.(tsx?|js)$/, "");
+}
+
+/** Renders a coloured suite breakdown table. */
+function suitesTable(data) {
+  if (!data) return `<p class="unavailable">No Allure data found.</p>`;
+
+  const { suites, totals } = data;
+  const overallOk = totals.failed === 0 && totals.broken === 0;
+
+  const totalBar = `<div class="total-bar ${overallOk ? "total-bar--pass" : "total-bar--fail"}">
+      <span class="total-count">${totals.total} tests</span>
+      <span class="pill pill--pass">${totals.passed} passed</span>
+      ${totals.failed > 0 ? `<span class="pill pill--fail">${totals.failed} failed</span>` : ""}
+      ${totals.broken > 0 ? `<span class="pill pill--broken">${totals.broken} broken</span>` : ""}
+      ${totals.skipped > 0 ? `<span class="pill pill--skip">${totals.skipped} skipped</span>` : ""}
+    </div>`;
+
+  const rows = suites
+    .map((s) => {
+      const ok = s.failed === 0 && s.broken === 0;
+      const dot = ok ? "dot--pass" : "dot--fail";
+      const pills = [
+        s.passed > 0 ? `<span class="pill pill--pass">${s.passed}✓</span>` : "",
+        s.failed > 0 ? `<span class="pill pill--fail">${s.failed}✗</span>` : "",
+        s.broken > 0 ? `<span class="pill pill--broken">${s.broken}!</span>` : "",
+        s.skipped > 0 ? `<span class="pill pill--skip">${s.skipped}−</span>` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `<tr>
+          <td><span class="dot ${dot}"></span></td>
+          <td class="suite-name">${suiteName(s.name)}</td>
+          <td class="suite-pills">${pills}</td>
+        </tr>`;
+    })
+    .join("\n");
+
+  return `${totalBar}
+    <table class="suite-table">
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>`;
+}
+
+/**
  * Builds the HTML string for the dashboard index page.
  * Exported for use in tests.
  */
-function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable }) {
+function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable, unitData, e2eData }) {
   const badgesHtml = WORKFLOWS.map(
     ({ file, label }) =>
       `      <a href="${workflowUrl(file)}" target="_blank" rel="noopener noreferrer" data-testid="badge-${file}">
         <img src="${badgeUrl(file)}" alt="${label} status" data-testid="badge-img-${file}" />
       </a>`,
   ).join("\n");
+
+  const unitOk = unitData ? unitData.totals.failed === 0 && unitData.totals.broken === 0 : null;
+  const e2eOk  = e2eData  ? e2eData.totals.failed  === 0 && e2eData.totals.broken  === 0 : null;
+
+  const unitPanelClass  = unitOk === null ? "panel" : unitOk  ? "panel panel--pass" : "panel panel--fail";
+  const e2ePanelClass   = e2eOk  === null ? "panel" : e2eOk   ? "panel panel--pass" : "panel panel--fail";
 
   const lighthousePanel = lighthouseAvailable
     ? `    <section class="panel" data-testid="lighthouse-panel">
@@ -64,7 +160,7 @@ function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable }) {
     </section>`
     : `    <section class="panel panel--unavailable" data-testid="lighthouse-panel">
       <h2>Lighthouse CI</h2>
-      <p class="unavailable" data-testid="lighthouse-unavailable">Not available — no Lighthouse artefact found for this run.</p>
+      <p class="unavailable" data-testid="lighthouse-unavailable">Not available — deploy job must succeed to produce this artefact.</p>
     </section>`;
 
   const lhUserFlowPanel = lhUserFlowAvailable
@@ -74,7 +170,7 @@ function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable }) {
     </section>`
     : `    <section class="panel panel--unavailable" data-testid="lh-user-flow-panel">
       <h2>Lighthouse User Flow</h2>
-      <p class="unavailable" data-testid="lh-user-flow-unavailable">Not available — no user-flow artefact found for this run.</p>
+      <p class="unavailable" data-testid="lh-user-flow-unavailable">Not available — deploy job must succeed to produce this artefact.</p>
     </section>`;
 
   return `<!DOCTYPE html>
@@ -84,17 +180,83 @@ function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable }) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>card-max CI Dashboard</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem 2rem; background: #0d1117; color: #e6edf3; }
     h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1rem; margin: 0 0 0.75rem; }
     .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 2rem; }
     .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
-    .panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
-    .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.25rem; }
-    .panel h2 { font-size: 1rem; margin: 0 0 0.75rem; }
-    .panel a { color: #58a6ff; text-decoration: none; }
+    .panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+
+    /* Panel base */
+    .panel {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .panel a { color: #58a6ff; text-decoration: none; font-size: 0.875rem; }
     .panel a:hover { text-decoration: underline; }
-    .panel--unavailable { opacity: 0.6; }
-    .unavailable { color: #8b949e; font-size: 0.875rem; }
+
+    /* Panel states */
+    .panel--pass { border-color: #238636; background: #0f2419; }
+    .panel--pass h2::before { content: "✓ "; color: #3fb950; }
+    .panel--fail { border-color: #da3633; background: #1f1010; }
+    .panel--fail h2::before { content: "✗ "; color: #f85149; }
+    .panel--unavailable { opacity: 0.55; }
+    .unavailable { color: #8b949e; font-size: 0.875rem; margin: 0; }
+
+    /* Total bar */
+    .total-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+      font-size: 0.8rem;
+    }
+    .total-bar--pass { background: #0f2419; border: 1px solid #238636; }
+    .total-bar--fail { background: #1f1010; border: 1px solid #da3633; }
+    .total-count { font-weight: 600; color: #e6edf3; margin-right: 0.25rem; }
+
+    /* Pills */
+    .pill {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .pill--pass   { background: #1a4429; color: #3fb950; }
+    .pill--fail   { background: #3d0f0f; color: #f85149; }
+    .pill--broken { background: #3d2200; color: #d29922; }
+    .pill--skip   { background: #21262d; color: #8b949e; }
+
+    /* Suite table */
+    .suite-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    .suite-table td { padding: 3px 4px; vertical-align: middle; }
+    .suite-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .suite-name { color: #c9d1d9; word-break: break-all; }
+    .suite-pills { white-space: nowrap; text-align: right; }
+
+    /* Status dot */
+    .dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+    .dot--pass { background: #3fb950; }
+    .dot--fail { background: #f85149; }
+
+    /* Report link */
+    .report-link { display: block; margin-top: 0.75rem; font-size: 0.8rem; }
   </style>
 </head>
 <body>
@@ -106,14 +268,16 @@ ${badgesHtml}
   </section>
 
   <div class="panels" data-testid="panels-section">
-    <section class="panel" data-testid="allure-unit-panel">
+    <section class="${unitPanelClass}" data-testid="allure-unit-panel">
       <h2>Unit / Component Tests</h2>
-      <p><a href="./allure-unit/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-unit">Open Allure Unit Report</a></p>
+      ${suitesTable(unitData)}
+      <a class="report-link" href="./allure-unit/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-unit">Open full Allure report →</a>
     </section>
 
-    <section class="panel" data-testid="allure-e2e-panel">
+    <section class="${e2ePanelClass}" data-testid="allure-e2e-panel">
       <h2>E2E Tests</h2>
-      <p><a href="./allure-e2e/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-e2e">Open Allure E2E Report</a></p>
+      ${suitesTable(e2eData)}
+      <a class="report-link" href="./allure-e2e/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-e2e">Open full Allure report →</a>
     </section>
 
 ${lighthousePanel}
@@ -122,7 +286,7 @@ ${lhUserFlowPanel}
 
     <section class="panel" data-testid="cron-health-panel">
       <h2>Cron Job Health</h2>
-      <p><a href="./cron-summary.html" target="_blank" rel="noopener noreferrer" data-testid="link-cron-summary">Open Cron Job Health</a></p>
+      <p><a href="./cron-summary.html" target="_blank" rel="noopener noreferrer" data-testid="link-cron-summary">Open Cron Job Health →</a></p>
     </section>
   </div>
 </body>
@@ -137,23 +301,25 @@ function main() {
 
   const lighthouseAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse"));
   const lhUserFlowAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse-user-flow"));
+
+  const unitData = readAllureSuites(path.join(DASHBOARD_DIR, "allure-unit", "data", "suites.json"));
+  const e2eData  = readAllureSuites(path.join(DASHBOARD_DIR, "allure-e2e",  "data", "suites.json"));
+
   const timestamp = new Date().toISOString();
 
-  const html = buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable });
+  const html = buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable, unitData, e2eData });
 
   const outPath = path.join(DASHBOARD_DIR, "index.html");
   fs.writeFileSync(outPath, html, "utf8");
 
   console.log(`Dashboard index written to ${outPath}`);
-  console.log(
-    `  Lighthouse panel: ${lighthouseAvailable ? "linked" : "unavailable placeholder"}`,
-  );
-  console.log(
-    `  User-flow panel: ${lhUserFlowAvailable ? "linked" : "unavailable placeholder"}`,
-  );
+  console.log(`  Unit panel : ${unitData ? `${unitData.totals.total} tests, ${unitData.totals.failed} failed` : "no data"}`);
+  console.log(`  E2E panel  : ${e2eData  ? `${e2eData.totals.total}  tests, ${e2eData.totals.failed}  failed` : "no data"}`);
+  console.log(`  Lighthouse : ${lighthouseAvailable ? "linked" : "unavailable"}`);
+  console.log(`  User-flow  : ${lhUserFlowAvailable ? "linked" : "unavailable"}`);
 }
 
-module.exports = { buildHtml, WORKFLOWS };
+module.exports = { buildHtml, readAllureSuites, suiteName, WORKFLOWS };
 
 if (require.main === module) {
   main();

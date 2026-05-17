@@ -678,15 +678,57 @@ npm run test:watch     # watch mode
 npm run test:coverage  # with coverage report
 ```
 
-Tests live next to their source files (`*.test.ts`, `*.test.tsx`).
-They use `jsdom` and mock all database/network calls — no MongoDB required.
+Tests live next to their source files (`*.test.ts`, `*.test.tsx`). They use `jsdom` and mock all database/network calls — no MongoDB required.
 
-**Test files:**
-- `crawler/utils/parseDiscount.test.ts` — discount classifier (17 tests)
-- `src/app/api/offers/route.test.ts` — API filter logic (20 tests)
-- `src/components/OfferCard.test.tsx` — card rendering (11 tests)
-- `src/components/OfferGrid.test.tsx` — grid + empty state (5 tests)
-- `src/components/FilterBar.test.tsx` — filter interactions (7 tests)
+#### Unit / component test suites
+
+| File | What it covers |
+|------|---------------|
+| **API routes** | |
+| `src/app/api/offers/route.test.ts` | Query param validation, bank/category/date filters, pagination, sort orders, Atlas Search vs `$text` fallback, 503 on DB unavailable |
+| `src/app/api/offers/[id]/route.test.ts` | Single-offer fetch by ID, 400 on invalid ID, 404 on not found, 503 on DB error |
+| `src/app/api/health/route.test.ts` | Health endpoint returns 200 with `{ status: "ok" }` |
+| `src/app/api/ping/route.test.ts` | Ping/warmup endpoint returns 200 |
+| **Middleware** | |
+| `src/middleware.test.ts` | Rate-limiting logic — allows requests below threshold, blocks above, excludes page routes, passes through on Redis unavailability |
+| **Components** | |
+| `src/components/cards/OfferCard.test.tsx` | Card renders title, bank, discount label, expiry, offer-type badge; handles missing description/discount |
+| `src/components/cards/OfferCardSkeleton.test.tsx` | Skeleton placeholder renders with correct testids |
+| `src/components/cards/OfferGrid.test.tsx` | Renders offer cards vs empty-state, ad unit injection rules (≥9 cards, ADSENSE enabled) |
+| `src/components/filters/FilterBar.test.tsx` | Active-filter chips for bank/category/offerType/sort/dates, chip removal, "All" defaults, unknown category fallback |
+| `src/components/filters/FilterDrawer.test.tsx` | Drawer open/close, bank filter options visible |
+| `src/components/filters/FilterPresetChips.test.tsx` | Preset chip list renders, delete button, no chips on empty list |
+| `src/components/filters/SavePresetPopover.test.tsx` | Popover open, name input, save on Enter, disabled when name empty |
+| `src/components/filters/SearchBar.test.tsx` | Input updates URL param, clear button shows/hides, debounce |
+| `src/components/filters/DateFilter.test.tsx` | Calendar opens, date selection fires callback, clear button |
+| `src/components/layout/PaginationControls.test.tsx` | Prev/next hrefs, disabled states, hides when ≤1 page |
+| `src/components/layout/ScrollControls.test.tsx` | Back-to-top visibility threshold, IntersectionObserver fallback |
+| `src/components/layout/ThemeToggle.test.tsx` | Dark/light toggle, system preference, icon swap |
+| `src/components/search/HeroSearch.test.tsx` | Typewriter placeholder, search submit, reduced-motion stops animation |
+| `src/components/search/SearchDrawer.test.tsx` | Drawer open, query input, category jump chips, clear |
+| **Hooks** | |
+| `src/hooks/useFilterPresets.test.ts` | Save/load/delete presets in localStorage, deduplication, max 10 limit |
+| **Crawler scrapers** | |
+| `crawler/scrapers/amex.test.ts` | Parses AMEX offer cards from HTML, skips invalid items, handles HTTP errors |
+| `crawler/scrapers/boc.test.ts` | Parses BOC categories + offers, rate limiting, network failures |
+| `crawler/scrapers/combank.test.ts` | Parses Commercial Bank offer listings, discount extraction |
+| `crawler/scrapers/hnb.test.ts` | HNB REST API response parsing, validation failures, 500 status |
+| `crawler/scrapers/ntb.test.ts` | NTB HTML scraper, deduplication across pages |
+| `crawler/scrapers/peoples_bank.test.ts` | People's Bank promotion-card HTML, category detection, deduplication |
+| `crawler/scrapers/sampath.test.ts` | Sampath REST API response parsing, offer type classification |
+| **Crawler utilities** | |
+| `crawler/utils/parseDiscount.test.ts` | Classifies all 8 offer types, extracts percentage/cashback values, handles edge cases |
+| `crawler/utils/logo.test.ts` | Clearbit + Brandfetch logo resolution, rate limiting at 40/run, fallback to icon |
+| `crawler/utils/db.test.ts` | Upsert logic, expiry of stale offers, DB write error handling |
+| `crawler/run.test.ts` | Full crawler entrypoint, runs all scrapers, handles partial failures |
+| **Scripts** | |
+| `scripts/build-dashboard-index.test.ts` | Dashboard HTML contains correct testids, badge links, panel links, handles Lighthouse absent/present |
+| `scripts/fetch-cron-summary.test.ts` | Fetches cron workflow runs from GitHub API, builds cron-summary.html, handles 404s |
+| `scripts/lhci-user-flow.test.ts` | `checkInpBudgets()` logic — passes/fails on INP thresholds, handles missing audits |
+| **CI config** | |
+| `src/lib/ci/workflow.test.ts` | Validates `ci.yml` structure: composite action setup, no Atlas warmup ping in deploy job, Playwright browser install present |
+| **Performance** | |
+| `src/lib/performance/mobile-performance-sla.test.ts` | Mobile Lighthouse SLA thresholds — Performance ≥80, LCP ≤2.5s, CLS ≤0.1 |
 
 ### End-to-end tests (Playwright)
 
@@ -694,8 +736,23 @@ They use `jsdom` and mock all database/network calls — no MongoDB required.
 npm run test:e2e       # requires dev server running + real MongoDB
 ```
 
-E2E tests are in `e2e/`. They launch a real Chromium browser against
-`http://localhost:3000` (or `PLAYWRIGHT_BASE_URL` env var).
+E2E tests are in `e2e/`. They launch a real Chromium browser (+ Mobile Chrome) against `http://localhost:3000` (or `PLAYWRIGHT_BASE_URL` env var). All tests use the **resilient SSR pattern** — they accept either the offer-grid (DB available) or empty-state (no DB in CI) to avoid flakes.
+
+#### E2E test suites
+
+| File | What it covers |
+|------|---------------|
+| `e2e/offers.spec.ts` | Page load, bank filter sets URL param, category filter, combined filters, empty state, offer card renders |
+| `e2e/search.spec.ts` | Hero search bar — typing updates URL, search triggers filter, clear button, reduced-motion typewriter |
+| `e2e/search-ux.spec.ts` | Search drawer open/close, jump-to-category chips, query input in drawer, keyboard navigation |
+| `e2e/filter-presets.spec.ts` | Save filter preset, load preset from chip, delete preset, max 10 presets |
+| `e2e/dark-mode.spec.ts` | Theme toggle switches dark/light, persists across page reload, respects system preference |
+| `e2e/visual.spec.ts` | Visual regression — offer-grid, filter-drawer, hero-search, empty-state pixel snapshots (Chromium, desktop); structural testid sanity checks |
+| `e2e/performance.spec.ts` | Lighthouse CI — Performance ≥80, Accessibility ≥90, Best Practices ≥90, SEO ≥90 on production URL |
+| `e2e/mobile-performance-sla.spec.ts` | Mobile Lighthouse — Performance ≥80, LCP ≤2.5s, CLS ≤0.1, FCP ≤1.8s on Pixel 5 profile |
+| `e2e/interaction-timing.spec.ts` | UI interaction budgets — bank filter click ≤500ms, category filter ≤500ms, search input response ≤500ms, pagination ≤500ms |
+| `e2e/atlas-warmup-cron.spec.ts` | `/api/health` and `/api/ping` respond 200; warmup cron workflow defined in ci config |
+| `e2e/adsense.spec.ts` | AdSense slot renders when enabled; does not inject when `ADSENSE_ENABLED=false` |
 
 ---
 
