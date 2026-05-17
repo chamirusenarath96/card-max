@@ -69,6 +69,13 @@ if (require.main === module) {
     const page = await browser.newPage();
     await page.goto(TARGET_URL);
 
+    // Wait explicitly for the FilterBar to stream in after the Suspense boundary
+    // resolves its server-side DB fetch. The default 30 s click timeout is not
+    // enough on Vercel cold-start + MongoDB Atlas connection time.
+    // filter-drawer-trigger lives inside <Suspense> wrapping OfferGridSection
+    // which is an async server component — page `load` fires before it streams.
+    await page.getByTestId('filter-drawer-trigger').waitFor({ state: 'visible', timeout: 90_000 });
+
     const flow = await startFlow(page, { name: 'User interaction flow' });
 
     // Open the filter drawer so bank/category filter buttons are accessible
@@ -82,6 +89,8 @@ if (require.main === module) {
     await flow.endTimespan();
 
     // Step 2: Apply Dining category filter (RSC nav: browser GETs /?bank=…&category=dining)
+    // category-chip-dining is a dynamic chip (loaded via /api/categories) — wait for it.
+    await page.getByTestId('category-chip-dining').waitFor({ state: 'visible', timeout: 15_000 });
     await flow.startTimespan({ stepName: 'Apply Dining category filter' });
     await page.getByTestId('category-chip-dining').click();
     await page.waitForURL((url) => url.searchParams.has('category'), { timeout: 10_000 });
