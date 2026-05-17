@@ -33,10 +33,11 @@ jobs:
         run: npm ci
 
       # ── Step 1: Vitest with Allure output ────────────────────────────────────
+      # allure-vitest reporter + resultsDir are configured in vitest.config.ts
+      # (active only when CI=true). The ALLURE_RESULTS_DIR env var is NOT
+      # honoured by allure-vitest — resultsDir must be set in config.
       - name: Run unit tests with Allure reporter
-        run: npm run test -- --reporter=allure-vitest/reporter --reporter=default
-        env:
-          ALLURE_RESULTS_DIR: allure-results/unit
+        run: npm run test
 
       # ── Step 2: Playwright E2E with Allure reporter ───────────────────────────
       - name: Build for E2E
@@ -47,12 +48,13 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # allure-playwright reporter + outputFolder are configured in playwright.config.ts
+      # (active only when CI=true). No --reporter CLI flag needed — config handles it.
       - name: Run E2E tests with Allure reporter
-        run: npx playwright test --reporter=allure-playwright
+        run: npx playwright test
         if: always()
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          ALLURE_RESULTS_DIR: allure-results/e2e
 
       # ── Step 3: Generate Allure HTML reports ──────────────────────────────────
       - name: Generate Allure unit report

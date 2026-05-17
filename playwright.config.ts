@@ -7,7 +7,16 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: "html",
+  // In CI include allure-playwright with explicit outputFolder so dashboard.yml's
+  // `allure generate allure-results/e2e` finds results. The ALLURE_RESULTS_DIR env
+  // var is only respected when the reporter is actually loaded — not via --reporter CLI
+  // flag which the hardcoded "html" reporter was shadowing. (Fix: dashboard Allure bug)
+  reporter: process.env.CI
+    ? [
+        ["allure-playwright", { outputFolder: "allure-results/e2e" }],
+        ["html"],
+      ]
+    : "html",
 
   expect: {
     timeout: 30000,
