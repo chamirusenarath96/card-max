@@ -274,6 +274,25 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      - name: Run Lighthouse CI (production)
+        run: |
+          npm install -g @lhci/cli@0.14.x
+          lhci autorun \
+            --collect.url="https://card-max.vercel.app" \
+            --collect.numberOfRuns=3
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Upload Lighthouse production report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-prod-report-${{ github.sha }}
+          path: .lighthouseci/
+          retention-days: 14
+
       - name: Invalidate ISR cache
         run: |
           STATUS=$(curl -s -o /tmp/revalidate.txt -w "%{http_code}" \
