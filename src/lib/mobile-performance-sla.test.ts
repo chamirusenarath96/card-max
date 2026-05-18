@@ -52,12 +52,13 @@ describe("Mobile Performance SLA — spec 018", () => {
       expect(settings.throttlingMethod).toBe("simulate");
     });
 
-    it("uploads to filesystem target", () => {
+    it("uploads to temporary-public-storage target", () => {
       const config = JSON.parse(
         readFileSync(resolve(ROOT, ".lighthouserc.json"), "utf-8"),
       );
-      expect(config.ci.upload.target).toBe("filesystem");
-      expect(config.ci.upload.outputDir).toBe(".lighthouseci");
+      // temporary-public-storage prints a public URL in the CI log so reports
+      // are viewable without a self-hosted LHCI server.
+      expect(config.ci.upload.target).toBe("temporary-public-storage");
     });
   });
 
