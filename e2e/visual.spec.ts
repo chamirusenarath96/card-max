@@ -17,6 +17,17 @@ import { test, expect } from "@playwright/test";
 // Mobile Chrome produces different pixel dimensions and would need separate baselines.
 test.skip(({ isMobile }) => isMobile, "Visual regression is desktop-only in first iteration");
 
+const MOCK_CATEGORIES = {
+  data: [
+    { category: "dining", label: "Dining", count: 42 },
+    { category: "groceries", label: "Groceries", count: 31 },
+    { category: "shopping", label: "Shopping", count: 20 },
+    { category: "travel", label: "Travel", count: 15 },
+    { category: "fuel", label: "Fuel", count: 10 },
+    { category: "online", label: "Online", count: 8 },
+  ],
+};
+
 const MOCK_OFFER = {
   _id: "mock-offer-visual-1",
   bank: "commercial_bank",
@@ -48,6 +59,16 @@ test.describe("Visual regression", () => {
     // useTypewriter() checks window.matchMedia("prefers-reduced-motion: reduce")
     // and returns a static value when true, preventing the setTimeout loop.
     await page.emulateMedia({ reducedMotion: "reduce" });
+    // Mock /api/categories so the FilterDrawer always shows fully-loaded
+    // category chips (no skeleton pills) and the same chips regardless of
+    // what is currently in the DB. This makes visual snapshots stable.
+    await page.route("**/api/categories**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_CATEGORIES),
+      }),
+    );
   });
 
   test("offer grid matches baseline", async ({ page }) => {
@@ -154,6 +175,13 @@ test.describe("Visual regression", () => {
 test.describe("Structural sanity", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.route("**/api/categories**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_CATEGORIES),
+      }),
+    );
   });
 
   test("critical data-testid elements are visible", async ({ page }) => {
