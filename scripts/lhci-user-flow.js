@@ -68,19 +68,12 @@ if (require.main === module) {
   const BYPASS_TOKEN = process.env.VERCEL_BYPASS_TOKEN;
 
   if (!BYPASS_TOKEN) {
-    console.warn(
-      '[lhci-flow] VERCEL_BYPASS_TOKEN is not set — x-vercel-protection-bypass header will be omitted.',
-    );
-    console.warn(
-      '[lhci-flow] If the deployment has protection enabled, generate a token at:',
-    );
-    console.warn(
-      '[lhci-flow]   Vercel dashboard → Project → Settings → Deployment Protection',
-      '→ Protection Bypass for Automation',
-    );
-    console.warn(
-      '[lhci-flow] Then add it as the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets.',
-    );
+    console.warn('[lhci-flow] VERCEL_BYPASS_TOKEN is not set.');
+    console.warn('[lhci-flow] Skipping user-flow audit — cannot reach a protection-enabled preview deployment.');
+    console.warn('[lhci-flow] To enable the audit, generate a token at:');
+    console.warn('[lhci-flow]   Vercel dashboard → Project → Settings → Deployment Protection → Protection Bypass for Automation');
+    console.warn('[lhci-flow] Then add it as the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets → Actions.');
+    process.exit(0); // Skip gracefully — do not block the deploy
   }
 
   (async () => {

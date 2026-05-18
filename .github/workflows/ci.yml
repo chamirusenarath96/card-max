@@ -217,6 +217,12 @@ jobs:
 
       - name: Run Lighthouse CI
         run: |
+          if [ -z "$VERCEL_BYPASS_TOKEN" ]; then
+            echo "VERCEL_BYPASS_TOKEN not set — skipping Lighthouse CI (cannot reach protected preview deployment)"
+            echo "To enable: Vercel dashboard → Project → Settings → Deployment Protection → Protection Bypass for Automation"
+            echo "Then add the token as VERCEL_BYPASS_TOKEN in GitHub → Settings → Secrets → Actions."
+            exit 0
+          fi
           npm install -g @lhci/cli@0.14.x
           lhci autorun \
             --collect.url="${{ steps.deploy.outputs.preview_url }}" \
@@ -224,6 +230,7 @@ jobs:
             --collect.numberOfRuns=3
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+          VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
         timeout-minutes: 10
         continue-on-error: true
 
