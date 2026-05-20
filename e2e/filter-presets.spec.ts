@@ -42,7 +42,10 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test.describe("Save Filter Presets (Feature 006)", () => {
+// FilterPresetChips and SavePresetPopover were removed from the main page UI
+// (active-filter chips stripped from FilterBar, FilterPresetChips section removed).
+// Component-level behaviour is still covered by the unit tests for those components.
+test.describe.skip("Save Filter Presets (Feature 006)", () => {
   test("save button visible when filters active, hidden when none (AC1)", async ({ page }) => {
     await page.goto("/?bank=hnb");
     // Wait for filter bar to render

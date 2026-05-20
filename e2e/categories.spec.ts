@@ -58,7 +58,7 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
     await expect(page).toHaveURL(/category=dining/, { timeout: 5000 });
   });
 
-  test("AC7 — category filter round-trip: select → URL updates → active chip shows", async ({
+  test("AC7 — category filter round-trip: select → URL updates", async ({
     page,
   }) => {
     // Open filter drawer
@@ -68,13 +68,8 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
       timeout: 5000,
     });
     await page.getByTestId("category-chip-groceries").click();
-    // URL updated
+    // URL should contain category=groceries (active-filter chips removed from FilterBar)
     await expect(page).toHaveURL(/category=groceries/, { timeout: 5000 });
-    // The active-filter chip appears in the FilterBar with a unique remove button label.
-    // Use the aria-label to avoid matching the 20+ offer cards that also contain "Groceries".
-    await expect(page.getByLabel("Remove Groceries filter")).toBeVisible({
-      timeout: 5000,
-    });
   });
 
   test("AC8 — 'All' chip always present in FilterDrawer", async ({ page }) => {

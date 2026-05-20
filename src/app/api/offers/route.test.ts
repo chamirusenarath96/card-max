@@ -379,8 +379,8 @@ describe("GET /api/offers", () => {
     expect(mockCount).not.toHaveBeenCalled();
   });
 
-  // Fallback: Atlas Search index not found → falls back to $text
-  it("falls back to $text search when Atlas Search returns MongoServerError index not found", async () => {
+  // Fallback: any Atlas Search error → falls back to case-insensitive regex search
+  it("falls back to regex search when Atlas Search throws any error", async () => {
     const mongoError = Object.assign(new Error("index not found"), {
       name: "MongoServerError",
     });
@@ -388,18 +388,25 @@ describe("GET /api/offers", () => {
 
     const res = await GET(makeRequest({ q: "pizza" }));
     expect(res.status).toBe(200);
-    // Fallback path uses find() with $text filter
+    // Fallback path uses find() with a regex $or clause (no $text, no Atlas Search).
+    // The regex filter is an $or over title / merchant / description.
     expect(mockFind).toHaveBeenCalledWith(
-      expect.objectContaining({ $text: { $search: "pizza" } })
+      expect.objectContaining({
+        $or: expect.arrayContaining([
+          expect.objectContaining({ title: expect.any(RegExp) }),
+        ]),
+      }),
     );
   });
 
-  // Non-MongoServerError re-thrown as 500
-  it("returns 500 when Atlas Search throws a non-index error", async () => {
+  // Non-index errors also fall back to regex (not re-thrown as 500)
+  it("falls back to regex search when Atlas Search throws a network error", async () => {
     mockAggregate.mockRejectedValue(new Error("network timeout"));
 
     const res = await GET(makeRequest({ q: "pizza" }));
-    expect(res.status).toBe(500);
+    // Previously returned 500; now falls back to regex and returns 200.
+    expect(res.status).toBe(200);
+    expect(mockFind).toHaveBeenCalled();
   });
 
   // ── Pagination ────────────────────────────────────────────────────────────

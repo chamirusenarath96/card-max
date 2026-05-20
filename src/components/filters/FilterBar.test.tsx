@@ -2,12 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@/test-utils";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FilterBar } from "./FilterBar";
 
-vi.mock("@/hooks/useFilterPresets", () => ({
-  useFilterPresets: () => ({ presets: [], savePreset: vi.fn(), deletePreset: vi.fn() }),
-}));
-
 // FilterBar renders FilterDrawer which calls useCategories.
-// Return empty/loaded state so the drawer renders without a real fetch.
 vi.mock("@/hooks/useCategories", () => ({
   useCategories: () => ({ data: [], isLoading: false, error: false }),
 }));
@@ -36,80 +31,15 @@ describe("FilterBar", () => {
 
   it("shows no active-filter chips when no props are set", () => {
     render(<FilterBar />);
+    // Active filter chips have been removed from FilterBar — only the Filters
+    // trigger button is rendered.
     expect(screen.queryByRole("button", { name: /^Remove /i })).not.toBeInTheDocument();
   });
 
-  it("shows a bank chip when activeBank is set", () => {
-    render(<FilterBar activeBank="commercial_bank" />);
-    expect(screen.getByText("Commercial Bank")).toBeInTheDocument();
-  });
-
-  it("shows a category chip when activeCategory is set", () => {
-    render(<FilterBar activeCategory="dining" />);
-    expect(screen.getByText("Dining")).toBeInTheDocument();
-  });
-
-  it("shows an offerType chip when activeOfferType is set", () => {
-    render(<FilterBar activeOfferType="cashback" />);
-    expect(screen.getByText("Cashback")).toBeInTheDocument();
-  });
-
-  it("shows a sort chip when activeSort is 'expiringSoon'", () => {
-    render(<FilterBar activeSort="expiringSoon" />);
-    expect(screen.getByText("Expiring Soon")).toBeInTheDocument();
-  });
-
-  it("does not show a sort chip when activeSort is 'latest'", () => {
-    render(<FilterBar activeSort="latest" />);
-    // "latest" is the default — no chip for it
-    expect(screen.queryByText("Latest")).not.toBeInTheDocument();
-  });
-
-  it("shows a date chip when both activeFrom and activeTo are set", () => {
-    render(<FilterBar activeFrom="2026-03-01" activeTo="2026-06-30" />);
-    expect(screen.getByText("01 Mar – 30 Jun 2026")).toBeInTheDocument();
-  });
-
-  it("shows a date chip with 'From ...' when only activeFrom is set", () => {
-    render(<FilterBar activeFrom="2026-03-01" />);
-    expect(screen.getByText(/From 01 Mar 2026/)).toBeInTheDocument();
-  });
-
-  it("clicking remove on bank chip navigates without bank param", () => {
-    render(<FilterBar activeBank="commercial_bank" />);
-    fireEvent.click(screen.getByLabelText("Remove Commercial Bank filter"));
-    expect(mockPush).toHaveBeenCalledWith("/");
-  });
-
-  it("clicking remove on category chip navigates without category param", () => {
-    render(<FilterBar activeCategory="dining" />);
-    fireEvent.click(screen.getByLabelText("Remove Dining filter"));
-    expect(mockPush).toHaveBeenCalledWith("/");
-  });
-
-  it("clicking remove on offerType chip navigates without offerType param", () => {
-    render(<FilterBar activeOfferType="cashback" />);
-    fireEvent.click(screen.getByLabelText("Remove Cashback filter"));
-    expect(mockPush).toHaveBeenCalledWith("/");
-  });
-
-  it("clicking remove on date chip navigates without date params", () => {
-    render(<FilterBar activeFrom="2026-03-01" activeTo="2026-06-30" />);
-    fireEvent.click(screen.getByLabelText("Remove 01 Mar – 30 Jun 2026 filter"));
-    expect(mockPush).toHaveBeenCalledWith("/");
-  });
-
-  it("shows multiple chips when multiple filters are active", () => {
-    render(
-      <FilterBar
-        activeBank="hnb"
-        activeCategory="dining"
-        activeOfferType="percentage"
-      />
-    );
-    expect(screen.getByText("Hatton National Bank")).toBeInTheDocument();
-    expect(screen.getByText("Dining")).toBeInTheDocument();
-    expect(screen.getByText("% Discount")).toBeInTheDocument();
+  it("shows no active-filter chips even when filters are active", () => {
+    render(<FilterBar activeBank="commercial_bank" activeCategory="dining" />);
+    // Chips removed — filter state is managed inside the FilterDrawer only.
+    expect(screen.queryByRole("button", { name: /^Remove /i })).not.toBeInTheDocument();
   });
 
   it("filter by bank calls router with correct bank param", async () => {
@@ -120,15 +50,5 @@ describe("FilterBar", () => {
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"))
     );
-  });
-
-  it("shows save preset button when ≥1 filter is active (AC1)", () => {
-    render(<FilterBar activeBank="hnb" />);
-    expect(screen.getByTestId("save-preset-button")).toBeInTheDocument();
-  });
-
-  it("hides save preset button when no filters are active (AC1)", () => {
-    render(<FilterBar />);
-    expect(screen.queryByTestId("save-preset-button")).not.toBeInTheDocument();
   });
 });
