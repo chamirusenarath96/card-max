@@ -190,23 +190,34 @@ export async function GET(request: NextRequest) {
         raw = searchRaw;
         total = (countResult as Array<{ total?: number }>)[0]?.total ?? 0;
       } catch (err) {
-        // Atlas Search index not yet built — fall back to legacy $text search
-        if (
-          err instanceof Error &&
-          err.name === "MongoServerError" &&
-          err.message.includes("index not found")
-        ) {
-          console.warn("[api/offers] Atlas Search index unavailable, falling back to $text");
-          filter.$text = { $search: term };
-          const [fallbackRaw, fallbackTotal] = await Promise.all([
-            OfferModel.find(filter).sort(sortOrder).skip(skip).limit(limit).select("-__v").lean(),
-            OfferModel.countDocuments(filter),
-          ]);
-          raw = fallbackRaw;
-          total = fallbackTotal;
-        } else {
-          throw err;
-        }
+        // Atlas Search unavailable (index not built, non-Atlas cluster, network error, etc.)
+        // Fall back to a case-insensitive regex search — works without any special index.
+        // Previously only caught "index not found" errors which missed many real-world
+        // failure modes (unsupported operator, wrong index name, cold-start errors).
+        console.warn(
+          "[api/offers] Atlas Search unavailable, falling back to regex search:",
+          (err as Error).message,
+        );
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(escaped, "i");
+        const textClause = {
+          $or: [{ title: regex }, { merchant: regex }, { description: regex }],
+        };
+
+        // Merge with existing filter, safely handling a pre-existing $or (e.g. from
+        // date-range filters) by combining both conditions under $and.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { $or: existingOr, ...baseFilter } = filter as any;
+        const fallbackFilter = existingOr
+          ? { ...baseFilter, $and: [{ $or: existingOr }, textClause] }
+          : { ...baseFilter, ...textClause };
+
+        const [fallbackRaw, fallbackTotal] = await Promise.all([
+          OfferModel.find(fallbackFilter).sort(sortOrder).skip(skip).limit(limit).select("-__v").lean(),
+          OfferModel.countDocuments(fallbackFilter),
+        ]);
+        raw = fallbackRaw;
+        total = fallbackTotal;
       }
     } else {
       const [findRaw, findTotal] = await Promise.all([

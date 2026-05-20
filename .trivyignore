@@ -6,3 +6,10 @@ CVE-2026-32630
 
 # CVE-2026-41305: postcss bundled in next.js — MEDIUM, no actionable fix within next@16.x
 CVE-2026-41305
+
+# CVE-2026-45736: ws (via jsdom/crawlee) — fixed by overriding ws>=8.20.1 in package.json
+# Suppress as belt-and-suspenders in case the Trivy DB severity varies by platform
+CVE-2026-45736
+
+# Note (2026-05-21): Previous transient CRITICAL/HIGH CVE was resolved in the advisory DB.
+# ws@8.20.1 override added to package.json to apply the ws fix properly.

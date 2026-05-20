@@ -1,0 +1,6 @@
+# Force LF line endings for files that must not have CRLF on Linux
+# (e.g. Trivy ignore file — CRLF causes CVE IDs to be read as "CVE-xxx\r" on Linux)
+.trivyignore text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

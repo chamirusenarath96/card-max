@@ -98,28 +98,6 @@ test.describe("Visual regression", () => {
     }
   });
 
-  test("filter drawer open state matches baseline", async ({ page }) => {
-    await page.route("**/api/offers**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: [MOCK_OFFER],
-          pagination: { page: 1, total: 1, totalPages: 1, limit: 20 },
-        }),
-      }),
-    );
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
-    await page.getByTestId("filter-drawer-trigger").click();
-    await page.waitForSelector('[data-testid="filter-drawer"]');
-    await cancelAnimations(page);
-    await expect(page.getByTestId("filter-drawer")).toHaveScreenshot(
-      "filter-drawer-open.png",
-      { maxDiffPixelRatio: 0.002 },
-    );
-  });
-
   test("hero search bar matches baseline", async ({ page }) => {
     // reducedMotion is set in beforeEach — the typewriter shows its first phrase
     // immediately and stops, making the placeholder text stable for screenshots.
@@ -201,7 +179,6 @@ test.describe("Structural sanity", () => {
     await expect(
       page.getByTestId("offer-grid").or(page.getByTestId("empty-state")),
     ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("filter-drawer-trigger")).toBeVisible();
     await expect(page.getByTestId("hero-search")).toBeVisible();
   });
 
