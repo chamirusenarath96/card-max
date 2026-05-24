@@ -4,12 +4,17 @@
  *
  * Strategy: Iterate over credit card category pages at
  * /promotion-category/{slug}/?cardType=credit_card and parse
- * <div class="promotion-card"> tiles. Each tile has:
- *   - <span class="discount-badge"> for discount text
- *   - <img> for merchant logo
- *   - <h3><a href> for merchant name + detail link
- *   - <p> tags for offer description and validity
- * Falls back to heading-based and table-row parsing for robustness.
+ * <article class="offer-card"> tiles. Each tile has:
+ *   - <div class="discount-badge"> for discount percentage
+ *   - <div class="promo-short"> for merchant name
+ *   - <span class="merchant-name"> for offer description
+ *   - <a href> in .offer-image for the detail page link
+ *   - <img> in .offer-image for the merchant logo
+ *
+ * NOTE: The site embeds staff-directory popups (sgpb-main-popup-data-container)
+ * on every page containing Tamil/Sinhala-script manager names in <h2> elements.
+ * These are stripped before any parsing to prevent junk data ingestion.
+ *
  * Returns [] on any error without throwing.
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
@@ -25,10 +30,7 @@ const CATEGORIES: Array<{ slug: string; defaultCategory: OfferInput["category"] 
   { slug: "promotion-category/online-stores", defaultCategory: "online" },
   { slug: "promotion-category/home-care-electronics", defaultCategory: "homecare" },
   { slug: "promotion-category/travel", defaultCategory: "travel" },
-  { slug: "promotion-category/jewellers", defaultCategory: "shopping" },
   { slug: "promotion-category/auto-mobile", defaultCategory: "other" },
-  { slug: "promotion-category/mastercard", defaultCategory: "shopping" },
-  { slug: "promotion-category/visa", defaultCategory: "shopping" },
   { slug: "installments", defaultCategory: "other" },
 ];
 
@@ -39,6 +41,9 @@ const MONTH_MAP: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4,
   jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 };
+
+/** Tamil Unicode block: U+0B80–U+0BFF; Sinhala block: U+0D80–U+0DFF */
+const NON_LATIN_SCRIPT_RE = /[஀-௿඀-෿ऀ-ॿ]/;
 
 export async function scrape(): Promise<OfferInput[]> {
   console.log("[peoples_bank] Starting scrape…");
@@ -77,28 +82,140 @@ export async function scrape(): Promise<OfferInput[]> {
 
 // ── Parsers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Pre-process HTML before any parsing:
+ * 1. Strip HTML comments
+ * 2. Strip staff-directory popup modals (sgpb-main-popup-data-container divs)
+ *    which embed Tamil/Sinhala-script manager profiles on every page.
+ */
+function preprocessHtml(html: string): string {
+  // Strip HTML comments
+  let cleaned = html.replace(/<!--[\s\S]*?-->/g, "");
+
+  // Strip SG Popup Builder popup containers — these hold staff directory content
+  // with Tamil names that would otherwise pollute heading-based parsing
+  cleaned = cleaned.replace(
+    /<div[^>]+class="[^"]*sgpb-main-popup-data-container[^"]*"[^>]*>[\s\S]*?<\/div>\s*(?=<div|$)/gi,
+    ""
+  );
+
+  return cleaned;
+}
+
 function parseOfferCards(
   html: string,
   pageUrl: string,
   defaultCategory: OfferInput["category"],
 ): Partial<OfferInput>[] {
-  const stripped = html.replace(/<!--[\s\S]*?-->/g, "");
+  const stripped = preprocessHtml(html);
 
-  // Primary: .promotion-card divs (current site structure)
+  // If the page explicitly says there are no promotions, skip all parsing
+  if (/No Promotions Available/i.test(stripped)) {
+    return [];
+  }
+
+  // Primary: <article class="offer-card"> (current site structure as of 2026)
+  const articleOffers = parseViaOfferArticles(stripped, pageUrl, defaultCategory);
+  if (articleOffers.length > 0) return articleOffers;
+
+  // Legacy fallback: .promotion-card divs (older site layout — kept for resilience)
   const cardOffers = parseViaPromotionCards(stripped, pageUrl, defaultCategory);
   if (cardOffers.length > 0) return cardOffers;
 
-  // Fallback 1: heading-based (older layout)
-  const headingOffers = parseViaHeadings(stripped, pageUrl, defaultCategory);
-  if (headingOffers.length > 0) return headingOffers;
-
-  // Fallback 2: table rows
-  return parseViaTableRows(stripped, pageUrl);
+  // Last-resort fallback: heading-based parsing (only if no card structure found)
+  return parseViaHeadings(stripped, pageUrl, defaultCategory);
 }
 
 /**
- * Parse <div class="promotion-card"> tiles.
- * Structure: discount-badge span | img | h3>a (merchant + link) | p (desc + validity)
+ * Parse <article class="offer-card"> tiles — current People's Bank site structure.
+ *
+ * Structure:
+ *   <article class="offer-card">
+ *     <div class="discount-badge">30%</div>
+ *     <div class="offer-image">
+ *       <a href="...detail-page..."><img src="..." alt="..." /></a>
+ *     </div>
+ *     <div class="card-content">
+ *       <div class="promo-short fw-medium">Merchant Name</div>
+ *       <div class="meta">
+ *         <span class="merchant-name">Description text</span>
+ *       </div>
+ *     </div>
+ *   </article>
+ */
+function parseViaOfferArticles(
+  html: string,
+  pageUrl: string,
+  defaultCategory: OfferInput["category"],
+): Partial<OfferInput>[] {
+  const offers: Partial<OfferInput>[] = [];
+
+  // Match each <article class="offer-card">...</article> block
+  const articleRe = /<article[^>]+class="[^"]*offer-card[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
+  let m: RegExpExecArray | null;
+
+  while ((m = articleRe.exec(html)) !== null) {
+    const block = m[1]!;
+
+    // Discount badge
+    const badgeMatch = block.match(/<div[^>]+class="[^"]*discount-badge[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+    const discountText = badgeMatch ? cleanText(badgeMatch[1]!) : "";
+
+    // Merchant name from .promo-short
+    const promoShortMatch = block.match(/<div[^>]+class="[^"]*promo-short[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+    const merchant = promoShortMatch ? cleanText(promoShortMatch[1]!) : "";
+    if (!merchant || merchant.length < 2) continue;
+
+    // Skip entries with non-Latin (Tamil/Sinhala) script in the merchant name
+    if (NON_LATIN_SCRIPT_RE.test(merchant)) continue;
+
+    // Description from .merchant-name span
+    const descMatch = block.match(/<span[^>]+class="[^"]*merchant-name[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+    const description = descMatch ? cleanText(descMatch[1]!).substring(0, 300) : undefined;
+
+    // Source URL: first <a href> inside .offer-image
+    const imgLinkMatch = block.match(
+      /<div[^>]+class="[^"]*offer-image[^"]*"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"/i
+    );
+    const rawHref = imgLinkMatch?.[1] ?? "";
+    const sourceUrl = rawHref.startsWith("http")
+      ? rawHref
+      : rawHref ? `${BASE_URL}${rawHref}` : pageUrl;
+
+    // Merchant logo <img>
+    const imgMatch = block.match(/<img\b[^>]+src="([^"]+)"[^>]*>/i);
+    const merchantLogoUrl = imgMatch ? toAbsoluteUrl(imgMatch[1]!) : undefined;
+
+    const allText = (description ?? "") + " " + discountText;
+    const { validFrom, validUntil } = extractDates(allText);
+    const discount = parseDiscount(discountText || undefined);
+    const category = detectCategory(merchant, allText) ?? defaultCategory;
+
+    const titleDiscount = discountText || extractDiscountText(allText);
+    const title = (titleDiscount ? `${titleDiscount} at ${merchant}` : merchant).substring(0, 200);
+
+    offers.push({
+      bank: "peoples_bank",
+      bankDisplayName: "People's Bank",
+      title,
+      merchant: merchant.substring(0, 100),
+      description,
+      ...discount,
+      category,
+      merchantLogoUrl,
+      validFrom,
+      validUntil,
+      sourceUrl,
+      scrapedAt: new Date(),
+    });
+  }
+
+  return offers;
+}
+
+/**
+ * Legacy: Parse <div class="promotion-card"> tiles (older site layout).
+ * Kept as resilience fallback in case the site reverts.
  */
 function parseViaPromotionCards(
   html: string,
@@ -113,26 +230,23 @@ function parseViaPromotionCards(
   while ((m = cardRe.exec(html)) !== null) {
     const block = m[1]!;
 
-    // Merchant name + link from <h3><a>
     const h3Match = block.match(/<h3[^>]*>[\s\S]*?<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i);
     if (!h3Match) continue;
     const rawHref = h3Match[1]!;
     const merchant = cleanText(h3Match[2]!);
     if (!merchant || merchant.length < 2) continue;
+    if (NON_LATIN_SCRIPT_RE.test(merchant)) continue;
 
     const sourceUrl = rawHref.startsWith("http")
       ? rawHref
       : rawHref ? `${BASE_URL}${rawHref}` : pageUrl;
 
-    // Discount from <span class="discount-badge">
     const badgeMatch = block.match(/<span[^>]+class="[^"]*discount-badge[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
     const discountText = badgeMatch ? cleanText(badgeMatch[1]!) : "";
 
-    // Image
     const imgMatch = block.match(/<img\b[^>]+src="([^"]+)"[^>]*>/i);
     const merchantLogoUrl = imgMatch ? toAbsoluteUrl(imgMatch[1]!) : undefined;
 
-    // Paragraphs: first is description, remainder may have validity
     const paras = [...block.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
       .map(p => cleanText(p[1]!))
       .filter(t => t.length > 3);
@@ -164,7 +278,8 @@ function parseViaPromotionCards(
 }
 
 /**
- * Fallback: scan h2–h5 headings and derive one offer per heading.
+ * Last-resort fallback: scan h2–h5 headings and derive one offer per heading.
+ * Only used when no card/article structure is found on the page.
  */
 function parseViaHeadings(
   html: string,
@@ -180,6 +295,8 @@ function parseViaHeadings(
   while ((m = headingRe.exec(html)) !== null) {
     const rawTitle = cleanText(m[1]!);
     if (!rawTitle || rawTitle.length < 5 || seen.has(rawTitle)) continue;
+    // Skip Tamil/Sinhala-script headings (staff directory entries)
+    if (NON_LATIN_SCRIPT_RE.test(rawTitle)) continue;
     seen.add(rawTitle);
 
     const headEnd = m.index + m[0].length;
@@ -215,47 +332,6 @@ function parseViaHeadings(
       validFrom,
       validUntil,
       sourceUrl: linkMatch ? linkMatch[1]! : pageUrl,
-      scrapedAt: new Date(),
-    });
-  }
-
-  return offers;
-}
-
-/**
- * Fallback: parse table rows where each row is one offer.
- */
-function parseViaTableRows(html: string, pageUrl: string): Partial<OfferInput>[] {
-  const offers: Partial<OfferInput>[] = [];
-
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let rowMatch: RegExpExecArray | null;
-
-  while ((rowMatch = rowRe.exec(html)) !== null) {
-    const cells = [...rowMatch[1]!.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map(c => cleanText(c[1]!));
-
-    if (cells.length < 2) continue;
-    const merchant = cells[0]!.trim();
-    const offerText = cells[1]!.trim();
-    if (!merchant || merchant.length < 2) continue;
-    if (merchant.toLowerCase() === "merchant" || merchant.toLowerCase() === "outlet") continue;
-
-    const title = offerText ? offerText.substring(0, 200) : merchant.substring(0, 200);
-    const discount = parseDiscount(extractDiscountText(offerText));
-    const { validFrom, validUntil } = extractDates(cells.slice(2).join(" ") || offerText);
-
-    offers.push({
-      bank: "peoples_bank",
-      bankDisplayName: "People's Bank",
-      title,
-      merchant,
-      description: offerText.substring(0, 300) || undefined,
-      ...discount,
-      category: detectCategory(merchant, offerText) ?? undefined,
-      validFrom,
-      validUntil,
-      sourceUrl: pageUrl,
       scrapedAt: new Date(),
     });
   }
@@ -309,11 +385,11 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
 
 function detectCategory(merchant: string, text: string): OfferInput["category"] | null {
   const t = `${merchant} ${text}`.toLowerCase();
-  if (/dining|restaurant|food|pizza|burger|cafe|bistro/.test(t)) return "dining";
+  if (/dining|restaurant|\bfood\b|pizza|burger|cafe|bistro/.test(t)) return "dining";
   if (/hotel|resort|accommodation|stay|lodge|leisure/.test(t)) return "lodging";
   if (/travel|flight|airline|holiday/.test(t)) return "travel";
   if (/fuel|petrol|gas\s+station/.test(t)) return "fuel";
-  if (/grocery|supermarket|keells|cargills|food\s+city/.test(t)) return "groceries";
+  if (/grocery|supermarket|keells|cargills|food\s+city|glomark|spar/.test(t)) return "groceries";
   if (/cinema|entertainment|movie|theme\s+park/.test(t)) return "entertainment";
   if (/wellness|spa|beauty|salon/.test(t)) return "wellness";
   if (/hospital|pharmacy|health|medical|clinic/.test(t)) return "healthcare";
