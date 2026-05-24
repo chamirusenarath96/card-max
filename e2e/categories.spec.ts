@@ -54,6 +54,8 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
     });
     // Click the chip
     await page.getByTestId("category-chip-dining").click();
+    // Multi-select: chip click queues the filter; Apply Filters commits it.
+    await page.getByTestId("apply-filters").click();
     // URL should now contain category=dining
     await expect(page).toHaveURL(/category=dining/, { timeout: 5000 });
   });
@@ -68,6 +70,8 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
       timeout: 5000,
     });
     await page.getByTestId("category-chip-groceries").click();
+    // Multi-select: chip click queues the filter; Apply Filters commits it.
+    await page.getByTestId("apply-filters").click();
     // URL should contain category=groceries (active-filter chips removed from FilterBar)
     await expect(page).toHaveURL(/category=groceries/, { timeout: 5000 });
   });
@@ -89,6 +93,8 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
       timeout: 5000,
     });
     await page.getByTestId("category-chip-all").click();
+    // Multi-select: chip click queues the filter; Apply Filters commits it.
+    await page.getByTestId("apply-filters").click();
     // category param should be removed
     await expect(page).not.toHaveURL(/category=/, { timeout: 5000 });
   });

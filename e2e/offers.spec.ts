@@ -57,7 +57,10 @@ test.describe("Offer Listing (Feature 001)", () => {
     await page.goto("/");
     // bank-filter-* lives inside the FilterDrawer Sheet — open it first
     await page.getByTestId("filter-drawer-trigger").click();
+    await page.waitForSelector('[data-testid="filter-drawer"]');
     await page.getByTestId("bank-filter-commercial_bank").click();
+    // Multi-select: chip click queues the filter; Apply Filters commits it.
+    await page.getByTestId("apply-filters").click();
     await expect(page).toHaveURL(/bank=commercial_bank/, { timeout: 10000 });
   });
 
