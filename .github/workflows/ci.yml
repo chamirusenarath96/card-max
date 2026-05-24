@@ -234,35 +234,34 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: Upload Lighthouse report
+      # Preview Lighthouse only runs when VERCEL_BYPASS_TOKEN is set.
+      # Uploaded under a different name so the production upload below can
+      # always claim the canonical "lighthouse-report-*" name.
+      - name: Upload Lighthouse preview report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-report-${{ github.sha }}
+          name: lighthouse-preview-report-${{ github.sha }}
           path: .lighthouseci/
           retention-days: 14
 
+      # User-flow deps installed regardless — used for both preview and
+      # production runs below.
       - name: Install Lighthouse for user-flow audit
         run: npm install --no-save lighthouse@^12
 
       - name: Install Playwright browsers (for user-flow audit)
         run: npx playwright install --with-deps chromium
 
-      - name: Run Lighthouse user-flow audit
+      # Preview user-flow: exits 0 gracefully when VERCEL_BYPASS_TOKEN is
+      # absent (protected preview URL cannot be reached without it).
+      - name: Run Lighthouse user-flow audit (preview)
         run: |
           node scripts/lhci-user-flow.js
         env:
           TARGET_URL: ${{ steps.deploy.outputs.preview_url }}
           VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
         timeout-minutes: 10
-
-      - name: Upload Lighthouse user-flow report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lhci-user-flow-${{ github.sha }}
-          path: .lighthouseci/user-flow/
-          retention-days: 14
 
       - name: Promote to production
         run: |
@@ -274,6 +273,9 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+      # Production Lighthouse CI — always runs after promote, no bypass
+      # token needed. Uploaded as "lighthouse-report-*" so the dashboard
+      # workflow can find it with its existing download pattern.
       - name: Run Lighthouse CI (production)
         run: |
           npm install -g @lhci/cli@0.14.x
@@ -285,12 +287,29 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: Upload Lighthouse production report
+      - name: Upload Lighthouse report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lighthouse-prod-report-${{ github.sha }}
+          name: lighthouse-report-${{ github.sha }}
           path: .lighthouseci/
+          retention-days: 14
+
+      # Production user-flow — runs against card-max.vercel.app after
+      # promote. No bypass token needed. Always produces report data.
+      - name: Run Lighthouse user-flow audit (production)
+        run: node scripts/lhci-user-flow.js
+        env:
+          TARGET_URL: https://card-max.vercel.app
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Upload Lighthouse user-flow report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lhci-user-flow-${{ github.sha }}
+          path: .lighthouseci/user-flow/
           retention-days: 14
 
       - name: Invalidate ISR cache
