@@ -3,18 +3,23 @@
  * Spec: specs/features/002-crawler.md
  *
  * Uses the public REST API at sampath.lk/api/card-promotions.
- * Response shape (discovered via network inspection):
- *   { data: SampathPromotion[] }  (or top-level array in some versions)
+ * The API requires a Referer header pointing to the offers page, otherwise it
+ * returns "Request Rejected". fetchJson() adds a Referer via extraHeaders.
+ *
+ * Response shape:
+ *   { data: SampathPromotion[] }
  *
  * Key fields per promotion:
  *   company_name    – merchant / partner name
  *   short_discount  – human-readable discount string ("15% off", "0% interest")
- *   category        – category string from Sampath's taxonomy
+ *   category        – category string from Sampath's taxonomy (e.g. "dining",
+ *                     "travel_and_leisure", "Electronics_and_Furniture")
  *   expire_on       – Unix timestamp in ms (offer end date)
  *   display_on      – Unix timestamp in ms (offer start date)
  *   image_url       – merchant logo / banner
- *   cards_new       – array of { "Partner name", Location, "Promotion Period",
- *                               "Eligible Card Categories" }
+ *   description     – HTML description of the offer
+ *   cards_new       – array of { title, description (HTML), icon_url, order_id }
+ *                     used to extract structured details (location, period, etc.)
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { fetchJson } from "../utils/http";
@@ -24,57 +29,98 @@ const API_URL =
   "https://www.sampath.lk/api/card-promotions?page_number=1&size=200";
 const SOURCE_URL = "https://www.sampath.lk/sampath-cards/credit-card-offer";
 
+/**
+ * The Sampath API requires a Referer pointing to the card offers page,
+ * otherwise it responds with "Request Rejected" (HTML 200 but not JSON).
+ */
+const EXTRA_HEADERS = {
+  Referer: "https://www.sampath.lk/sampath-cards/credit-card-offer",
+};
+
 /** Sampath category strings → our schema enum */
 const CATEGORY_MAP: Record<string, OfferInput["category"]> = {
+  // Dining / Food
   dining: "dining",
   food: "dining",
   restaurant: "dining",
   "food & beverage": "dining",
+
+  // Shopping / Retail / Fashion / Electronics
   shopping: "shopping",
   fashion: "shopping",
   retail: "shopping",
+  electronics_and_furniture: "shopping",
+
+  // Travel / Hotels / Leisure
   travel: "travel",
   hotel: "travel",
+  hotels: "travel",
   leisure: "travel",
+  travel_and_leisure: "travel",
+
+  // Fuel
   fuel: "fuel",
   petrol: "fuel",
+
+  // Groceries / Supermarkets
   grocery: "groceries",
   groceries: "groceries",
   supermarket: "groceries",
+  super_markets: "groceries",
+
+  // Entertainment
   entertainment: "entertainment",
   cinema: "entertainment",
+
+  // Healthcare
   health: "healthcare",
   pharmacy: "healthcare",
   medical: "healthcare",
+  health_and_insurance: "healthcare",
   wellness: "wellness",
+
+  // Online
   online: "online",
   "e-commerce": "online",
+
+  // Card-type-specific promotions → keep as "other" (handled by detectCategoryFromText)
+  // mastercard_offers, visa_offers, premium_offers, other → "other"
 };
 
+/**
+ * Junk company_name values that are not real merchant offers — these are
+ * generic category/card-type header entries inserted by Sampath's CMS.
+ * Filtering is case-insensitive and checks for the key prefix phrases.
+ */
+const JUNK_NAME_PATTERNS = [
+  /^exclusive offers for/i,
+  /^offers for (visa|mastercard|sampath)/i,
+];
+
+/** Actual shape of items inside the cards_new array */
 interface SampathCardEntry {
-  "Partner name"?: string;
-  Location?: string;
-  "Promotion Period"?: string;
-  "Eligible Card Categories"?: string;
+  title?: string;
+  description?: string; // HTML content
+  icon_url?: string;
+  order_id?: number;
 }
 
 interface SampathPromotion {
   id?: number;
   company_name?: string;
   short_discount?: string;
+  description?: string;   // HTML
   category?: string;
-  expire_on?: number; // Unix ms
-  display_on?: number; // Unix ms
+  expire_on?: number;     // Unix ms
+  display_on?: number;    // Unix ms
   image_url?: string;
   cards_new?: SampathCardEntry[];
 }
 
-// The API may return the list under different top-level keys
+// The API returns the list under a "data" key
 type SampathApiResponse =
   | SampathPromotion[]
   | { data: SampathPromotion[] }
-  | { promotions: SampathPromotion[] }
-  | { result: SampathPromotion[] }
   | Record<string, unknown>;
 
 export async function scrape(): Promise<OfferInput[]> {
@@ -82,21 +128,36 @@ export async function scrape(): Promise<OfferInput[]> {
   const offers: OfferInput[] = [];
 
   try {
-    const raw = await fetchJson<SampathApiResponse>(API_URL);
+    const raw = await fetchJson<SampathApiResponse>(API_URL, 1000, 2, EXTRA_HEADERS);
     const promotions = extractPromotionList(raw);
 
     if (promotions.length === 0) {
       console.warn("[sampath] API returned 0 promotions — check response shape");
     }
 
+    let skipped = 0;
     for (const item of promotions) {
+      // Skip generic card-type header entries (not real merchant offers)
+      const name = item.company_name?.trim() ?? "";
+      if (JUNK_NAME_PATTERNS.some((re) => re.test(name))) {
+        skipped++;
+        continue;
+      }
+
       const mapped = mapPromotion(item);
       const result = OfferInputSchema.safeParse(mapped);
       if (result.success) {
         offers.push(result.data);
       } else {
-        console.warn("[sampath] Offer failed validation:", result.error.flatten());
+        console.warn(
+          `[sampath] Offer "${name}" failed validation:`,
+          result.error.flatten()
+        );
       }
+    }
+
+    if (skipped > 0) {
+      console.log(`[sampath] Skipped ${skipped} generic/junk entries`);
     }
   } catch (err) {
     console.error("[sampath] Scrape failed:", err);
@@ -126,11 +187,7 @@ function extractPromotionList(response: SampathApiResponse): SampathPromotion[] 
 
 /**
  * Parse a Sampath timestamp into a Date.
- * The API may return:
- *   - a number  (Unix ms): 1700000000000
- *   - a numeric string: "1700000000000"  ← new Date("...") = Invalid Date!
- *   - an ISO string: "2026-12-31T18:30:00.000Z"
- * We must detect the numeric-string case and convert it to a number first.
+ * The API returns Unix timestamps in milliseconds.
  */
 function parseTimestamp(val: number | string | undefined | null): Date | undefined {
   if (val == null || val === 0 || val === "") return undefined;
@@ -146,16 +203,23 @@ function parseTimestamp(val: number | string | undefined | null): Date | undefin
 
 function mapPromotion(item: SampathPromotion): Partial<OfferInput> {
   const merchant = item.company_name ? cleanText(item.company_name) : "Various";
+  const discountText = item.short_discount ? cleanText(item.short_discount) : undefined;
   const category = mapCategory(item.category ?? "");
+
+  // Build a descriptive title: "20% off at Merchant" or "Merchant" if no discount
+  const title = discountText
+    ? `${discountText} at ${merchant}`
+    : merchant;
+
   const description = buildDescription(item);
 
   return {
     bank: "sampath_bank",
     bankDisplayName: "Sampath Bank",
-    title: merchant,
+    title,
     merchant,
     description,
-    ...parseDiscount(item.short_discount ? cleanText(item.short_discount) : undefined),
+    ...parseDiscount(discountText),
     category,
     merchantLogoUrl: item.image_url || undefined,
     validFrom: parseTimestamp(item.display_on),
@@ -165,31 +229,48 @@ function mapPromotion(item: SampathPromotion): Partial<OfferInput> {
   };
 }
 
-/** Build a description from cards_new entries if available */
+/**
+ * Build a description from the cards_new structured entries.
+ * Falls back to the top-level description HTML field if cards_new is absent.
+ */
 function buildDescription(item: SampathPromotion): string | undefined {
-  if (!item.cards_new?.length) return undefined;
-
-  const lines: string[] = [];
-  for (const card of item.cards_new.slice(0, 3)) {
-    const parts: string[] = [];
-    if (card["Partner name"]) parts.push(card["Partner name"]);
-    if (card["Promotion Period"]) parts.push(`Period: ${card["Promotion Period"]}`);
-    if (card["Eligible Card Categories"]) parts.push(`Cards: ${card["Eligible Card Categories"]}`);
-    if (parts.length) lines.push(parts.join(" | "));
+  // 1. Try structured cards_new entries first (more informative)
+  if (item.cards_new?.length) {
+    const lines: string[] = [];
+    for (const card of item.cards_new) {
+      if (!card.title || !card.description) continue;
+      // Skip generic "Partner" entries — just repeats the merchant name
+      if (/^partner$/i.test(card.title.trim())) continue;
+      const value = cleanText(card.description);
+      if (value) lines.push(`${card.title}: ${value}`);
+    }
+    if (lines.length) return lines.join(" | ").substring(0, 300);
   }
 
-  return lines.join("; ").substring(0, 300) || undefined;
+  // 2. Fall back to the main description field (HTML → plain text)
+  if (item.description) {
+    const cleaned = cleanText(item.description);
+    if (cleaned) return cleaned.substring(0, 300);
+  }
+
+  return undefined;
 }
 
 function mapCategory(raw: string): OfferInput["category"] {
-  const lower = raw.toLowerCase().trim();
+  const lower = raw.toLowerCase().trim().replace(/\s+/g, "_");
 
-  // Exact match first
+  // Exact match first (handles underscore-formatted Sampath categories)
   if (CATEGORY_MAP[lower]) return CATEGORY_MAP[lower];
 
-  // Partial match
+  // Also try without underscores / spaces
+  const withoutSeparators = lower.replace(/[_\s]/g, "");
   for (const [key, val] of Object.entries(CATEGORY_MAP)) {
-    if (lower.includes(key)) return val;
+    if (key.replace(/[_\s]/g, "") === withoutSeparators) return val;
+  }
+
+  // Partial substring match
+  for (const [key, val] of Object.entries(CATEGORY_MAP)) {
+    if (lower.includes(key.replace(/[_\s]/g, ""))) return val;
   }
 
   return detectCategoryFromText(raw);
@@ -198,16 +279,25 @@ function mapCategory(raw: string): OfferInput["category"] {
 function detectCategoryFromText(text: string): OfferInput["category"] {
   const lower = text.toLowerCase();
   if (/dining|restaurant|food|pizza|burger|cafe/.test(lower)) return "dining";
-  if (/shopping|retail|fashion|cloth/.test(lower)) return "shopping";
-  if (/travel|hotel|flight|airline/.test(lower)) return "travel";
+  if (/shopping|retail|fashion|cloth|electronics|furniture/.test(lower)) return "shopping";
+  if (/travel|hotel|flight|airline|leisure/.test(lower)) return "travel";
   if (/fuel|petrol/.test(lower)) return "fuel";
   if (/grocery|supermarket/.test(lower)) return "groceries";
   if (/cinema|entertainment|movie/.test(lower)) return "entertainment";
-  if (/hospital|pharmacy|health|medical/.test(lower)) return "healthcare";
+  if (/hospital|pharmacy|health|medical|insurance/.test(lower)) return "healthcare";
   if (/online|e.commerce/.test(lower)) return "online";
   return "other";
 }
 
 function cleanText(text: string): string {
-  return text.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return text
+    .replace(/<[^>]+>/g, "")        // strip HTML tags
+    .replace(/&amp;/g, "&")         // decode HTML entities
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#\d+;/g, "")         // strip numeric entities
+    .replace(/\s+/g, " ")
+    .trim();
 }

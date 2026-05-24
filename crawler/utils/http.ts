@@ -95,16 +95,18 @@ export async function fetchHtmlSessioned(
 
 /**
  * Fetch JSON from a URL with optional retry on transient errors (503/429).
+ * Pass `extraHeaders` for sites that require additional headers (e.g. Referer).
  */
 export async function fetchJson<T>(
   url: string,
   delayMs = 1000,
-  retries = 2
+  retries = 2,
+  extraHeaders: Record<string, string> = {}
 ): Promise<T> {
   await sleep(delayMs);
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const response = await fetch(url, { headers: JSON_HEADERS });
+    const response = await fetch(url, { headers: { ...JSON_HEADERS, ...extraHeaders } });
 
     if (response.ok) {
       return response.json() as Promise<T>;
