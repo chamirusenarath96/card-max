@@ -133,6 +133,33 @@ input[type="search"]::-webkit-search-cancel-button {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ── Custom keyframe animations ─────────────────────────────────────────── */
+
+/* Glow pulse for Filters button — attracts attention when no filters are active */
+@keyframes filter-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in oklch, var(--primary) 35%, transparent);
+  }
+}
+
+/* Indeterminate progress bar for top-of-page navigation indicator */
+@keyframes nav-progress-slide {
+  from { transform: translateX(-150%); }
+  to   { transform: translateX(450%); }
+}
+
+@layer utilities {
+  .animate-filter-glow {
+    animation: filter-glow 2s ease-in-out infinite;
+  }
+  .animate-nav-progress {
+    animation: nav-progress-slide 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

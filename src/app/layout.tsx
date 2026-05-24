@@ -5,6 +5,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
+import { NavigationProgressProvider } from "@/components/layout/NavigationProgressContext";
+import { NavigationProgressBar } from "@/components/layout/NavigationProgressBar";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -56,7 +58,10 @@ export default function RootLayout({
           storageKey="theme"
           disableTransitionOnChange
         >
-          <TooltipProvider>{children}</TooltipProvider>
+          <NavigationProgressProvider>
+            <NavigationProgressBar />
+            <TooltipProvider>{children}</TooltipProvider>
+          </NavigationProgressProvider>
         </ThemeProvider>
       </body>
     </html>

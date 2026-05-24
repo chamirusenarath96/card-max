@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useSearchSuggestions } from "./useSearchSuggestions";
+import { useNavigationProgress } from "@/components/layout/NavigationProgressContext";
 
 const TYPEWRITER_PHRASES = [
   "dining offers at Keells…",
@@ -69,7 +70,7 @@ interface Props {
 }
 
 export function HeroSearch({ initialQuery = "" }: Props) {
-  const router = useRouter();
+  const { navigate } = useNavigationProgress();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -112,7 +113,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
     const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    navigate(qs ? `${pathname}?${qs}` : pathname);
   }
 
   /**
@@ -127,7 +128,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
     next.delete("q");
     next.delete("page");
     const qs = next.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    navigate(qs ? `${pathname}?${qs}` : pathname);
   }
 
   // Alias used by result-item / see-all clicks (same behaviour, clearer intent)

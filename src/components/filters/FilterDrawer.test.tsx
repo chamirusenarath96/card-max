@@ -3,11 +3,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FilterDrawer } from "./FilterDrawer";
 import type { UseCategoriesResult } from "@/hooks/useCategories";
 
-const mockPush = vi.fn();
+const mockNavigate = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/components/layout/NavigationProgressContext", () => ({
+  useNavigationProgress: () => ({
+    navigate: mockNavigate,
+    isPending: false,
+    lastNavMs: null,
+  }),
 }));
 
 const mockUseCategories = vi.fn<() => UseCategoriesResult>();
@@ -24,6 +33,7 @@ const MOCK_CATEGORIES: UseCategoriesResult["data"] = [
 
 describe("FilterDrawer", () => {
   beforeEach(() => {
+    mockNavigate.mockClear();
     mockUseCategories.mockReturnValue({
       data: MOCK_CATEGORIES,
       isLoading: false,
@@ -41,6 +51,12 @@ describe("FilterDrawer", () => {
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     const drawer = await screen.findByTestId("filter-drawer");
     expect(drawer).toBeInTheDocument();
+  });
+
+  it("shows Apply Filters button when drawer is open", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    expect(await screen.findByTestId("apply-filters")).toBeInTheDocument();
   });
 
   it("shows bank filter options when drawer is open", async () => {
@@ -110,24 +126,66 @@ describe("FilterDrawer", () => {
     expect(await screen.findByTestId("category-chip-all")).toBeInTheDocument();
   });
 
-  // ── AC7: clicking a chip sets the URL param ───────────────────────────────
+  // ── Multi-select: filter chips update pending state, Apply navigates ─────
 
-  it("AC7 — clicking a dynamic category chip sets the category filter", async () => {
-    mockPush.mockClear();
+  it("clicking a bank chip highlights it without navigating", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const chip = await screen.findByTestId("bank-filter-commercial_bank");
+    fireEvent.click(chip);
+    // Navigate should NOT be called yet (pending state only)
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("clicking Apply after selecting bank navigates with bank param", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const chip = await screen.findByTestId("bank-filter-commercial_bank");
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByTestId("apply-filters"));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"));
+  });
+
+  // ── AC7: clicking a chip and applying sets the URL param ─────────────────
+
+  it("AC7 — clicking a dynamic category chip then Apply sets the category filter", async () => {
     render(<FilterDrawer />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     const chip = await screen.findByTestId("category-chip-dining");
     fireEvent.click(chip);
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("category=dining"));
+    fireEvent.click(screen.getByTestId("apply-filters"));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("category=dining"));
   });
 
-  it("clicking 'All' clears the category filter", async () => {
-    mockPush.mockClear();
+  it("clicking 'All' category then Apply clears the category filter", async () => {
     render(<FilterDrawer activeCategory="dining" />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     fireEvent.click(await screen.findByTestId("category-chip-all"));
+    fireEvent.click(screen.getByTestId("apply-filters"));
     await waitFor(() =>
-      expect(mockPush).toHaveBeenCalledWith(expect.not.stringContaining("category="))
+      expect(mockNavigate).toHaveBeenCalledWith(expect.not.stringContaining("category=")),
     );
+  });
+
+  // ── Clear all: immediate navigation without Apply ─────────────────────────
+
+  it("Clear all navigates immediately to pathname without any params", async () => {
+    render(<FilterDrawer activeBank="hnb" activeCategory="dining" />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    await screen.findByTestId("filter-drawer");
+    fireEvent.click(screen.getByTestId("clear-all-filters"));
+    expect(mockNavigate).toHaveBeenCalledWith("/");
+  });
+
+  // ── Glow animation ────────────────────────────────────────────────────────
+
+  it("trigger button has glow animation class when no filters are active", () => {
+    render(<FilterDrawer />);
+    expect(screen.getByTestId("filter-drawer-trigger")).toHaveClass("animate-filter-glow");
+  });
+
+  it("trigger button does not have glow animation when filters are active", () => {
+    render(<FilterDrawer activeBank="hnb" />);
+    expect(screen.getByTestId("filter-drawer-trigger")).not.toHaveClass("animate-filter-glow");
   });
 });

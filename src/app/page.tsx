@@ -14,6 +14,7 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -134,10 +135,11 @@ async function OfferGridSection({ params }: { params: SearchParams }) {
                   ? "Filtered Offers"
                   : "All Offers"}
           </h2>
-          <p className="mt-1.5 text-sm font-medium text-muted-foreground">
+          <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
             {pagination.total !== undefined
               ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
               : "Browsing offers"}
+            <LoadTimeBadge />
           </p>
         </div>
 

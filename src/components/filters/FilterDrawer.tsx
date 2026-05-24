@@ -1,7 +1,8 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { SlidersHorizontal, X, Check } from "lucide-react";
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
@@ -13,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useCategories } from "@/hooks/useCategories";
+import { useNavigationProgress } from "@/components/layout/NavigationProgressContext";
 
 const BANKS = Object.entries(BANK_METADATA) as [Bank, (typeof BANK_METADATA)[Bank]][];
 
@@ -46,6 +47,17 @@ interface Props {
   includeExpired?: boolean;
 }
 
+function toDate(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
+function toISODate(date: Date | undefined): string | null {
+  if (!date) return null;
+  return format(date, "yyyy-MM-dd");
+}
+
 export function FilterDrawer({
   activeBank,
   activeCategory,
@@ -55,65 +67,44 @@ export function FilterDrawer({
   activeSort,
   includeExpired,
 }: Props) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { navigate } = useNavigationProgress();
   const { data: categories, isLoading: categoriesLoading } = useCategories();
 
-  function setParam(key: string, value: string | null) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    params.delete("page");
-    const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+  // ── Controlled drawer open state ──────────────────────────────────────────
+  const [open, setOpen] = useState(false);
+
+  // ── Pending filter state — updated locally, applied on "Apply Filters" ───
+  const [pendingBank, setPendingBank] = useState<string>("");
+  const [pendingCategory, setPendingCategory] = useState<string>("");
+  const [pendingOfferType, setPendingOfferType] = useState<string>("");
+  const [pendingSort, setPendingSort] = useState<string>("latest");
+  const [pendingIncludeExpired, setPendingIncludeExpired] = useState<boolean>(false);
+  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>(undefined);
+
+  /**
+   * Sync pending state from URL params when the drawer opens.
+   * Called inside the onOpenChange event handler — not inside a useEffect —
+   * so setting state in a batch is correct and avoids cascading renders.
+   */
+  function syncPendingFromUrl() {
+    setPendingBank(activeBank ?? "");
+    setPendingCategory(activeCategory ?? "");
+    setPendingOfferType(activeOfferType ?? "");
+    setPendingSort(activeSort ?? "latest");
+    setPendingIncludeExpired(includeExpired ?? false);
+    const from = toDate(activeFrom);
+    const to = toDate(activeTo);
+    setPendingDateRange(from || to ? { from, to } : undefined);
   }
 
-  function clearAll() {
-    router.push(pathname);
+  function handleOpenChange(isOpen: boolean) {
+    if (isOpen) syncPendingFromUrl();
+    setOpen(isOpen);
   }
 
-  function toDate(value: string | undefined): Date | undefined {
-    if (!value) return undefined;
-    const d = new Date(value);
-    return isNaN(d.getTime()) ? undefined : d;
-  }
-
-  function toISODate(date: Date | undefined): string | null {
-    if (!date) return null;
-    return format(date, "yyyy-MM-dd");
-  }
-
-  const fromDate = toDate(activeFrom);
-  const toDate_ = toDate(activeTo);
-  const dateRange: DateRange | undefined =
-    fromDate || toDate_ ? { from: fromDate, to: toDate_ } : undefined;
-
-  function handleDateSelect(selected: DateRange | undefined) {
-    const params = new URLSearchParams(searchParams.toString());
-    const from = toISODate(selected?.from);
-    const to = toISODate(selected?.to);
-    if (from) params.set("activeFrom", from); else params.delete("activeFrom");
-    if (to) params.set("activeTo", to); else params.delete("activeTo");
-    params.delete("page");
-    const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
-  }
-
-  function clearDates() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("activeFrom");
-    params.delete("activeTo");
-    params.delete("page");
-    const qs = params.toString();
-    router.push(qs ? `${pathname}?${qs}` : pathname);
-  }
-
-  const currentSort = activeSort ?? "latest";
-
+  // ── Active count (reflects applied URL state, shown on trigger badge) ────
   const activeCount = [
     activeBank,
     activeCategory,
@@ -124,13 +115,66 @@ export function FilterDrawer({
     includeExpired ? "expired" : null,
   ].filter(Boolean).length;
 
+  // ── Pending count (reflects changes not yet applied) ─────────────────────
+  const pendingCount = [
+    pendingBank,
+    pendingCategory,
+    pendingOfferType,
+    pendingDateRange?.from ? toISODate(pendingDateRange.from) : null,
+    pendingDateRange?.to ? toISODate(pendingDateRange.to) : null,
+    pendingSort !== "latest" ? pendingSort : null,
+    pendingIncludeExpired ? "expired" : null,
+  ].filter(Boolean).length;
+
+  // ── Apply all pending state to URL (single router.push call) ─────────────
+  function applyFilters() {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (pendingBank) params.set("bank", pendingBank); else params.delete("bank");
+    if (pendingCategory) params.set("category", pendingCategory); else params.delete("category");
+    if (pendingOfferType) params.set("offerType", pendingOfferType); else params.delete("offerType");
+    if (pendingSort !== "latest") params.set("sort", pendingSort); else params.delete("sort");
+    if (pendingIncludeExpired) params.set("includeExpired", "true"); else params.delete("includeExpired");
+
+    const from = toISODate(pendingDateRange?.from);
+    const to = toISODate(pendingDateRange?.to);
+    if (from) params.set("activeFrom", from); else params.delete("activeFrom");
+    if (to) params.set("activeTo", to); else params.delete("activeTo");
+
+    params.delete("page");
+
+    // Close drawer optimistically, then navigate (one DB call for all changes).
+    setOpen(false);
+    const qs = params.toString();
+    navigate(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  // ── Clear all filters (immediate — no Apply needed) ───────────────────────
+  function clearAll() {
+    setPendingBank("");
+    setPendingCategory("");
+    setPendingOfferType("");
+    setPendingSort("latest");
+    setPendingIncludeExpired(false);
+    setPendingDateRange(undefined);
+    setOpen(false);
+    navigate(pathname);
+  }
+
+  const fromDate = pendingDateRange?.from;
+  const toDate_ = pendingDateRange?.to;
+
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
         <Button
           variant="outline"
           data-testid="filter-drawer-trigger"
-          className="relative h-auto min-h-11 gap-2 rounded-lg px-5 py-2.5 font-medium"
+          className={cn(
+            "relative h-auto min-h-11 gap-2 rounded-lg px-5 py-2.5 font-medium",
+            // Glow animation only when no filters are active — attracts first-time users
+            activeCount === 0 && "animate-filter-glow",
+          )}
           aria-label={`Open filters${activeCount > 0 ? `, ${activeCount} active` : ""}`}
         >
           <SlidersHorizontal className="size-4" aria-hidden />
@@ -150,8 +194,9 @@ export function FilterDrawer({
         side="right"
         data-testid="filter-drawer"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
+        {/* ── Drawer header ─────────────────────────────────────────────── */}
         <SheetHeader className="flex flex-row items-center justify-between border-b px-6 py-4">
           <SheetTitle className="text-base font-semibold">Filters</SheetTitle>
           <div className="flex items-center gap-1">
@@ -167,21 +212,21 @@ export function FilterDrawer({
                 Clear all
               </Button>
             )}
-            <SheetClose asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                data-testid="filter-drawer-close"
-                aria-label="Close filters"
-              >
-                <X className="size-4" />
-              </Button>
-            </SheetClose>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="filter-drawer-close"
+              aria-label="Close filters"
+              onClick={() => setOpen(false)}
+            >
+              <X className="size-4" />
+            </Button>
           </div>
         </SheetHeader>
 
+        {/* ── Scrollable filter body ─────────────────────────────────────── */}
         <div className="flex-1 space-y-0 overflow-y-auto">
-          {/* Drawer ad unit — top of drawer, above filters */}
+          {/* Drawer ad unit */}
           {process.env.NEXT_PUBLIC_ADSENSE_ENABLED === "true" && (
             <div className="min-h-[90px] px-6 pt-4" data-testid="drawer-ad-unit">
               <AdUnit
@@ -205,9 +250,9 @@ export function FilterDrawer({
                   key={value}
                   type="button"
                   data-testid={`sort-${value}`}
-                  variant={currentSort === value ? "default" : "outline"}
+                  variant={pendingSort === value ? "default" : "outline"}
                   className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                  onClick={() => setParam("sort", value === "latest" ? null : value)}
+                  onClick={() => setPendingSort(value)}
                 >
                   {label}
                 </Button>
@@ -224,29 +269,29 @@ export function FilterDrawer({
               <Button
                 type="button"
                 data-testid="bank-filter-all"
-                variant={!activeBank ? "default" : "outline"}
+                variant={!pendingBank ? "default" : "outline"}
                 className="h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold"
-                onClick={() => setParam("bank", null)}
+                onClick={() => setPendingBank("")}
               >
                 All Banks
               </Button>
               {BANKS.map(([bank, meta]) => {
-                const isActive = activeBank === bank;
+                const isSelected = pendingBank === bank;
                 return (
                   <Button
                     key={bank}
                     type="button"
                     data-testid={`bank-filter-${bank}`}
-                    variant={isActive ? "default" : "outline"}
-                    aria-pressed={isActive}
+                    variant={isSelected ? "default" : "outline"}
+                    aria-pressed={isSelected}
                     className={cn(
                       "h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold",
-                      isActive
+                      isSelected
                         ? "border-transparent text-primary-foreground hover:opacity-95"
                         : "bg-background text-foreground hover:bg-accent",
                     )}
-                    style={isActive ? { backgroundColor: meta.color } : undefined}
-                    onClick={() => setParam("bank", activeBank === bank ? null : bank)}
+                    style={isSelected ? { backgroundColor: meta.color } : undefined}
+                    onClick={() => setPendingBank(pendingBank === bank ? "" : bank)}
                   >
                     {meta.displayName}
                   </Button>
@@ -255,16 +300,16 @@ export function FilterDrawer({
             </div>
           </section>
 
-          {/* Date Range — inline calendar, no nested popover */}
+          {/* Date Range */}
           <section className="px-6 py-5">
             <div className="mb-3 flex items-center justify-between">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Date Range
               </Label>
-              {(activeFrom || activeTo) && (
+              {(fromDate || toDate_) && (
                 <button
                   type="button"
-                  onClick={clearDates}
+                  onClick={() => setPendingDateRange(undefined)}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
                   aria-label="Clear date range"
                 >
@@ -286,8 +331,8 @@ export function FilterDrawer({
               <Calendar
                 mode="range"
                 numberOfMonths={2}
-                selected={dateRange}
-                onSelect={handleDateSelect}
+                selected={pendingDateRange}
+                onSelect={setPendingDateRange}
                 captionLayout="dropdown"
               />
             </div>
@@ -303,18 +348,16 @@ export function FilterDrawer({
               role="group"
               aria-label="Filter by category"
             >
-              {/* "All" chip is always present regardless of API state (AC8) */}
               <Button
                 type="button"
                 data-testid="category-chip-all"
-                variant={!activeCategory ? "default" : "outline"}
+                variant={!pendingCategory ? "default" : "outline"}
                 className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                onClick={() => setParam("category", null)}
+                onClick={() => setPendingCategory("")}
               >
                 All
               </Button>
 
-              {/* Skeleton pills while the API is loading (AC4) */}
               {categoriesLoading &&
                 Array.from({ length: 6 }).map((_, i) => (
                   <Skeleton
@@ -324,20 +367,18 @@ export function FilterDrawer({
                   />
                 ))}
 
-              {/* Dynamic category pills from /api/categories (AC3) */}
               {!categoriesLoading &&
                 categories.map((cat) => (
                   <Button
                     key={cat.category}
                     type="button"
                     data-testid={`category-chip-${cat.category}`}
-                    variant={activeCategory === cat.category ? "default" : "outline"}
-                    aria-pressed={activeCategory === cat.category}
+                    variant={pendingCategory === cat.category ? "default" : "outline"}
+                    aria-pressed={pendingCategory === cat.category}
                     className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
                     onClick={() =>
-                      setParam(
-                        "category",
-                        activeCategory === cat.category ? null : cat.category,
+                      setPendingCategory(
+                        pendingCategory === cat.category ? "" : cat.category,
                       )
                     }
                   >
@@ -360,9 +401,9 @@ export function FilterDrawer({
               <Button
                 type="button"
                 data-testid="offer-type-all"
-                variant={!activeOfferType ? "default" : "outline"}
+                variant={!pendingOfferType ? "default" : "outline"}
                 className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                onClick={() => setParam("offerType", null)}
+                onClick={() => setPendingOfferType("")}
               >
                 All Types
               </Button>
@@ -371,13 +412,12 @@ export function FilterDrawer({
                   key={type.value}
                   type="button"
                   data-testid={`offer-type-${type.value}`}
-                  variant={activeOfferType === type.value ? "default" : "outline"}
-                  aria-pressed={activeOfferType === type.value}
+                  variant={pendingOfferType === type.value ? "default" : "outline"}
+                  aria-pressed={pendingOfferType === type.value}
                   className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
                   onClick={() =>
-                    setParam(
-                      "offerType",
-                      activeOfferType === type.value ? null : type.value,
+                    setPendingOfferType(
+                      pendingOfferType === type.value ? "" : type.value,
                     )
                   }
                 >
@@ -395,14 +435,32 @@ export function FilterDrawer({
             <Button
               type="button"
               data-testid="include-expired-toggle"
-              variant={includeExpired ? "default" : "outline"}
-              aria-pressed={includeExpired}
+              variant={pendingIncludeExpired ? "default" : "outline"}
+              aria-pressed={pendingIncludeExpired}
               className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-              onClick={() => setParam("includeExpired", includeExpired ? null : "true")}
+              onClick={() => setPendingIncludeExpired((prev) => !prev)}
             >
-              {includeExpired ? "Showing expired offers" : "Include expired offers"}
+              {pendingIncludeExpired ? "Showing expired offers" : "Include expired offers"}
             </Button>
           </section>
+        </div>
+
+        {/* ── Sticky footer: Apply Filters ──────────────────────────────────── */}
+        <div className="border-t border-border bg-background px-6 py-4">
+          <Button
+            type="button"
+            data-testid="apply-filters"
+            className="w-full gap-2"
+            onClick={applyFilters}
+          >
+            <Check className="size-4" aria-hidden />
+            Apply Filters
+            {pendingCount > 0 && (
+              <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 py-0.5 text-xs">
+                {pendingCount}
+              </span>
+            )}
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
