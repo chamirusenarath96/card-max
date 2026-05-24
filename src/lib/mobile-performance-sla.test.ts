@@ -90,12 +90,15 @@ describe("Mobile Performance SLA — spec 018", () => {
 
     it("upload artifact step uses if: always() (AC4)", () => {
       expect(ciYml).toContain("lighthouse-report");
-      // The "Upload Lighthouse report" step must have "if: always()"
+      // The canonical "Upload Lighthouse report" step (production) must have "if: always()".
+      // Production Lighthouse runs AFTER "Promote to production", so the upload is post-promote.
       const uploadStepIdx = ciYml.indexOf("Upload Lighthouse report");
       expect(uploadStepIdx).toBeGreaterThan(-1);
-      // The "if: always()" must appear between "Upload Lighthouse report" and "Promote to production"
       const promoteIdx = ciYml.indexOf("Promote to production");
-      const uploadSection = ciYml.slice(uploadStepIdx, promoteIdx);
+      // Upload must appear after promote (production Lighthouse correctly runs post-promote).
+      expect(uploadStepIdx).toBeGreaterThan(promoteIdx);
+      // Verify if: always() is present in the upload step block (next ~200 chars).
+      const uploadSection = ciYml.slice(uploadStepIdx, uploadStepIdx + 200);
       expect(uploadSection).toContain("if: always()");
     });
 
