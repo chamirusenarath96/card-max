@@ -5,18 +5,6 @@ import { useState, useRef, useEffect } from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useSearchSuggestions } from "./useSearchSuggestions";
-import { FilterDrawer } from "@/components/filters/FilterDrawer";
-
-const SUGGESTION_CHIPS: { label: string; params: Record<string, string> }[] = [
-  { label: "Dining", params: { category: "dining" } },
-  { label: "Shopping", params: { category: "shopping" } },
-  { label: "Online", params: { category: "online" } },
-  { label: "Cashback", params: { offerType: "cashback" } },
-  { label: "Buy 1 Get 1", params: { offerType: "bogo" } },
-  { label: "Expiring Soon", params: { sort: "expiringSoon" } },
-  { label: "Hotels", params: { q: "hotel" } },
-  { label: "Supermarkets", params: { q: "supermarket" } },
-];
 
 const TYPEWRITER_PHRASES = [
   "dining offers at Keells…",
@@ -145,13 +133,6 @@ export function HeroSearch({ initialQuery = "" }: Props) {
   // Alias used by result-item / see-all clicks (same behaviour, clearer intent)
   const freshSearch = pushSearch;
 
-  function handleChip(chipParams: Record<string, string>) {
-    setDropdownOpen(false);
-    const params = new URLSearchParams();
-    Object.entries(chipParams).forEach(([k, v]) => params.set(k, v));
-    router.push(`${pathname}?${params.toString()}`);
-  }
-
   function handleResultClick(sourceUrl: string) {
     setDropdownOpen(false);
     window.open(sourceUrl, "_blank", "noopener,noreferrer");
@@ -277,42 +258,6 @@ export function HeroSearch({ initialQuery = "" }: Props) {
         </div>
       </div>
 
-      {/* Example hint */}
-      <p className="text-sm text-muted-foreground" data-testid="hero-search-hint">
-        Try: dining, cashback, hotels, or a bank name
-      </p>
-
-      {/* Suggestion chips + Filters button */}
-      <div
-        className="flex flex-wrap justify-center gap-2"
-        data-testid="search-suggestions"
-        role="group"
-        aria-label="Search suggestions"
-      >
-        {SUGGESTION_CHIPS.map((chip) => (
-          <button
-            key={chip.label}
-            type="button"
-            data-testid={`suggestion-${chip.label.toLowerCase().replace(/\s+/g, "-")}`}
-            onClick={() => handleChip(chip.params)}
-            className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            {chip.label}
-          </button>
-        ))}
-
-        {/* Filters drawer — colocated with search chips so the FilterBar
-            section below the hero is no longer needed */}
-        <FilterDrawer
-          activeBank={searchParams.get("bank") ?? undefined}
-          activeCategory={searchParams.get("category") ?? undefined}
-          activeOfferType={searchParams.get("offerType") ?? undefined}
-          activeFrom={searchParams.get("activeFrom") ?? undefined}
-          activeTo={searchParams.get("activeTo") ?? undefined}
-          activeSort={searchParams.get("sort") ?? undefined}
-          includeExpired={searchParams.get("includeExpired") === "true"}
-        />
-      </div>
     </div>
   );
 }
