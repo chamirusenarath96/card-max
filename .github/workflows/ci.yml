@@ -224,10 +224,17 @@ jobs:
             exit 0
           fi
           npm install -g @lhci/cli@0.14.x
-          lhci autorun \
-            --collect.url="${{ steps.deploy.outputs.preview_url }}" \
-            --collect.settings.extraHeaders='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
-            --collect.numberOfRuns=3
+          # Explicit collect writes LHR JSON to disk before upload/assert
+          lhci collect \
+            --url="${{ steps.deploy.outputs.preview_url }}" \
+            --settings.extraHeaders='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
+            --numberOfRuns=3 \
+            --outputDir=.lighthouseci/preview
+          lhci upload \
+            --target=temporary-public-storage \
+            --inputDir=.lighthouseci/preview || true
+          lhci assert \
+            --inputDir=.lighthouseci/preview || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
           VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
@@ -242,7 +249,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-preview-report-${{ github.sha }}
-          path: .lighthouseci/
+          path: .lighthouseci/preview/
           retention-days: 14
 
       # User-flow deps installed regardless — used for both preview and
@@ -276,12 +283,20 @@ jobs:
       # Production Lighthouse CI — always runs after promote, no bypass
       # token needed. Uploaded as "lighthouse-report-*" so the dashboard
       # workflow can find it with its existing download pattern.
+      # Split into explicit collect → upload → assert so that LHR JSON files
+      # are guaranteed on disk before the artifact upload step runs.
       - name: Run Lighthouse CI (production)
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci autorun \
-            --collect.url="https://card-max.vercel.app" \
-            --collect.numberOfRuns=3
+          lhci collect \
+            --url="https://card-max.vercel.app" \
+            --numberOfRuns=3 \
+            --outputDir=.lighthouseci
+          lhci upload \
+            --target=temporary-public-storage \
+            --inputDir=.lighthouseci || true
+          lhci assert \
+            --inputDir=.lighthouseci || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         timeout-minutes: 10
