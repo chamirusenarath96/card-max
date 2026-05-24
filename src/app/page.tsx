@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { FilterBar } from "@/components/filters";
 import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
 import { AdUnit } from "@/components/ads/AdUnit";
@@ -93,12 +92,9 @@ const BANK_LABEL: Record<string, string> = {
 function OfferGridSkeleton() {
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <Skeleton className="mb-2 h-9 w-48 rounded-lg" />
-          <Skeleton className="h-4 w-32 rounded" />
-        </div>
-        <Skeleton className="h-11 w-40 rounded-lg" />
+      <div className="mb-8">
+        <Skeleton className="mb-2 h-9 w-48 rounded-lg" />
+        <Skeleton className="h-4 w-32 rounded" />
       </div>
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -120,38 +116,21 @@ async function OfferGridSection({ params }: { params: SearchParams }) {
 
   return (
     <>
-      <div
-        className="mb-8 flex flex-wrap items-center justify-between gap-4"
-        data-testid="filter-section"
-      >
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
-            {params.q
-              ? `Results for "${params.q}"`
-              : params.bank
-                ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
-                : hasActiveFilters
-                  ? "Filtered Offers"
-                  : "All Offers"}
-          </h2>
-          <p className="mt-1.5 text-sm font-medium text-muted-foreground">
-            {pagination.total !== undefined
-              ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
-              : "Browsing offers"}
-          </p>
-        </div>
-
-        <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
-          <FilterBar
-            activeBank={params.bank}
-            activeCategory={params.category}
-            activeOfferType={params.offerType}
-            activeFrom={params.activeFrom}
-            activeTo={params.activeTo}
-            activeSort={params.sort}
-            includeExpired={params.includeExpired === "true"}
-          />
-        </Suspense>
+      <div className="mb-8" data-testid="filter-section">
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
+          {params.q
+            ? `Results for "${params.q}"`
+            : params.bank
+              ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
+              : hasActiveFilters
+                ? "Filtered Offers"
+                : "All Offers"}
+        </h2>
+        <p className="mt-1.5 text-sm font-medium text-muted-foreground">
+          {pagination.total !== undefined
+            ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
+            : "Browsing offers"}
+        </p>
       </div>
 
       <div data-testid="offer-grid-section">

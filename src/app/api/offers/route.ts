@@ -192,6 +192,35 @@ export async function GET(request: NextRequest) {
         ]);
         raw = searchRaw;
         total = (countResult as Array<{ total?: number }>)[0]?.total ?? 0;
+
+        // Atlas Search can return 0 results when its index is stale (e.g. newly
+        // inserted documents not yet indexed). Cross-check with regex and use
+        // those results if they return more — this keeps search working even
+        // when the Atlas index lags behind the collection.
+        if (total === 0) {
+          console.warn(
+            "[api/offers] Atlas Search returned 0 results — cross-checking with regex fallback",
+          );
+          const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(escaped, "i");
+          const textClause = {
+            $or: [{ title: regex }, { merchant: regex }, { description: regex }],
+          };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { $or: existingOr, ...baseFilter } = filter as any;
+          const fallbackFilter = existingOr
+            ? { ...baseFilter, $and: [{ $or: existingOr }, textClause] }
+            : { ...baseFilter, ...textClause };
+
+          const [fallbackRaw, fallbackTotal] = await Promise.all([
+            OfferModel.find(fallbackFilter).sort(sortOrder).skip(skip).limit(limit).select("-__v").lean(),
+            OfferModel.countDocuments(fallbackFilter),
+          ]);
+          if (fallbackTotal > 0) {
+            raw = fallbackRaw;
+            total = fallbackTotal;
+          }
+        }
       } catch (err) {
         // Atlas Search unavailable (index not built, non-Atlas cluster, network error, etc.)
         // Fall back to a case-insensitive regex search — works without any special index.

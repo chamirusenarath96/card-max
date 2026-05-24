@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useSearchSuggestions } from "./useSearchSuggestions";
+import { FilterDrawer } from "@/components/filters/FilterDrawer";
 
 const SUGGESTION_CHIPS: { label: string; params: Record<string, string> }[] = [
   { label: "Dining", params: { category: "dining" } },
@@ -281,7 +282,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
         Try: dining, cashback, hotels, or a bank name
       </p>
 
-      {/* Suggestion chips */}
+      {/* Suggestion chips + Filters button */}
       <div
         className="flex flex-wrap justify-center gap-2"
         data-testid="search-suggestions"
@@ -299,6 +300,18 @@ export function HeroSearch({ initialQuery = "" }: Props) {
             {chip.label}
           </button>
         ))}
+
+        {/* Filters drawer — colocated with search chips so the FilterBar
+            section below the hero is no longer needed */}
+        <FilterDrawer
+          activeBank={searchParams.get("bank") ?? undefined}
+          activeCategory={searchParams.get("category") ?? undefined}
+          activeOfferType={searchParams.get("offerType") ?? undefined}
+          activeFrom={searchParams.get("activeFrom") ?? undefined}
+          activeTo={searchParams.get("activeTo") ?? undefined}
+          activeSort={searchParams.get("sort") ?? undefined}
+          includeExpired={searchParams.get("includeExpired") === "true"}
+        />
       </div>
     </div>
   );

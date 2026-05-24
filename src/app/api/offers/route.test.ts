@@ -379,6 +379,48 @@ describe("GET /api/offers", () => {
     expect(mockCount).not.toHaveBeenCalled();
   });
 
+  // Stale-index fallback: Atlas Search succeeds but returns 0 results → regex cross-check
+  it("falls back to regex when Atlas Search returns 0 results (stale index)", async () => {
+    // Atlas Search pipeline returns empty results (stale index)
+    mockAggregate
+      .mockResolvedValueOnce([])       // searchRaw — empty
+      .mockResolvedValueOnce([]);       // countResult — empty (total = 0)
+
+    // Regex fallback returns 1 match
+    mockLean.mockResolvedValueOnce([makeOffer()]);
+    mockCount.mockResolvedValueOnce(1);
+
+    const res = await GET(makeRequest({ q: "pizza" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Should surface the regex result, not the Atlas 0-result response
+    expect(body.pagination.total).toBe(1);
+    expect(body.data).toHaveLength(1);
+    // Regex path: find() called with $or clause
+    expect(mockFind).toHaveBeenCalledWith(
+      expect.objectContaining({
+        $or: expect.arrayContaining([
+          expect.objectContaining({ title: expect.any(RegExp) }),
+        ]),
+      }),
+    );
+  });
+
+  // Stale-index fallback: Atlas returns 0 AND regex also returns 0 → empty response
+  it("returns empty results when both Atlas Search and regex return 0", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mockLean.mockResolvedValueOnce([]);
+    mockCount.mockResolvedValueOnce(0);
+
+    const res = await GET(makeRequest({ q: "xyzzy_nonexistent" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.pagination.total).toBe(0);
+    expect(body.data).toHaveLength(0);
+  });
+
   // Fallback: any Atlas Search error → falls back to case-insensitive regex search
   it("falls back to regex search when Atlas Search throws any error", async () => {
     const mongoError = Object.assign(new Error("index not found"), {
