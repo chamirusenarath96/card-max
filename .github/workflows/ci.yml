@@ -224,15 +224,13 @@ jobs:
             exit 0
           fi
           npm install -g @lhci/cli@0.14.x
-          # Explicit collect writes LHR JSON to disk before upload/assert
+          # Collect first — writes LHR JSON to disk. Do NOT upload here;
+          # lhci upload clears the outputDir before artifact capture runs.
           lhci collect \
             --url="${{ steps.deploy.outputs.preview_url }}" \
             --settings.extraHeaders='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
             --numberOfRuns=3 \
             --outputDir=.lighthouseci/preview
-          lhci upload \
-            --target=temporary-public-storage \
-            --inputDir=.lighthouseci/preview || true
           lhci assert \
             --inputDir=.lighthouseci/preview || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
@@ -283,8 +281,11 @@ jobs:
       # Production Lighthouse CI — always runs after promote, no bypass
       # token needed. Uploaded as "lighthouse-report-*" so the dashboard
       # workflow can find it with its existing download pattern.
-      # Split into explicit collect → upload → assert so that LHR JSON files
-      # are guaranteed on disk before the artifact upload step runs.
+      # NOTE: lhci upload is intentionally omitted here because
+      # temporary-public-storage clears .lighthouseci/ after uploading,
+      # which causes the artifact upload step to find an empty directory.
+      # We upload to temporary-public-storage in a separate step AFTER
+      # the artifact has been saved.
       - name: Run Lighthouse CI (production)
         run: |
           npm install -g @lhci/cli@0.14.x
@@ -292,9 +293,6 @@ jobs:
             --url="https://card-max.vercel.app" \
             --numberOfRuns=3 \
             --outputDir=.lighthouseci
-          lhci upload \
-            --target=temporary-public-storage \
-            --inputDir=.lighthouseci || true
           lhci assert \
             --inputDir=.lighthouseci || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
@@ -309,6 +307,13 @@ jobs:
           name: lighthouse-report-${{ github.sha }}
           path: .lighthouseci/
           retention-days: 14
+
+      # Publish to temporary-public-storage AFTER artifact is saved so the
+      # upload step cannot clear .lighthouseci/ before artifact capture.
+      - name: Publish Lighthouse results to temporary storage
+        if: always()
+        run: lhci upload --target=temporary-public-storage --inputDir=.lighthouseci || true
+        continue-on-error: true
 
       # Production user-flow — runs against card-max.vercel.app after
       # promote. No bypass token needed. Always produces report data.
