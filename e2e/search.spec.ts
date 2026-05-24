@@ -15,11 +15,6 @@ test.describe("Search — Hero bar", () => {
     await expect(page.getByTestId("hero-search-input")).toBeVisible();
   });
 
-  test("suggestion chips are visible", async ({ page }) => {
-    await expect(page.getByTestId("search-suggestions")).toBeVisible();
-    await expect(page.getByTestId("suggestion-dining")).toBeVisible();
-  });
-
   test("typing and pressing Enter sets ?q= param", async ({ page }) => {
     await page.getByTestId("hero-search-input").fill("pizza");
     await page.getByTestId("hero-search-input").press("Enter");
@@ -54,19 +49,6 @@ test.describe("Search — Hero bar", () => {
     await expect(page).not.toHaveURL(/q=/, { timeout: 10000 });
   });
 
-  test("clicking 'Dining' suggestion chip sets category=dining", async ({
-    page,
-  }) => {
-    await page.getByTestId("suggestion-dining").click();
-    await expect(page).toHaveURL(/category=dining/);
-  });
-
-  test("clicking 'Expiring Soon' chip sets sort=expiringSoon", async ({
-    page,
-  }) => {
-    await page.getByTestId("suggestion-expiring-soon").click();
-    await expect(page).toHaveURL(/sort=expiringSoon/);
-  });
 });
 
 // Search drawer tests are intentionally omitted — the drawer is not rendered on the

@@ -75,19 +75,6 @@ describe("HeroSearch", () => {
     expect(screen.getByTestId("hero-search-input")).toBeInTheDocument();
   });
 
-  it("renders the example hint text", () => {
-    render(<HeroSearch />);
-    expect(screen.getByTestId("hero-search-hint")).toBeInTheDocument();
-  });
-
-  it("renders suggestion chips", () => {
-    render(<HeroSearch />);
-    expect(screen.getByTestId("search-suggestions")).toBeInTheDocument();
-    expect(screen.getByTestId("suggestion-dining")).toBeInTheDocument();
-    expect(screen.getByTestId("suggestion-cashback")).toBeInTheDocument();
-    expect(screen.getByTestId("suggestion-expiring-soon")).toBeInTheDocument();
-  });
-
   it("shows initialQuery in the input", () => {
     render(<HeroSearch initialQuery="pizza" />);
     expect(screen.getByTestId("hero-search-input")).toHaveValue("pizza");
@@ -99,30 +86,6 @@ describe("HeroSearch", () => {
     fireEvent.change(input, { target: { value: "pizza" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(mockPush).toHaveBeenCalledWith("/?q=pizza");
-  });
-
-  it("clicking 'Dining' chip navigates with category=dining", () => {
-    render(<HeroSearch />);
-    fireEvent.click(screen.getByTestId("suggestion-dining"));
-    expect(mockPush).toHaveBeenCalledWith("/?category=dining");
-  });
-
-  it("clicking 'Cashback' chip navigates with offerType=cashback", () => {
-    render(<HeroSearch />);
-    fireEvent.click(screen.getByTestId("suggestion-cashback"));
-    expect(mockPush).toHaveBeenCalledWith("/?offerType=cashback");
-  });
-
-  it("clicking 'Expiring Soon' chip navigates with sort=expiringSoon", () => {
-    render(<HeroSearch />);
-    fireEvent.click(screen.getByTestId("suggestion-expiring-soon"));
-    expect(mockPush).toHaveBeenCalledWith("/?sort=expiringSoon");
-  });
-
-  it("clicking 'Hotels' chip navigates with q=hotel", () => {
-    render(<HeroSearch />);
-    fireEvent.click(screen.getByTestId("suggestion-hotels"));
-    expect(mockPush).toHaveBeenCalledWith("/?q=hotel");
   });
 
   // --- AC1: No hardcoded dropdown suggestions on mount ---
