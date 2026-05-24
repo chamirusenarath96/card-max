@@ -491,9 +491,9 @@ interface Offer {
 ```
 src/
 ├── app/
-│   ├── page.tsx              Server Component — fetches API, renders grid
-│   ├── layout.tsx            Root layout, metadata
-│   ├── globals.css           Tailwind base styles
+│   ├── page.tsx              Server Component — fetches API, renders grid + LoadTimeBadge
+│   ├── layout.tsx            Root layout — wraps tree in NavigationProgressProvider
+│   ├── globals.css           Tailwind base styles + custom keyframe animations
 │   └── api/
 │       ├── offers/
 │       │   ├── route.ts      GET /api/offers — list + filter + paginate
@@ -508,15 +508,29 @@ src/
     │   ├── OfferCardCompact.tsx  Compact card variant
     │   ├── OfferCardExpanded.tsx Expanded card variant
     │   └── OfferImage.tsx        3-stage image fallback (scraped → Clearbit → icon)
+    ├── filters/
+    │   ├── FilterBar.tsx         Filters trigger button + FilterDrawer (Client Component)
+    │   └── FilterDrawer.tsx      Multi-select drawer with pending state + Apply button
+    ├── layout/
+    │   ├── NavigationProgressContext.tsx  React context: navigate(), isPending, lastNavMs
+    │   ├── NavigationProgressBar.tsx      Fixed top-of-page animated progress bar
+    │   └── LoadTimeBadge.tsx              "⚡ Xms" badge shown after each navigation
     ├── OfferGrid.tsx         Responsive grid + empty state (Server Component)
-    └── FilterBar.tsx         Bank chips + category dropdown (Client Component)
+    └── search/
+        └── HeroSearch.tsx        Hero search bar (uses NavigationProgressContext)
 ```
 
 **Rendering model:**
 - `page.tsx` is a **Server Component** → renders HTML on the server, no JS bundle
 - Data fetching happens server-side, ISR-cached for 1 hour
-- `FilterBar` is the only **Client Component** (needs `useRouter` for URL param updates)
-- No state management library — URL search params are the single source of truth for filters
+- Client Components use `NavigationProgressContext` for navigation instead of raw `useRouter` — this wraps `router.push()` in React's `startTransition`, exposing `isPending` for the progress bar and `lastNavMs` for the load-time badge
+- No state management library — URL search params are the single source of truth for applied filters; pending (un-applied) filter state lives in `FilterDrawer` local state
+
+**Navigation & loading UX:**
+- `NavigationProgressBar` — a thin animated bar fixed at the top of the viewport that appears while the RSC payload is in-flight (eliminates the "app hangs" feel during filter/pagination navigation)
+- `FilterDrawer` — multi-select mode: chip clicks update local `pending*` state only; a single "Apply Filters" click calls `navigate()` once, collapsing all changes into one DB round-trip
+- Filters trigger button has a pulsing glow animation (`animate-filter-glow`) when no filters are active, drawing attention for first-time users
+- `LoadTimeBadge` — displays "⚡ Xms" beside the offer count after each navigation completes, showing real browser-domain timing
 
 ---
 
@@ -695,8 +709,11 @@ Tests live next to their source files (`*.test.ts`, `*.test.tsx`). They use `jsd
 | `src/components/cards/OfferCard.test.tsx` | Card renders title, bank, discount label, expiry, offer-type badge; handles missing description/discount |
 | `src/components/cards/OfferCardSkeleton.test.tsx` | Skeleton placeholder renders with correct testids |
 | `src/components/cards/OfferGrid.test.tsx` | Renders offer cards vs empty-state, ad unit injection rules (≥9 cards, ADSENSE enabled) |
-| `src/components/filters/FilterBar.test.tsx` | Active-filter chips for bank/category/offerType/sort/dates, chip removal, "All" defaults, unknown category fallback |
-| `src/components/filters/FilterDrawer.test.tsx` | Drawer open/close, bank filter options visible |
+| `src/components/filters/FilterBar.test.tsx` | Renders filter bar container and drawer trigger; verifies no active-filter chips (removed from FilterBar); bank filter calls navigate with correct param via Apply Filters |
+| `src/components/filters/FilterDrawer.test.tsx` | Drawer open/close, bank/category filter chip selection, Apply Filters commits navigation, Clear All navigates immediately, glow animation class present/absent based on active filter count |
+| `src/components/layout/NavigationProgressContext.test.tsx` | Initial state (isPending=false, lastNavMs=null), provides navigate function, default context values |
+| `src/components/layout/NavigationProgressBar.test.tsx` | Renders with correct testid, opacity-0 when not pending, opacity-100 when isPending=true |
+| `src/components/layout/LoadTimeBadge.test.tsx` | Returns null when lastNavMs=null, hidden while isPending, displays "⚡ Xms" value after navigation |
 | `src/components/filters/FilterPresetChips.test.tsx` | Preset chip list renders, delete button, no chips on empty list |
 | `src/components/filters/SavePresetPopover.test.tsx` | Popover open, name input, save on Enter, disabled when name empty |
 | `src/components/filters/SearchBar.test.tsx` | Input updates URL param, clear button shows/hides, debounce |
@@ -722,7 +739,7 @@ Tests live next to their source files (`*.test.ts`, `*.test.tsx`). They use `jsd
 | `crawler/utils/db.test.ts` | Upsert logic, expiry of stale offers, DB write error handling |
 | `crawler/run.test.ts` | Full crawler entrypoint, runs all scrapers, handles partial failures |
 | **Scripts** | |
-| `scripts/build-dashboard-index.test.ts` | Dashboard HTML contains correct testids, badge links, panel links, handles Lighthouse absent/present |
+| `scripts/build-dashboard-index.test.ts` | Dashboard HTML contains correct testids, badge links, panel links, handles Lighthouse absent/present, renders Interaction Timing panel from `test-results/interaction-timing.json` with pass/fail rows against 500 ms budget |
 | `scripts/fetch-cron-summary.test.ts` | Fetches cron workflow runs from GitHub API, builds cron-summary.html, handles 404s |
 | `scripts/lhci-user-flow.test.ts` | `checkInpBudgets()` logic — passes/fails on INP thresholds, handles missing audits |
 | **CI config** | |
@@ -750,7 +767,7 @@ E2E tests are in `e2e/`. They launch a real Chromium browser (+ Mobile Chrome) a
 | `e2e/visual.spec.ts` | Visual regression — offer-grid, filter-drawer, hero-search, empty-state pixel snapshots (Chromium, desktop); structural testid sanity checks |
 | `e2e/performance.spec.ts` | Lighthouse CI — Performance ≥80, Accessibility ≥90, Best Practices ≥90, SEO ≥90 on production URL |
 | `e2e/mobile-performance-sla.spec.ts` | Mobile Lighthouse — Performance ≥80, LCP ≤2.5s, CLS ≤0.1, FCP ≤1.8s on Pixel 5 profile |
-| `e2e/interaction-timing.spec.ts` | UI interaction budgets — bank filter click ≤500ms, category filter ≤500ms, search input response ≤500ms, pagination ≤500ms |
+| `e2e/interaction-timing.spec.ts` | UI interaction budgets — bank filter (open drawer → select chip → Apply Filters) ≤500ms, category filter ≤500ms, clear-all ≤500ms, pagination ≤500ms, filter drawer open/close ≤500ms each; all `/api/offers` calls mocked to isolate from DB variance; timing results written to `test-results/interaction-timing.json` for the CI dashboard |
 | `e2e/atlas-warmup-cron.spec.ts` | `/api/health` and `/api/ping` respond 200; warmup cron workflow defined in ci config |
 | `e2e/adsense.spec.ts` | AdSense slot renders when enabled; does not inject when `ADSENSE_ENABLED=false` |
 
@@ -1238,7 +1255,7 @@ POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
 #### ⚡ Performance & quality
 
 - [x] **Mobile performance & SLA enforcement (spec 018)** — The desktop version loads acceptably but mobile cold-load is noticeably slow. Goals: (1) Diagnose and fix the mobile bottleneck (likely: large JS bundle, unoptimised images, no font preload, or waterfall blocking render). (2) Define SLAs: initial page load ≤ 2.5 s LCP on mobile (Moto G4 @ 3G in Lighthouse), search/filter response ≤ 500 ms after user input. (3) Add a **pre-production SLA validation CI step**: after the Vercel preview deployment is created (Step 3 of the deploy pipeline) but before `vercel promote` runs, execute [Lighthouse CI](https://github.com/GoogleChrome/lighthouse-ci) (`lhci autorun`) against the preview URL; fail the deploy job if LCP > 2.5 s or Performance score < 70; surface the Lighthouse HTML report as a CI artefact. This gates production on measured performance, not just tests passing.
-- [ ] **UI interaction performance budgets** — measure and enforce response-time SLAs for user-triggered actions, not just page load. Two-track approach: (1) **Playwright interaction timing** — in the E2E suite, wrap key user actions (apply bank filter, apply category filter, clear all filters, paginate to next page, open/close filter drawer) with `performance.now()` before/after and assert the offers grid re-renders within 500 ms; use `page.waitForResponse('**/api/offers**')` to capture actual API round-trip time separately from render time; fail the test if either threshold is breached. (2) **Lighthouse user-flow audits** — use the Lighthouse Node API (`startFlow` / `endFlow` with `timespan` mode) to record a scripted user flow: land on page → click "People's Bank" filter → wait for grid update → click "Dining" category → wait for grid → clear all filters; extract `Total Blocking Time` and `Interaction to Next Paint (INP)` from the flow report and assert INP ≤ 200 ms per interaction; add the flow HTML report as a CI artefact alongside the existing page-load LHCI report. Surface both sets of timings in the CI dashboard roadmap item above.
+- [x] **UI interaction performance budgets** — measure and enforce response-time SLAs for user-triggered actions. **Playwright interaction timing** wraps five key user actions (apply bank filter, apply category filter, clear all filters, paginate to next page, open/close filter drawer) with `performance.now()` in the browser domain and asserts each completes within 500 ms; `/api/offers` and `/api/categories` are mocked to isolate from DB variance; results are written to `test-results/interaction-timing.json` and rendered as an **Interaction Timing panel** in the CI dashboard (pass/fail table per interaction against the 500 ms budget). Navigation UX improvements ship alongside: `NavigationProgressBar` (thin animated bar at the top of the viewport powered by React `useTransition`), `LoadTimeBadge` (live "⚡ Xms" readout beside the offer count), multi-select filter drawer with a single "Apply Filters" commit (one DB call for all pending changes), and a pulsing glow animation on the Filters button when no filters are active.
 
 #### 🔒 Security & reliability
 
