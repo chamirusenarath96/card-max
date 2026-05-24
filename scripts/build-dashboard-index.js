@@ -126,6 +126,82 @@ function suiteName(raw) {
     .replace(/\.(test|spec)\.(tsx?|js)$/, "");
 }
 
+/**
+ * Reads the interaction-timing.json written by e2e/interaction-timing.spec.ts.
+ * Returns the parsed payload or null if the file is missing / malformed.
+ * @param {string} testResultsDir  Absolute path to the test-results directory.
+ * @returns {{ timestamp: string, budgetMs: number, results: Record<string, number|null> }|null}
+ */
+function readTimingResults(testResultsDir) {
+  const p = path.join(testResultsDir, "interaction-timing.json");
+  if (!exists(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** Labels for timing keys — in display order. */
+const TIMING_LABELS = {
+  "bank-filter":      "Bank filter (select + apply)",
+  "category-filter":  "Category filter (select + apply)",
+  "clear-all-filters":"Clear all filters",
+  "pagination-next":  "Pagination next page",
+  "drawer-open":      "Filter drawer open",
+  "drawer-close":     "Filter drawer close",
+};
+
+/** Renders the interaction timing panel HTML. */
+function timingPanel(timingData) {
+  if (!timingData) {
+    return `    <section class="panel panel--unavailable" data-testid="timing-panel">
+      <h2>Interaction Timing</h2>
+      <p class="unavailable" data-testid="timing-unavailable">No timing data — run E2E tests to generate.</p>
+    </section>`;
+  }
+
+  const { budgetMs, results } = timingData;
+  const allPass = Object.values(results).every((v) => v === null || v < budgetMs);
+
+  const rows = Object.entries(TIMING_LABELS)
+    .map(([key, label]) => {
+      const ms = results[key];
+      if (ms === null || ms === undefined) {
+        return `<tr>
+          <td><span class="dot" style="background:#555"></span></td>
+          <td class="suite-name">${label}</td>
+          <td class="suite-pills"><span class="pill" style="background:#21262d;color:#8b949e">skipped</span></td>
+        </tr>`;
+      }
+      const pass = ms < budgetMs;
+      const dot = pass ? "dot--pass" : "dot--fail";
+      const pill = pass
+        ? `<span class="pill pill--pass">${ms}ms ✓</span>`
+        : `<span class="pill pill--fail">${ms}ms ✗ &gt;${budgetMs}ms</span>`;
+      return `<tr>
+          <td><span class="dot ${dot}"></span></td>
+          <td class="suite-name">${label}</td>
+          <td class="suite-pills">${pill}</td>
+        </tr>`;
+    })
+    .join("\n");
+
+  const panelClass = allPass ? "panel panel--pass" : "panel panel--fail";
+
+  return `    <section class="${panelClass}" data-testid="timing-panel">
+      <h2>Interaction Timing</h2>
+      <div class="total-bar ${allPass ? "total-bar--pass" : "total-bar--fail"}">
+        <span class="total-count">Budget: ${budgetMs}ms per interaction</span>
+      </div>
+      <table class="suite-table">
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </section>`;
+}
+
 /** Renders a coloured suite breakdown table. */
 function suitesTable(data) {
   if (!data) return `<p class="unavailable">No Allure data found.</p>`;
@@ -173,7 +249,7 @@ function suitesTable(data) {
  * Builds the HTML string for the dashboard index page.
  * Exported for use in tests.
  */
-function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable, unitData, e2eData }) {
+function buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable, unitData, e2eData, timingData }) {
   const badgesHtml = WORKFLOWS.map(
     ({ file, label }) =>
       `      <a href="${workflowUrl(file)}" target="_blank" rel="noopener noreferrer" data-testid="badge-${file}">
@@ -318,6 +394,8 @@ ${lighthousePanel}
 
 ${lhUserFlowPanel}
 
+${timingPanel(timingData)}
+
     <section class="panel" data-testid="cron-health-panel">
       <h2>Cron Job Health</h2>
       <p><a href="./cron-summary.html" target="_blank" rel="noopener noreferrer" data-testid="link-cron-summary">Open Cron Job Health →</a></p>
@@ -338,10 +416,14 @@ function main() {
 
   const unitData = readAllureSuites(path.join(DASHBOARD_DIR, "allure-unit", "data", "suites.json"));
   const e2eData  = readAllureSuites(path.join(DASHBOARD_DIR, "allure-e2e",  "data", "suites.json"));
+  // Timing JSON is written to project-root test-results/ by interaction-timing.spec.ts
+  const timingData = readTimingResults(
+    process.env.TEST_RESULTS_DIR_OVERRIDE || path.join(__dirname, "..", "test-results"),
+  );
 
   const timestamp = new Date().toISOString();
 
-  const html = buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable, unitData, e2eData });
+  const html = buildHtml({ timestamp, lighthouseAvailable, lhUserFlowAvailable, unitData, e2eData, timingData });
 
   const outPath = path.join(DASHBOARD_DIR, "index.html");
   fs.writeFileSync(outPath, html, "utf8");
@@ -351,9 +433,10 @@ function main() {
   console.log(`  E2E panel  : ${e2eData  ? `${e2eData.totals.total}  tests, ${e2eData.totals.failed}  failed` : "no data"}`);
   console.log(`  Lighthouse : ${lighthouseAvailable ? "linked" : "unavailable"}`);
   console.log(`  User-flow  : ${lhUserFlowAvailable ? "linked" : "unavailable"}`);
+  console.log(`  Timing     : ${timingData ? `${Object.keys(timingData.results).length} interactions, budget ${timingData.budgetMs}ms` : "no data"}`);
 }
 
-module.exports = { buildHtml, readAllureSuites, suiteName, WORKFLOWS };
+module.exports = { buildHtml, readAllureSuites, readTimingResults, timingPanel, suiteName, WORKFLOWS };
 
 if (require.main === module) {
   main();

@@ -7,16 +7,24 @@ vi.mock("@/hooks/useCategories", () => ({
   useCategories: () => ({ data: [], isLoading: false, error: false }),
 }));
 
-const mockPush = vi.fn();
+const mockNavigate = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock("@/components/layout/NavigationProgressContext", () => ({
+  useNavigationProgress: () => ({
+    navigate: mockNavigate,
+    isPending: false,
+    lastNavMs: null,
+  }),
+}));
+
 describe("FilterBar", () => {
   beforeEach(() => {
-    mockPush.mockClear();
+    mockNavigate.mockClear();
   });
 
   it("renders the filter bar container", () => {
@@ -42,13 +50,15 @@ describe("FilterBar", () => {
     expect(screen.queryByRole("button", { name: /^Remove /i })).not.toBeInTheDocument();
   });
 
-  it("filter by bank calls router with correct bank param", async () => {
+  it("filter by bank calls navigate with correct bank param (via Apply Filters)", async () => {
     render(<FilterBar />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     const bankBtn = await screen.findByTestId("bank-filter-commercial_bank");
     fireEvent.click(bankBtn);
+    // With multi-select, individual chip clicks don't navigate — Apply does.
+    fireEvent.click(screen.getByTestId("apply-filters"));
     await waitFor(() =>
-      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"))
+      expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank")),
     );
   });
 });

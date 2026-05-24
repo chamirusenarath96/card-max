@@ -3,11 +3,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HeroSearch } from "./HeroSearch";
 import type { SuggestionItem } from "./useSearchSuggestions";
 
-const mockPush = vi.fn();
+const mockNavigate = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/components/layout/NavigationProgressContext", () => ({
+  useNavigationProgress: () => ({
+    navigate: mockNavigate,
+    isPending: false,
+    lastNavMs: null,
+  }),
 }));
 
 // Default: hook returns no results (query too short or empty)
@@ -49,7 +57,7 @@ const MOCK_RESULTS = [
 
 describe("HeroSearch", () => {
   beforeEach(() => {
-    mockPush.mockClear();
+    mockNavigate.mockClear();
     mockUseSearchSuggestions.mockReturnValue({
       results: [],
       total: 0,
@@ -85,7 +93,7 @@ describe("HeroSearch", () => {
     const input = screen.getByTestId("hero-search-input");
     fireEvent.change(input, { target: { value: "pizza" } });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(mockPush).toHaveBeenCalledWith("/?q=pizza");
+    expect(mockNavigate).toHaveBeenCalledWith("/?q=pizza");
   });
 
   // --- AC1: No hardcoded dropdown suggestions on mount ---
@@ -288,7 +296,7 @@ describe("HeroSearch", () => {
     render(<HeroSearch initialQuery="pizza" />);
     fireEvent.click(screen.getByTestId("hero-search-clear"));
     // pushes pathname with no q param (other params preserved via searchParams)
-    expect(mockPush).toHaveBeenCalledWith("/");
+    expect(mockNavigate).toHaveBeenCalledWith("/");
   });
 
   it("erasing input to empty via keyboard clears ?q= from URL", () => {
@@ -296,7 +304,7 @@ describe("HeroSearch", () => {
     const input = screen.getByTestId("hero-search-input");
     fireEvent.change(input, { target: { value: "" } });
     expect(input).toHaveValue("");
-    expect(mockPush).toHaveBeenCalledWith("/");
+    expect(mockNavigate).toHaveBeenCalledWith("/");
   });
 
   it("pressing Escape closes the dropdown", () => {

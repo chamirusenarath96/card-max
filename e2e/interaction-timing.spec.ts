@@ -2,8 +2,8 @@
  * E2E interaction performance budget tests (spec 029)
  *
  * Measures browser-side render time for five key user interactions:
- * 1. Apply bank filter
- * 2. Apply category filter
+ * 1. Apply bank filter (select bank chip → click Apply Filters)
+ * 2. Apply category filter (select category chip → click Apply Filters)
  * 3. Clear all filters
  * 4. Paginate to next page
  * 5. Open and close the filter drawer
@@ -16,8 +16,24 @@
  * The browser sends a GET to the page URL (e.g. /?bank=peoples_bank) rather than
  * directly to /api/offers — we capture this RSC navigation response as the API
  * round-trip proxy (AC3). The /api/offers mock (AC4) covers any client-side fallback.
+ *
+ * Timing results are written to test-results/interaction-timing.json for the CI
+ * dashboard to display.
  */
+import * as fs from "fs";
+import * as path from "path";
 import { type Page, test, expect } from "@playwright/test";
+
+// ── Timing accumulator (written to JSON in afterAll) ──────────────────────
+
+const timingResults: Record<string, number | null> = {
+  "bank-filter": null,
+  "category-filter": null,
+  "clear-all-filters": null,
+  "pagination-next": null,
+  "drawer-open": null,
+  "drawer-close": null,
+};
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -90,7 +106,7 @@ async function measureInteraction(
     { timeout: 10_000 },
   );
   // Cancel animations so they do not inflate the timing budget (spec Edge Cases)
-  // Guard against infinite animations (e.g. Skeleton pulse) which throw
+  // Guard against infinite animations (e.g. Skeleton pulse, glow) which throw
   // InvalidStateError when finish() is called on them.
   await page.evaluate(() =>
     document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* infinite animation */ } }),
@@ -133,28 +149,54 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     );
   });
 
+  // Write timing JSON after all tests complete.
+  test.afterAll(() => {
+    try {
+      const outDir = path.join(process.cwd(), "test-results");
+      fs.mkdirSync(outDir, { recursive: true });
+      const payload = {
+        timestamp: new Date().toISOString(),
+        budgetMs: RENDER_BUDGET_MS,
+        results: timingResults,
+      };
+      fs.writeFileSync(
+        path.join(outDir, "interaction-timing.json"),
+        JSON.stringify(payload, null, 2),
+        "utf8",
+      );
+    } catch {
+      // Non-fatal: dashboard timing panel will show "no data" gracefully.
+    }
+  });
+
   // AC1, AC2: bank filter re-renders grid within 500 ms
+  // Flow: open drawer → select bank chip → click Apply Filters → navigation
   test("bank filter re-renders grid within 500 ms", async ({ page }) => {
     await page.goto("/");
     await expect(
       page.getByTestId("offer-grid").or(page.getByTestId("empty-state")),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Open the filter drawer before timing starts so we isolate the filter-click
+    // Open the filter drawer before timing starts so we isolate the filter-click + Apply
     await page.getByTestId("filter-drawer-trigger").click();
     await page.waitForSelector('[data-testid="filter-drawer"]');
 
     // AC3: API round-trip captured via waitForResponse inside measureInteraction
     const { renderMs } = await measureInteraction(
       page,
-      () => page.getByTestId("bank-filter-peoples_bank").click(),
+      async () => {
+        await page.getByTestId("bank-filter-peoples_bank").click();
+        await page.getByTestId("apply-filters").click();
+      },
       "**/api/offers**",
     );
+    timingResults["bank-filter"] = Math.round(renderMs);
     // AC2: assert render budget
     expect(renderMs).toBeLessThan(RENDER_BUDGET_MS);
   });
 
   // AC1, AC2: category filter re-renders grid within 500 ms
+  // Flow: open drawer → select category chip → click Apply Filters → navigation
   test("category filter re-renders grid within 500 ms", async ({ page }) => {
     await page.goto("/");
     await expect(
@@ -170,14 +212,19 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     // AC3: API round-trip captured via waitForResponse inside measureInteraction
     const { renderMs } = await measureInteraction(
       page,
-      () => page.getByTestId("category-chip-dining").click(),
+      async () => {
+        await page.getByTestId("category-chip-dining").click();
+        await page.getByTestId("apply-filters").click();
+      },
       "**/api/offers**",
     );
+    timingResults["category-filter"] = Math.round(renderMs);
     // AC2: assert render budget
     expect(renderMs).toBeLessThan(RENDER_BUDGET_MS);
   });
 
   // AC1, AC2: clear-all-filters re-renders grid within 500 ms
+  // Clear All navigates immediately (no Apply button needed).
   test("clear all filters re-renders grid within 500 ms", async ({ page }) => {
     await page.goto("/?bank=peoples_bank&category=dining");
     await expect(
@@ -194,6 +241,7 @@ test.describe("Interaction performance budgets (spec 029)", () => {
       () => page.getByTestId("clear-all-filters").click(),
       "**/api/offers**",
     );
+    timingResults["clear-all-filters"] = Math.round(renderMs);
     // AC2: assert render budget
     expect(renderMs).toBeLessThan(RENDER_BUDGET_MS);
   });
@@ -221,6 +269,7 @@ test.describe("Interaction performance budgets (spec 029)", () => {
       () => page.getByTestId("pagination-next").click(),
       "**/api/offers**",
     );
+    timingResults["pagination-next"] = Math.round(renderMs);
     // AC2: assert render budget
     expect(renderMs).toBeLessThan(RENDER_BUDGET_MS);
   });
@@ -232,7 +281,7 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     await page.waitForSelector('[data-testid="filter-section"]');
 
     await page.evaluate(() =>
-      document.getAnimations().forEach((a) => a.finish()),
+      document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* infinite */ } }),
     );
 
     // Measure open time (AC1: open is one of the five key interactions)
@@ -243,11 +292,12 @@ test.describe("Interaction performance budgets (spec 029)", () => {
       (start) => performance.now() - start,
       t0,
     );
+    timingResults["drawer-open"] = Math.round(openMs);
     // AC2: assert render budget for open
     expect(openMs).toBeLessThan(RENDER_BUDGET_MS);
 
     await page.evaluate(() =>
-      document.getAnimations().forEach((a) => a.finish()),
+      document.getAnimations().forEach((a) => { try { a.finish(); } catch { /* infinite */ } }),
     );
 
     // Measure close time (AC1: close is the fifth interaction)
@@ -260,6 +310,7 @@ test.describe("Interaction performance budgets (spec 029)", () => {
       (start) => performance.now() - start,
       t1,
     );
+    timingResults["drawer-close"] = Math.round(closeMs);
     // AC2: assert render budget for close
     expect(closeMs).toBeLessThan(RENDER_BUDGET_MS);
   });
