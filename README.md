@@ -10,6 +10,7 @@
 
 1. [Architecture Overview](#architecture-overview)
 2. [System Design Diagram](#system-design-diagram)
+   - [Navigation & Loading UX Flow](#navigation--loading-ux-flow)
 3. [Crawler Design](#crawler-design)
    - [Strategy Overview](#strategy-overview)
    - [Per-Bank Strategies](#per-bank-strategies)
@@ -20,6 +21,7 @@
 6. [API Reference](#api-reference)
 7. [Getting Started](#getting-started)
 8. [Testing](#testing)
+   - [Test suite architecture](#test-suite-architecture)
 9. [CI / Continuous Integration](#ci--continuous-integration)
    - [When CI runs](#when-ci-runs)
    - [CI Flow](#ci-flow)
@@ -45,91 +47,111 @@
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        GitHub Actions                           │
-│                                                                 │
-│  ┌──────────────────────────────┐   ┌────────────────────────┐ │
-│  │  Daily Cron (2AM Colombo)    │   │  CI Pipeline (on PR)   │ │
-│  │  npm run crawler             │   │  lint → tsc → test     │ │
-│  └─────────────┬────────────────┘   └───────────────────────-┘ │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │  CD Pipeline (on push to master)                         │   │
-│  │  CI → E2E → Migrate DB → Deploy → Bust ISR cache        │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└────────────────┼────────────────────────────────────────────────┘
-                 │ scrapes 4 banks
-                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Crawler (Node.js / tsx)                       │
-│                                                                 │
-│  combank.ts   sampath.ts   hnb.ts    ntb.ts     amex.ts         │
-│  (HTML scrape) (REST API) (REST API) (HTTP+PW) (HTTP scrape)    │
-│        └──────────┴────────────┴────────────┘                  │
-│                          │                                      │
-│              crawler/utils/parseDiscount.ts                     │
-│              (classifies offer type: percentage/bogo/...)       │
-│                          │                                      │
-│              crawler/utils/db.ts                                │
-│              (upsert + expire stale offers)                     │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ writes to
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   MongoDB Atlas M0 (free)                       │
-│                                                                 │
-│  Collection: offers                                             │
-│  ~700 documents · 4 compound indexes                            │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ reads from
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Next.js 16 App Router (Vercel)                     │
-│                                                                 │
-│  src/app/page.tsx          — Server Component (ISR 1hr)         │
-│  src/app/api/offers/       — GET /api/offers (serverless fn)    │
-│  src/components/           — OfferCard · OfferGrid · FilterBar  │
-└─────────────────────────────────────────────────────────────────┘
-                           │ served to
-                           ▼
-                     Browser (User)
+```mermaid
+graph TD
+    subgraph GHA["GitHub Actions"]
+        CRON["Daily Cron — 2AM Colombo\nnpm run crawler"]
+        CI_PR["CI Pipeline on PR\nlint · tsc · Vitest · build"]
+        CD["CD Pipeline on push to master\nCI → E2E → Migrate → Deploy → Bust ISR"]
+    end
+
+    subgraph CR["Crawler — Node.js / tsx"]
+        BANKS["combank · sampath · hnb · ntb\namex · peoples_bank · boc"]
+        PARSE["parseDiscount.ts\nclassify: percentage · cashback · bogo · ..."]
+        DBU["db.ts — upsert + expire stale offers"]
+    end
+
+    DB[("MongoDB Atlas M0\noffers collection\n~700 docs · 4 indexes")]
+
+    subgraph VR["Next.js 16 App Router — Vercel"]
+        EDGE["Vercel CDN Edge\nISR-cached HTML · 1hr TTL"]
+        SRV["Server Components\npage.tsx · GET /api/offers"]
+        subgraph CLI["Client Components"]
+            NPC["NavigationProgressContext\nuseTransition · isPending · lastNavMs"]
+            NPB["NavigationProgressBar\nfixed top bar · loading indicator"]
+            FD["FilterDrawer\nmulti-select pending state · Apply Filters"]
+            LTB["LoadTimeBadge · ⚡ Xms"]
+            HS["HeroSearch · typewriter placeholder"]
+        end
+    end
+
+    BROWSER(["Browser"])
+
+    CRON -->|"scrapes 7 banks"| BANKS
+    BANKS --> PARSE --> DBU -->|"upsert"| DB
+    DBU -->|"POST /api/revalidate"| EDGE
+    DB -->|"query"| SRV --> EDGE -->|"cached HTML"| BROWSER
+    CD --> VR
+    BROWSER -->|"filter / paginate\nnavigate() via useTransition"| NPC
+    NPC --> NPB & FD & LTB & HS
+    NPC -->|"router.push → RSC re-render"| SRV
 ```
 
 ---
 
 ## System Design Diagram
 
+```mermaid
+flowchart TD
+    REQ["Browser — GET /?bank=hnb&category=dining"]
+
+    CDN{"Vercel CDN Edge\ncache hit?"}
+    CACHE_HIT["Serve cached HTML\n< 10ms"]
+
+    subgraph SSR["Next.js Server Component — page.tsx"]
+        SP["1. Read searchParams\nbank · category · page · sort · ..."]
+        FETCH["2. fetch /api/offers?bank=hnb&category=dining\ncache: no-store"]
+        subgraph API["API Route Handler — route.ts"]
+            ZOD["Validate params — Zod"]
+            CONN["dbConnect() — reuse Mongoose connection"]
+            QUERY["Build MongoDB filter\nbank · category · isExpired: false"]
+            AGG["Promise.all\nfind() + countDocuments()"]
+            SER["Serialize BSON → plain JSON\nreturn data · pagination · _timing"]
+        end
+        RENDER["3. Render OfferGrid + OfferCard list"]
+        ISR["4. Vercel caches HTML\nISR revalidate: 3600s"]
+    end
+
+    MONGO[("MongoDB Atlas")]
+
+    REQ --> CDN
+    CDN -->|"hit"| CACHE_HIT
+    CDN -->|"miss / stale"| SP
+    SP --> FETCH --> ZOD --> CONN --> QUERY --> AGG --> SER
+    CONN --> MONGO
+    SER --> RENDER --> ISR
+    ISR -->|"next request served from cache"| CDN
 ```
-User request: GET /?bank=hnb&category=dining
-       │
-       ▼
-  Vercel CDN ──── cache hit? ──── YES ──► serve cached HTML (< 10ms)
-       │
-       NO (first request or stale)
-       │
-       ▼
-  Next.js Server Component (page.tsx)
-       │
-       ├─ 1. reads searchParams { bank, category }
-       │
-       ├─ 2. calls internal fetch → GET /api/offers?bank=hnb&category=dining
-       │         │
-       │         ▼
-       │    API Route Handler (route.ts)
-       │         │
-       │         ├─ validates query params (Zod)
-       │         ├─ dbConnect() — reuses cached Mongoose connection
-       │         ├─ builds MongoDB filter { bank, category, isExpired: false }
-       │         ├─ Promise.all([find(), countDocuments()])
-       │         ├─ serializes BSON → plain JSON
-       │         └─ returns { data: Offer[], pagination, _timing }
-       │
-       ├─ 3. renders <OfferGrid offers={...} />
-       │         └─ maps to <OfferCard /> per offer
-       │
-       └─ 4. Vercel caches the HTML (ISR: revalidate every 3600s)
-              All requests for next 1hr served from cache
+
+### Navigation & Loading UX Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FD as FilterDrawer
+    participant NPC as NavigationProgressContext
+    participant NPB as NavigationProgressBar
+    participant RSC as Next.js RSC
+    participant LTB as LoadTimeBadge
+
+    Note over FD: Filters button glows (animate-filter-glow)<br/>when no filters are active
+
+    U->>FD: Opens drawer
+    Note over FD: syncPendingFromUrl()<br/>loads current URL params into pending state
+
+    U->>FD: Clicks bank chip, category chip...
+    Note over FD: Updates pendingBank, pendingCategory...<br/>No navigation — local state only
+
+    U->>FD: Clicks Apply Filters
+    FD->>NPC: navigate("/?bank=hnb&category=dining")
+    Note over NPC: startTransition(() => router.push(url))<br/>isPending = true · navStartRef = now()
+
+    NPC->>NPB: isPending=true → opacity-100 (bar animates)
+    NPC->>RSC: router.push triggers RSC fetch (one DB call)
+
+    RSC-->>NPC: RSC payload received — isPending=false
+    NPC->>NPB: isPending=false → opacity-0 (bar hides)
+    NPC->>LTB: lastNavMs = now() - navStartRef → renders ⚡ 342ms
 ```
 
 ---
@@ -771,6 +793,45 @@ E2E tests are in `e2e/`. They launch a real Chromium browser (+ Mobile Chrome) a
 | `e2e/atlas-warmup-cron.spec.ts` | `/api/health` and `/api/ping` respond 200; warmup cron workflow defined in ci config |
 | `e2e/adsense.spec.ts` | AdSense slot renders when enabled; does not inject when `ADSENSE_ENABLED=false` |
 
+### Test suite architecture
+
+```mermaid
+flowchart TD
+    subgraph UNIT["Vitest — Unit & Component Tests"]
+        direction LR
+        UA["API routes\nroute.test.ts\nZod validation · filters · pagination"]
+        UB["React components\n*.test.tsx colocated\nrender · interact · assert"]
+        UC["Crawler scrapers\n7 banks · fixture HTML/JSON\nno network · no DB"]
+        UD["Hooks & utilities\nuseFilterPresets · parseDiscount\nloadTime · db upsert"]
+        UE["Loading UX components\nNavigationProgressContext\nNavigationProgressBar · LoadTimeBadge"]
+    end
+
+    subgraph E2E["Playwright — End-to-end Tests"]
+        direction LR
+        EA["offers · categories · search\nfilter-presets · dark-mode"]
+        EB["interaction-timing\n5 interactions × 500ms budget\nmocked API — no DB variance"]
+        EC["visual.spec.ts\nscreenshot regression\ndata-testid sanity checks"]
+        ED["performance · mobile-sla\nLighthouse CI scores"]
+    end
+
+    subgraph DASH["CI Dashboard — GitHub Pages"]
+        DA["Allure Report\nVitest + Playwright JUnit XML"]
+        DB2["Interaction Timing Panel\ntest-results/interaction-timing.json\npass/fail × 500ms per interaction"]
+        DC["Cron Job Summary\ncrawler · warmup health"]
+        DD["Lighthouse HTML Report"]
+    end
+
+    JSDOM["jsdom — no browser\nno DB · mocked I/O\n~3s"]
+    CHROME["Real Chromium + Mobile Chrome\nProduction DB secret\n~10 min"]
+    PAGES["GitHub Pages\ndashboard.yml on push to master"]
+
+    UNIT --> JSDOM
+    E2E --> CHROME
+    EB -->|"writes JSON"| DB2
+    JSDOM & CHROME --> DASH
+    DASH --> PAGES
+```
+
 ---
 
 ## CI / Continuous Integration
@@ -800,71 +861,35 @@ Everything — CI checks, deployment, and cache invalidation — is defined in `
 
 ### Pipeline flow
 
-```
-Push to master                         Pull request
-      │                                      │
-      ▼                                      ▼
-┌─────────────────────────────────────────────────────┐
-│  Job 0 — "Security Audit" (parallel with Job 1)    │
-│                                                     │
-│  ./.github/actions/setup  ← composite action       │
-│  npm audit --audit-level=high                       │
-│  trivy filesystem scan → SARIF upload               │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    PUSH(["Push to master\nor Pull Request"])
 
-┌─────────────────────────────────────────────────────┐
-│  Job 1 — "Lint, Type Check & Test"                  │
-│  Runs on: ubuntu-latest (no secrets needed)         │
-│                                                     │
-│  ./.github/actions/setup  ← composite action       │
-│    (checkout + Node 22 + npm ci)                    │
-│  validate workflow YAML files                       │
-│  npm run lint        ESLint                         │
-│  npm run type-check  tsc --noEmit                   │
-│  npm run test        Vitest unit tests              │
-│  npm run build       next build                     │
-└──────────────────┬──────────────────────────────────┘
-                   │ needs: ci
-                   ▼
-┌─────────────────────────────────────────────────────┐
-│  Job 2 — "E2E Tests"                                │
-│  environment: Production (MONGODB_URI secret)       │
-│                                                     │
-│  ./.github/actions/setup  ← composite action       │
-│  npm run build       rebuild (.next doesn't         │
-│                      carry over between VMs)        │
-│  playwright install chromium                        │
-│  npm run test:e2e    Playwright tests               │
-│  Upload report on failure                           │
-└──────────────────┬──────────────────────────────────┘
-                   │ needs: [ci, e2e]
-                   │ if: push event only (not PRs)
-                   ▼
-┌─────────────────────────────────────────────────────┐
-│  Job 3 — "Run DB Migrations"                        │
-│  environment: Production (MONGODB_URI secret)       │
-│                                                     │
-│  ./.github/actions/setup  ← composite action       │
-│  npm run migrate     runs all scripts/              │
-│                      migrate-*.ts in order          │
-│  On failure → create GitHub Issue + block deploy    │
-└──────────────────┬──────────────────────────────────┘
-                   │ needs: [ci, e2e, migrate]
-                   │ if: push event only (not PRs)
-                   ▼
-┌─────────────────────────────────────────────────────┐
-│  Job 4 — "Deploy to Production"                     │
-│  environment: Production (Vercel secrets)           │
-│                                                     │
-│  ./.github/actions/setup  ← composite action       │
-│  vercel pull --environment=production               │
-│  vercel build                                       │
-│  vercel deploy --prebuilt  → preview URL            │
-│  vercel promote <url>      → card-max.vercel.app    │
-│  curl /api/revalidate      → bust ISR cache         │
-│  Post commit comment with production URL            │
-│  On failure → create GitHub Issue                   │
-└─────────────────────────────────────────────────────┘
+    subgraph PAR["Run in parallel"]
+        SA["Job 0 — Security Audit\nnpm audit --audit-level=high\nTrivy filesystem scan → SARIF upload"]
+        CI["Job 1 — Lint, Type Check & Test\nvalidate workflow YAML\nnpm run lint · type-check · test · build\nno secrets · fast feedback"]
+    end
+
+    E2E["Job 2 — E2E Tests\nenvironment: Production\nnext build → playwright install chromium\nnpm run test:e2e\nwrites interaction-timing.json"]
+
+    MIG["Job 3 — DB Migrations\nenvironment: Production\nnpm run migrate\nruns pending migrate-*.ts in order"]
+
+    DEP["Job 4 — Deploy to Production\nenvironment: Production\nvercel pull → vercel build\nvercel deploy --prebuilt → preview URL\nvercel promote → card-max.vercel.app\nPOST /api/revalidate → bust ISR cache"]
+
+    ISS_MIG["🔴 GitHub Issue\nMigration failed"]
+    ISS_DEP["🔴 GitHub Issue\nDeploy failed"]
+    ART["📦 Upload Playwright report\nas CI artifact"]
+    CMT["💬 Commit comment\nwith production URL"]
+
+    PUSH --> PAR
+    CI -->|"needs: ci"| E2E
+    E2E -->|"needs: ci + e2e\npush only — skipped on PR"| MIG
+    MIG -->|"needs: ci + e2e + migrate\npush only — skipped on PR"| DEP
+
+    E2E -->|"on failure"| ART
+    MIG -->|"on failure"| ISS_MIG
+    DEP -->|"on failure"| ISS_DEP
+    DEP -->|"on success"| CMT
 ```
 
 **Composite setup action:** All five jobs share `.github/actions/setup` which handles `actions/checkout@v4`, `actions/setup-node@v4` (Node 22, npm cache), and `npm ci`. Updating the Node version or install flags requires a change in exactly one file.
@@ -1009,46 +1034,31 @@ type-check, unit tests, and E2E tests all pass.
 
 ### The four-step deploy pipeline
 
-```
-Push to master → CI passes
-        │
-        │  workflow_run trigger fires
-        ▼
-Step 1 — vercel pull --environment=production
-        Downloads project config and injects production env vars
-        (MONGODB_URI etc.) into the build environment.
-        │
-        ▼
-Step 2 — vercel build
-        Runs Next.js build on the GitHub Actions runner using
-        the production env vars from step 1.
-        Output written to .vercel/output/ in Vercel's Build Output
-        API format (static files + serverless bundles + config).
-        Tagged internally as a "preview" build.
-        │
-        ▼
-Step 3 — vercel deploy --prebuilt
-        Uploads .vercel/output/ to Vercel. No rebuild on Vercel's
-        side — the prebuilt output is used as-is.
+```mermaid
+sequenceDiagram
+    participant GHA as GitHub Actions (Job 4)
+    participant VCL as Vercel CLI
+    participant VDN as Vercel CDN / Edge
+    participant PROD as card-max.vercel.app
 
-        Returns a unique immutable preview URL:
-        https://card-xyz123-chamirusenarath96s-projects.vercel.app
+    GHA->>VCL: vercel pull --environment=production
+    Note over VCL: Downloads project config<br/>Injects MONGODB_URI into build env
 
-        This deployment is live at that URL but NOT the production
-        alias yet. It can be inspected and tested before going live.
-        │
-        ▼
-Step 4 — vercel promote <preview-url>
-        Atomically points the production alias (card-max.vercel.app)
-        at the preview deployment. Zero downtime — old deployment
-        keeps serving until the alias switch completes.
-        The preview URL stays live permanently.
-        │
-        ▼
-card-max.vercel.app now serves the new build
-        │
-        ├── Post commit comment with production URL
-        └── On any step failure → create GitHub Issue [Deploy] failed
+    GHA->>GHA: vercel build
+    Note over GHA: Runs next build locally on the runner<br/>Output: .vercel/output/ (Build Output API)<br/>Tagged as "preview" build
+
+    GHA->>VCL: vercel deploy --prebuilt
+    Note over VCL: Uploads .vercel/output/ — no rebuild<br/>Returns immutable preview URL
+    VCL-->>GHA: https://card-xyz123-....vercel.app
+
+    GHA->>VCL: vercel promote card-xyz123-....vercel.app
+    Note over VDN: Atomically switches production alias<br/>Zero downtime — old build keeps serving<br/>during alias transition
+    VCL-->>PROD: card-max.vercel.app → new build
+
+    GHA->>PROD: POST /api/revalidate
+    Note over PROD: Busts ISR page cache<br/>Next visitor gets freshly rendered HTML
+
+    GHA->>GHA: Post commit comment with production URL
 ```
 
 ### Why build as "preview" then promote, not deploy with `--prod` directly
@@ -1125,35 +1135,32 @@ Next.js has four separate cache layers that stack on top of each other. Understa
 
 ### The four caches
 
-```
-Browser request → card-max.vercel.app
-        │
-        ▼
-┌──────────────────────┐
-│  1. Router Cache     │  browser memory — instant back/forward nav
-│     (client-side)    │  cleared on tab close / full reload
-└──────────┬───────────┘
-           │ miss
-           ▼
-┌──────────────────────┐
-│  2. Full Route Cache │  Vercel CDN edge — pre-rendered HTML
-│     (page ISR)       │  controlled by export const revalidate
-└──────────┬───────────┘
-           │ miss or stale
-           ▼
-┌──────────────────────┐
-│  3. Data Cache       │  server-side — fetch() response store
-│     (fetch cache)    │  controlled by next: { revalidate } on fetch()
-└──────────┬───────────┘
-           │ miss or stale
-           ▼
-┌──────────────────────┐
-│  4. Request Memo     │  in-memory — deduplicates identical fetch()
-│     (per-request)    │  calls within a single server render
-└──────────┬───────────┘
-           │
-           ▼
-     MongoDB Atlas  ← actual database query
+```mermaid
+flowchart TD
+    REQ["Browser — GET /?bank=hnb"]
+
+    C1{"1. Router Cache\nbrowser memory · ~30s TTL"}
+    HIT1["Serve instantly\nback/forward nav"]
+
+    C2{"2. Full Route Cache\nVercel CDN Edge\nexport const revalidate = 3600"}
+    HIT2["Serve cached HTML\n< 10ms from edge"]
+
+    C3{"3. Data Cache\nserver-side fetch store\ncache: no-store ← DISABLED"}
+
+    C4["4. Request Memo\nin-memory per-request\ndeduplicates identical fetch calls"]
+
+    DB[("MongoDB Atlas\nlive query")]
+
+    INV["POST /api/revalidate\nrevalidatePath /\nafter crawler run"]
+
+    REQ -->|"cache hit"| C1 --> HIT1
+    REQ -->|"miss"| C2
+    C2 -->|"hit"| HIT2
+    C2 -->|"miss / stale"| C3
+    C3 -->|"always misses — no-store"| C4
+    C4 --> DB
+
+    INV -->|"marks stale"| C2
 ```
 
 ### How this project uses each layer
@@ -1182,25 +1189,26 @@ This is intentional. The Full Route Cache (layer 2) already controls how often t
 
 ### How revalidation works after a crawler run
 
-```
-Crawler finishes writing to MongoDB
-        │
-        ▼
-POST /api/revalidate  (authenticated with VERCEL_REVALIDATION_SECRET)
-        │
-        ├── revalidatePath("/")           — marks home page HTML as stale
-        └── revalidatePath("/", "layout") — marks all pages sharing root layout as stale
-                │
-                ▼
-        Next visitor to card-max.vercel.app
-                │
-                ├── Full Route Cache is stale → page re-renders on the server
-                │
-                └── fetchOffers() runs with cache: "no-store"
-                        │
-                        └── hits /api/offers → queries MongoDB → returns live data
-                                │
-                                └── fresh HTML cached for next 3600s
+```mermaid
+sequenceDiagram
+    participant CR as Crawler (GitHub Actions)
+    participant DB as MongoDB Atlas
+    participant RV as POST /api/revalidate
+    participant CDN as Vercel CDN Edge
+    participant USR as Next Visitor
+
+    CR->>DB: upsert + expire stale offers
+    CR->>RV: POST (Authorization: Bearer SECRET)
+    RV->>CDN: revalidatePath("/")
+    RV->>CDN: revalidatePath("/", "layout")
+    Note over CDN: Full Route Cache marked stale<br/>Old HTML still served until next request
+
+    USR->>CDN: GET /?bank=hnb
+    CDN->>CDN: stale — trigger re-render
+    CDN->>DB: fetchOffers() — cache: no-store
+    DB-->>CDN: fresh offer data
+    CDN-->>USR: freshly rendered HTML
+    Note over CDN: New HTML cached for 3600s
 ```
 
 ---
