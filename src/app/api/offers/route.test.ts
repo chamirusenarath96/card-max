@@ -227,19 +227,19 @@ describe("GET /api/offers", () => {
 
   it("sorts by createdAt descending by default (latest)", async () => {
     await GET(makeRequest());
-    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1, _id: -1 });
   });
 
   it("sorts by createdAt descending when sort=latest", async () => {
     await GET(makeRequest({ sort: "latest" }));
-    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(mockSort).toHaveBeenCalledWith({ createdAt: -1, _id: -1 });
   });
 
   // ── Sort: expiringSoon ──────────────────────────────────────────────
 
   it("sorts by validUntil ascending when sort=expiringSoon", async () => {
     await GET(makeRequest({ sort: "expiringSoon" }));
-    expect(mockSort).toHaveBeenCalledWith({ validUntil: 1 });
+    expect(mockSort).toHaveBeenCalledWith({ validUntil: 1, _id: 1 });
   });
 
   it("filters validUntil within 3 days when sort=expiringSoon", async () => {

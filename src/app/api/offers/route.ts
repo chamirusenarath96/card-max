@@ -113,9 +113,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Sort order: "expiringSoon" = validUntil asc, "latest" = createdAt desc
+    // _id is always appended as a deterministic tiebreaker so pagination is
+    // stable even when many documents share the same createdAt timestamp
+    // (e.g. after a bulk scrape run inserts dozens of offers in one second).
     const sortOrder: Record<string, 1 | -1> = sort === "expiringSoon"
-      ? { validUntil: 1 }
-      : { createdAt: -1 };
+      ? { validUntil: 1, _id: 1 }
+      : { createdAt: -1, _id: -1 };
 
     const skip = (page - 1) * limit;
 
