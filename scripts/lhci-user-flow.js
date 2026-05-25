@@ -67,7 +67,13 @@ if (require.main === module) {
   /** Vercel deployment-protection bypass token (set in CI via VERCEL_BYPASS_TOKEN secret). */
   const BYPASS_TOKEN = process.env.VERCEL_BYPASS_TOKEN;
 
-  if (!BYPASS_TOKEN) {
+  /** The canonical production URL — never needs a bypass token. */
+  const PRODUCTION_URL = 'https://card-max.vercel.app';
+  const isProductionUrl = TARGET_URL === PRODUCTION_URL || TARGET_URL.startsWith(PRODUCTION_URL + '/');
+
+  // Skip only for preview deployments that require deployment protection bypass.
+  // Production URL (card-max.vercel.app) is publicly accessible — always proceed.
+  if (!BYPASS_TOKEN && !isProductionUrl) {
     console.warn('[lhci-flow] VERCEL_BYPASS_TOKEN is not set.');
     console.warn('[lhci-flow] Skipping user-flow audit — cannot reach a protection-enabled preview deployment.');
     console.warn('[lhci-flow] To enable the audit, generate a token at:');
