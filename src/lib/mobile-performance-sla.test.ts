@@ -68,14 +68,14 @@ describe("Mobile Performance SLA — spec 018", () => {
       "utf-8",
     );
 
-    it("contains lhci collect command (explicit phase split)", () => {
-      // lhci autorun was replaced with explicit collect→upload→assert phases
-      // to guarantee LHR JSON files land on disk before the artifact upload step.
-      expect(ciYml).toContain("lhci collect");
+    it("contains lhci assert command", () => {
+      // Raw lighthouse CLI writes JSON; lhci assert enforces SLA thresholds.
+      expect(ciYml).toContain("lhci assert");
     });
 
     it("Lighthouse step appears before Promote to production step", () => {
-      const lhciPos = ciYml.indexOf("lhci collect");
+      // First occurrence of lhci assert is in the preview step (before promote).
+      const lhciPos = ciYml.indexOf("lhci assert");
       const promotePos = ciYml.indexOf("Promote to production");
       expect(lhciPos).toBeGreaterThan(-1);
       expect(promotePos).toBeGreaterThan(-1);
@@ -84,7 +84,7 @@ describe("Mobile Performance SLA — spec 018", () => {
 
     it("Lighthouse step appears after Deploy to Vercel step (AC2)", () => {
       const deployPos = ciYml.indexOf("Deploy to Vercel");
-      const lhciPos = ciYml.indexOf("lhci collect");
+      const lhciPos = ciYml.indexOf("lhci assert");
       expect(deployPos).toBeGreaterThan(-1);
       expect(lhciPos).toBeGreaterThan(-1);
       expect(lhciPos).toBeGreaterThan(deployPos);
