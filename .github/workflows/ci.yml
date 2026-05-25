@@ -235,8 +235,6 @@ jobs:
           done
           echo "=== .lighthouseci/preview/ contents ==="
           ls -lh .lighthouseci/preview/
-          lhci assert \
-            --inputDir=.lighthouseci/preview || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
           VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
@@ -253,6 +251,12 @@ jobs:
           name: lighthouse-preview-report-${{ github.sha }}
           path: .lighthouseci/preview/
           retention-days: 14
+
+      # Assert AFTER artifact is saved — lhci assert wipes the dir on init.
+      - name: Assert Lighthouse SLA thresholds (preview)
+        if: always()
+        run: lhci assert --inputDir=.lighthouseci/preview || echo "⚠️  Lighthouse assertion failed — see results above"
+        continue-on-error: true
 
       # User-flow deps installed regardless — used for both preview and
       # production runs below.
@@ -283,13 +287,12 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       # Production Lighthouse CI — always runs after promote, no bypass
-      # token needed. Uploaded as "lighthouse-report-*" so the dashboard
-      # workflow can find it with its existing download pattern.
-      # Uses the raw `lighthouse` CLI instead of `lhci collect` because
-      # lhci collect stores results in SQLite (not JSON files on disk),
-      # so actions/upload-artifact finds nothing. The lighthouse CLI writes
-      # plain JSON LHR files directly, which upload-artifact can capture.
-      - name: Run Lighthouse CI (production)
+      # token needed. Uses the raw `lighthouse` CLI which writes plain JSON
+      # LHR files directly to disk (lhci collect uses SQLite and lhci assert
+      # wipes the outputDir on init, both causing upload-artifact to find nothing).
+      # Three separate steps: collect → upload → assert, so artifact capture
+      # happens before lhci assert can initialise its storage over .lighthouseci/.
+      - name: Collect Lighthouse reports (production)
         run: |
           npm install -g @lhci/cli@0.14.x lighthouse
           mkdir -p .lighthouseci
@@ -302,11 +305,9 @@ jobs:
           done
           echo "=== .lighthouseci/ contents ==="
           ls -lh .lighthouseci/
-          lhci assert \
-            --inputDir=.lighthouseci || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
-        timeout-minutes: 10
+        timeout-minutes: 8
         continue-on-error: true
 
       - name: Upload Lighthouse report
@@ -316,6 +317,13 @@ jobs:
           name: lighthouse-report-${{ github.sha }}
           path: .lighthouseci/
           retention-days: 14
+
+      # Assert AFTER artifact is saved — lhci assert wipes .lighthouseci/ on init
+      # so must not run before the upload step.
+      - name: Assert Lighthouse SLA thresholds (production)
+        if: always()
+        run: lhci assert --inputDir=.lighthouseci || echo "⚠️  Lighthouse assertion failed — see results above"
+        continue-on-error: true
 
       # Production user-flow — runs against card-max.vercel.app after
       # promote. No bypass token needed. Always produces report data.
