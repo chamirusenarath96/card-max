@@ -263,7 +263,7 @@ jobs:
       # User-flow deps installed regardless — used for both preview and
       # production runs below.
       - name: Install Lighthouse for user-flow audit
-        run: npm install --no-save lighthouse@^12
+        run: npm install --no-save lighthouse@^12 puppeteer-core
 
       - name: Install Playwright browsers (for user-flow audit)
         run: npx playwright install --with-deps chromium

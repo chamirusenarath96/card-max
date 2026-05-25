@@ -12,9 +12,10 @@
  * Writes the flow HTML report to .lighthouseci/user-flow/report.html.
  *
  * Run: node scripts/lhci-user-flow.js
- * Env: TARGET_URL — the Vercel preview URL to audit (required)
+ * Env: TARGET_URL — the Vercel preview/production URL to audit (required)
  *
- * Requires: lighthouse >= 11 (INP promoted to stable audit in v11)
+ * Requires: lighthouse >= 11 (INP promoted to stable audit in v11), puppeteer-core
+ * Uses Playwright's already-installed Chromium via puppeteer-core (no extra download).
  * Spec: specs/features/029-ui-interaction-performance-budgets.md
  */
 
@@ -60,94 +61,128 @@ if (require.main === module) {
   }
 
   // Dynamic requires inside main block so tests can import the module without
-  // needing lighthouse or playwright installed.
+  // needing lighthouse or puppeteer installed.
   const { startFlow } = require('lighthouse/core/index.cjs');
-  const { chromium } = require('playwright');
+  // puppeteer-core: no bundled browser — we reuse Playwright's installed Chromium.
+  const puppeteer = require('puppeteer-core');
+  // playwright-core ships the executablePath() helper; playwright install must
+  // have already been run in CI before this step.
+  const { chromium: playwrightChromium } = require('playwright-core');
 
   /** Vercel deployment-protection bypass token (set in CI via VERCEL_BYPASS_TOKEN secret). */
   const BYPASS_TOKEN = process.env.VERCEL_BYPASS_TOKEN;
 
   /** The canonical production URL — never needs a bypass token. */
   const PRODUCTION_URL = 'https://card-max.vercel.app';
-  const isProductionUrl = TARGET_URL === PRODUCTION_URL || TARGET_URL.startsWith(PRODUCTION_URL + '/');
+  const isProductionUrl =
+    TARGET_URL === PRODUCTION_URL || TARGET_URL.startsWith(PRODUCTION_URL + '/');
 
-  // Skip only for preview deployments that require deployment protection bypass.
+  // Skip only for preview deployments that require deployment-protection bypass.
   // Production URL (card-max.vercel.app) is publicly accessible — always proceed.
   if (!BYPASS_TOKEN && !isProductionUrl) {
     console.warn('[lhci-flow] VERCEL_BYPASS_TOKEN is not set.');
-    console.warn('[lhci-flow] Skipping user-flow audit — cannot reach a protection-enabled preview deployment.');
+    console.warn(
+      '[lhci-flow] Skipping user-flow audit — cannot reach a protection-enabled preview deployment.',
+    );
     console.warn('[lhci-flow] To enable the audit, generate a token at:');
-    console.warn('[lhci-flow]   Vercel dashboard → Project → Settings → Deployment Protection → Protection Bypass for Automation');
-    console.warn('[lhci-flow] Then add it as the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets → Actions.');
+    console.warn(
+      '[lhci-flow]   Vercel dashboard → Project → Settings → Deployment Protection → Protection Bypass for Automation',
+    );
+    console.warn(
+      '[lhci-flow] Then add it as the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets → Actions.',
+    );
     process.exit(0); // Skip gracefully — do not block the deploy
   }
 
   (async () => {
-    const browser = await chromium.launch({ headless: true });
-    // Pass the Vercel deployment-protection bypass header so Playwright reaches
-    // the actual app instead of being redirected to vercel.com/login.
-    const context = await browser.newContext(
-      BYPASS_TOKEN
-        ? { extraHTTPHeaders: { 'x-vercel-protection-bypass': BYPASS_TOKEN } }
-        : {},
-    );
-    const page = await context.newPage();
-    await page.goto(TARGET_URL);
+    // Reuse Playwright's Chromium installation to avoid downloading a second browser.
+    const executablePath = playwrightChromium.executablePath();
+    console.log(`[lhci-flow] Using Chromium at: ${executablePath}`);
+
+    const browser = await puppeteer.launch({
+      executablePath,
+      headless: true,
+      args: ['--no-sandbox', '--disable-gpu'],
+    });
+
+    const page = await browser.newPage();
+
+    // Pass the Vercel deployment-protection bypass header when set.
+    if (BYPASS_TOKEN) {
+      await page.setExtraHTTPHeaders({ 'x-vercel-protection-bypass': BYPASS_TOKEN });
+    }
+
+    await page.goto(TARGET_URL, { timeout: 90_000 });
 
     // Race between:
     //   A) filter-drawer-trigger becoming visible (app loaded successfully), or
-    //   B) Vercel's client-side JS redirecting to vercel.com/login (protection
-    //      active, bypass token missing/wrong).
-    //
-    // Vercel protection redirects happen client-side AFTER page.goto() returns,
-    // so checking page.url() right after goto() always shows the original URL.
-    // Promise.race catches whichever event fires first and fails fast with a
-    // clear error instead of timing out after 90 s.
+    //   B) Vercel's client-side JS redirecting to vercel.com/login (protection active).
     await Promise.race([
-      // A — happy path: app streamed in and the FilterBar is visible
-      page.getByTestId('filter-drawer-trigger').waitFor({ state: 'visible', timeout: 90_000 }),
-
-      // B — login redirect: Vercel protection bounced Playwright to the login page
-      page.waitForURL(
-        (url) => url.toString().includes('vercel.com/login') || url.toString().includes('vercel.com/sso'),
-        { timeout: 90_000 },
-      ).then(() => {
-        const loginUrl = page.url();
-        console.error(`[lhci-flow] Redirected to Vercel login: ${loginUrl}`);
-        console.error(
-          '[lhci-flow] Set the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets → Actions.',
-        );
-        console.error(
-          '[lhci-flow] Generate the token at: Vercel dashboard → Project → Settings → Deployment Protection.',
-        );
-        throw new Error('Vercel deployment protection login redirect');
+      // A — happy path
+      page.waitForSelector('[data-testid="filter-drawer-trigger"]', {
+        visible: true,
+        timeout: 90_000,
       }),
+
+      // B — login redirect
+      page
+        .waitForFunction(
+          () =>
+            window.location.href.includes('vercel.com/login') ||
+            window.location.href.includes('vercel.com/sso'),
+          { timeout: 90_000 },
+        )
+        .then(() => {
+          const loginUrl = page.url();
+          console.error(`[lhci-flow] Redirected to Vercel login: ${loginUrl}`);
+          console.error(
+            '[lhci-flow] Set the VERCEL_BYPASS_TOKEN secret in GitHub → Settings → Secrets → Actions.',
+          );
+          console.error(
+            '[lhci-flow] Generate the token at: Vercel dashboard → Project → Settings → Deployment Protection.',
+          );
+          throw new Error('Vercel deployment protection login redirect');
+        }),
     ]);
 
     const flow = await startFlow(page, { name: 'User interaction flow' });
 
     // Open the filter drawer so bank/category filter buttons are accessible
-    await page.getByTestId('filter-drawer-trigger').click();
-    await page.waitForSelector('[data-testid="filter-drawer"]');
+    await page.click('[data-testid="filter-drawer-trigger"]');
+    await page.waitForSelector('[data-testid="filter-drawer"]', { visible: true });
 
     // Step 1: Apply People's Bank filter (RSC nav: browser GETs /?bank=peoples_bank)
     await flow.startTimespan({ stepName: "Apply People's Bank filter" });
-    await page.getByTestId('bank-filter-peoples_bank').click();
-    await page.waitForURL((url) => url.searchParams.has('bank'), { timeout: 10_000 });
+    await page.click('[data-testid="bank-filter-peoples_bank"]');
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.has('bank'),
+      { timeout: 10_000 },
+    );
     await flow.endTimespan();
 
     // Step 2: Apply Dining category filter (RSC nav: browser GETs /?bank=…&category=dining)
     // category-chip-dining is a dynamic chip (loaded via /api/categories) — wait for it.
-    await page.getByTestId('category-chip-dining').waitFor({ state: 'visible', timeout: 15_000 });
+    await page.waitForSelector('[data-testid="category-chip-dining"]', {
+      visible: true,
+      timeout: 15_000,
+    });
     await flow.startTimespan({ stepName: 'Apply Dining category filter' });
-    await page.getByTestId('category-chip-dining').click();
-    await page.waitForURL((url) => url.searchParams.has('category'), { timeout: 10_000 });
+    await page.click('[data-testid="category-chip-dining"]');
+    await page.waitForFunction(
+      () => new URL(window.location.href).searchParams.has('category'),
+      { timeout: 10_000 },
+    );
     await flow.endTimespan();
 
     // Step 3: Clear all filters (RSC nav: browser GETs / with no params)
     await flow.startTimespan({ stepName: 'Clear all filters' });
-    await page.getByTestId('clear-all-filters').click();
-    await page.waitForURL((url) => !url.searchParams.has('bank') && !url.searchParams.has('category'), { timeout: 10_000 });
+    await page.click('[data-testid="clear-all-filters"]');
+    await page.waitForFunction(
+      () =>
+        !new URL(window.location.href).searchParams.has('bank') &&
+        !new URL(window.location.href).searchParams.has('category'),
+      { timeout: 10_000 },
+    );
     await flow.endTimespan();
 
     const result = await flow.createFlowResult();
