@@ -73,22 +73,53 @@ jobs:
         run: allure generate allure-results --output dashboard/allure-e2e --clean
 
       # ── Step 4: Download latest LHCI artefact ─────────────────────────────────
-      - name: Download Lighthouse report artefact
+      # When triggered by workflow_run (CI / Deploy completed), use the exact
+      # run_id so we don't rely on glob search which fails to match.
+      # When triggered by push, fall back to search_artifacts across ci.yml runs.
+      - name: Download Lighthouse report artefact (workflow_run)
+        if: github.event_name == 'workflow_run'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          run_id: ${{ github.event.workflow_run.id }}
+          name: lighthouse-report-*
+          name_is_regexp: true
+          path: dashboard/lighthouse
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Download Lighthouse report artefact (push fallback)
+        if: github.event_name == 'push'
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: ci.yml
           name: lighthouse-report-*
+          name_is_regexp: true
           path: dashboard/lighthouse
           search_artifacts: true
           if_no_artifact_found: warn
         continue-on-error: true
 
       # ── Step 4b: Download latest Lighthouse user-flow artefact (spec 029) ──────
-      - name: Download Lighthouse user-flow artefact
+      - name: Download Lighthouse user-flow artefact (workflow_run)
+        if: github.event_name == 'workflow_run'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          run_id: ${{ github.event.workflow_run.id }}
+          name: lhci-user-flow-*
+          name_is_regexp: true
+          path: dashboard/lighthouse-user-flow
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Download Lighthouse user-flow artefact (push fallback)
+        if: github.event_name == 'push'
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: ci.yml
           name: lhci-user-flow-*
+          name_is_regexp: true
           path: dashboard/lighthouse-user-flow
           search_artifacts: true
           if_no_artifact_found: warn
