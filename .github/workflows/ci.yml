@@ -223,18 +223,18 @@ jobs:
             echo "Then add the token as VERCEL_BYPASS_TOKEN in GitHub → Settings → Secrets → Actions."
             exit 0
           fi
-          npm install -g @lhci/cli@0.14.x lighthouse
-          mkdir -p .lighthouseci/preview
+          npm install -g lighthouse
+          mkdir -p "$GITHUB_WORKSPACE/lighthouse-reports-preview"
           for i in 1 2 3; do
             lighthouse "${{ steps.deploy.outputs.preview_url }}" \
               --output=json \
-              --output-path=".lighthouseci/preview/lhr-run${i}.json" \
+              --output-path="$GITHUB_WORKSPACE/lighthouse-reports-preview/lhr-run${i}.json" \
               --chrome-flags="--headless --no-sandbox --disable-gpu" \
               --extra-headers='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
               --quiet || true
           done
-          echo "=== .lighthouseci/preview/ contents ==="
-          ls -lh .lighthouseci/preview/
+          echo "=== lighthouse-reports-preview/ contents ==="
+          ls -lh "$GITHUB_WORKSPACE/lighthouse-reports-preview/"
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
           VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
@@ -249,13 +249,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-preview-report-${{ github.sha }}
-          path: .lighthouseci/preview/
+          path: lighthouse-reports-preview/
           retention-days: 14
 
       # Assert AFTER artifact is saved — lhci assert wipes the dir on init.
       - name: Assert Lighthouse SLA thresholds (preview)
         if: always()
-        run: lhci assert --inputDir=.lighthouseci/preview || echo "⚠️  Lighthouse assertion failed — see results above"
+        run: |
+          npm install -g @lhci/cli@0.14.x
+          lhci assert --inputDir=lighthouse-reports-preview || echo "⚠️  Lighthouse assertion failed — see results above"
         continue-on-error: true
 
       # User-flow deps installed regardless — used for both preview and
@@ -292,21 +294,22 @@ jobs:
       # wipes the outputDir on init, both causing upload-artifact to find nothing).
       # Three separate steps: collect → upload → assert, so artifact capture
       # happens before lhci assert can initialise its storage over .lighthouseci/.
+      # Use a plain directory name (not .lighthouseci) so lhci cannot
+      # interfere with it. The .lighthouseci name is special to lhci and
+      # causes upload-artifact to find nothing despite files being present.
       - name: Collect Lighthouse reports (production)
         run: |
-          npm install -g @lhci/cli@0.14.x lighthouse
-          mkdir -p .lighthouseci
+          npm install -g lighthouse
+          mkdir -p lighthouse-reports
           for i in 1 2 3; do
             lighthouse https://card-max.vercel.app \
               --output=json \
-              --output-path=".lighthouseci/lhr-run${i}.json" \
+              --output-path="$GITHUB_WORKSPACE/lighthouse-reports/lhr-run${i}.json" \
               --chrome-flags="--headless --no-sandbox --disable-gpu" \
               --quiet || true
           done
-          echo "=== .lighthouseci/ contents ==="
-          ls -lh .lighthouseci/
-        env:
-          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+          echo "=== lighthouse-reports/ contents ==="
+          ls -lh "$GITHUB_WORKSPACE/lighthouse-reports/"
         timeout-minutes: 8
         continue-on-error: true
 
@@ -315,14 +318,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-report-${{ github.sha }}
-          path: .lighthouseci/
+          path: lighthouse-reports/
           retention-days: 14
 
-      # Assert AFTER artifact is saved — lhci assert wipes .lighthouseci/ on init
-      # so must not run before the upload step.
       - name: Assert Lighthouse SLA thresholds (production)
         if: always()
-        run: lhci assert --inputDir=.lighthouseci || echo "⚠️  Lighthouse assertion failed — see results above"
+        run: |
+          npm install -g @lhci/cli@0.14.x
+          lhci assert --inputDir=lighthouse-reports || echo "⚠️  Lighthouse assertion failed — see results above"
         continue-on-error: true
 
       # Production user-flow — runs against card-max.vercel.app after
