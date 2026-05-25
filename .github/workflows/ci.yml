@@ -223,14 +223,18 @@ jobs:
             echo "Then add the token as VERCEL_BYPASS_TOKEN in GitHub → Settings → Secrets → Actions."
             exit 0
           fi
-          npm install -g @lhci/cli@0.14.x
-          # Collect first — writes LHR JSON to disk. Do NOT upload here;
-          # lhci upload clears the outputDir before artifact capture runs.
-          lhci collect \
-            --url="${{ steps.deploy.outputs.preview_url }}" \
-            --settings.extraHeaders='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
-            --numberOfRuns=3 \
-            --outputDir=.lighthouseci/preview
+          npm install -g @lhci/cli@0.14.x lighthouse
+          mkdir -p .lighthouseci/preview
+          for i in 1 2 3; do
+            lighthouse "${{ steps.deploy.outputs.preview_url }}" \
+              --output=json \
+              --output-path=".lighthouseci/preview/lhr-run${i}.json" \
+              --chrome-flags="--headless --no-sandbox --disable-gpu" \
+              --extra-headers='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
+              --quiet || true
+          done
+          echo "=== .lighthouseci/preview/ contents ==="
+          ls -lh .lighthouseci/preview/
           lhci assert \
             --inputDir=.lighthouseci/preview || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
@@ -281,18 +285,23 @@ jobs:
       # Production Lighthouse CI — always runs after promote, no bypass
       # token needed. Uploaded as "lighthouse-report-*" so the dashboard
       # workflow can find it with its existing download pattern.
-      # NOTE: lhci upload is intentionally omitted here because
-      # temporary-public-storage clears .lighthouseci/ after uploading,
-      # which causes the artifact upload step to find an empty directory.
-      # We upload to temporary-public-storage in a separate step AFTER
-      # the artifact has been saved.
+      # Uses the raw `lighthouse` CLI instead of `lhci collect` because
+      # lhci collect stores results in SQLite (not JSON files on disk),
+      # so actions/upload-artifact finds nothing. The lighthouse CLI writes
+      # plain JSON LHR files directly, which upload-artifact can capture.
       - name: Run Lighthouse CI (production)
         run: |
-          npm install -g @lhci/cli@0.14.x
-          lhci collect \
-            --url="https://card-max.vercel.app" \
-            --numberOfRuns=3 \
-            --outputDir=.lighthouseci
+          npm install -g @lhci/cli@0.14.x lighthouse
+          mkdir -p .lighthouseci
+          for i in 1 2 3; do
+            lighthouse https://card-max.vercel.app \
+              --output=json \
+              --output-path=".lighthouseci/lhr-run${i}.json" \
+              --chrome-flags="--headless --no-sandbox --disable-gpu" \
+              --quiet || true
+          done
+          echo "=== .lighthouseci/ contents ==="
+          ls -lh .lighthouseci/
           lhci assert \
             --inputDir=.lighthouseci || echo "⚠️  Lighthouse assertion failed — see results above"
         env:
@@ -307,13 +316,6 @@ jobs:
           name: lighthouse-report-${{ github.sha }}
           path: .lighthouseci/
           retention-days: 14
-
-      # Publish to temporary-public-storage AFTER artifact is saved so the
-      # upload step cannot clear .lighthouseci/ before artifact capture.
-      - name: Publish Lighthouse results to temporary storage
-        if: always()
-        run: lhci upload --target=temporary-public-storage --inputDir=.lighthouseci || true
-        continue-on-error: true
 
       # Production user-flow — runs against card-max.vercel.app after
       # promote. No bypass token needed. Always produces report data.
