@@ -86,7 +86,7 @@
 </head>
 <body>
   <h1 data-testid="dashboard-title">card-max CI Dashboard</h1>
-  <p class="subtitle" data-testid="dashboard-timestamp">Generated: 2026-05-26T16:29:58.558Z</p>
+  <p class="subtitle" data-testid="dashboard-timestamp">Generated: 2026-05-26T16:46:28.376Z</p>
 
   <section class="badges" data-testid="badges-section">
       <a href="https://github.com/chamirusenarath96/card-max/actions/workflows/ci.yml" target="_blank" rel="noopener noreferrer" data-testid="badge-ci.yml">
@@ -403,14 +403,14 @@
       <a class="report-link" href="./allure-e2e/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-e2e">Open full Allure report →</a>
     </section>
 
-    <section class="panel" data-testid="lighthouse-panel">
+    <section class="panel panel--unavailable" data-testid="lighthouse-panel">
       <h2>Lighthouse CI</h2>
-      <p><a href="./lighthouse/" target="_blank" rel="noopener noreferrer" data-testid="link-lighthouse">Open Lighthouse Report</a></p>
+      <p class="unavailable" data-testid="lighthouse-unavailable">Not available — deploy job must succeed to produce this artefact.</p>
     </section>
 
-    <section class="panel" data-testid="lh-user-flow-panel">
+    <section class="panel panel--unavailable" data-testid="lh-user-flow-panel">
       <h2>Lighthouse User Flow</h2>
-      <p><a href="./lighthouse-user-flow/report.html" target="_blank" rel="noopener noreferrer" data-testid="link-lh-user-flow">Open User Flow Report</a></p>
+      <p class="unavailable" data-testid="lh-user-flow-unavailable">Not available — deploy job must succeed to produce this artefact.</p>
     </section>
 
     <section class="panel panel--pass" data-testid="timing-panel">
@@ -423,17 +423,17 @@
           <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Bank filter (select + apply)</td>
-          <td class="suite-pills"><span class="pill pill--pass">157ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">162ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Category filter (select + apply)</td>
-          <td class="suite-pills"><span class="pill pill--pass">148ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">171ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Clear all filters</td>
-          <td class="suite-pills"><span class="pill pill--pass">79ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">89ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot" style="background:#555"></span></td>
@@ -443,12 +443,12 @@
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Filter drawer open</td>
-          <td class="suite-pills"><span class="pill pill--pass">133ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">139ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Filter drawer close</td>
-          <td class="suite-pills"><span class="pill pill--pass">358ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">251ms ✓</span></td>
         </tr>
         </tbody>
       </table>
