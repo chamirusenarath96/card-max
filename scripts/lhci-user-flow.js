@@ -147,41 +147,54 @@ if (require.main === module) {
 
     const flow = await startFlow(page, { name: 'User interaction flow' });
 
-    // Open the filter drawer so bank/category filter buttons are accessible
-    await page.click('[data-testid="filter-drawer-trigger"]');
-    await page.waitForSelector('[data-testid="filter-drawer"]', { visible: true });
+    // ── Helper: open the filter drawer and wait until it is visible ────────────
+    async function openDrawer() {
+      await page.waitForSelector('[data-testid="filter-drawer-trigger"]', { visible: true });
+      await page.click('[data-testid="filter-drawer-trigger"]');
+      await page.waitForSelector('[data-testid="filter-drawer"]', { visible: true });
+    }
 
-    // Step 1: Apply People's Bank filter (RSC nav: browser GETs /?bank=peoples_bank)
+    // ── Step 1: Apply People's Bank filter ────────────────────────────────────
+    // Selecting a chip in the drawer only highlights it — the "Apply Filters"
+    // button triggers navigation (setOpen(false) + router.push with bank param).
+    await openDrawer();
     await flow.startTimespan({ stepName: "Apply People's Bank filter" });
     await page.click('[data-testid="bank-filter-peoples_bank"]');
+    await page.click('[data-testid="apply-filters"]'); // closes drawer + navigates
     await page.waitForFunction(
       () => new URL(window.location.href).searchParams.has('bank'),
-      { timeout: 10_000 },
+      { timeout: 15_000 },
     );
     await flow.endTimespan();
 
-    // Step 2: Apply Dining category filter (RSC nav: browser GETs /?bank=…&category=dining)
-    // category-chip-dining is a dynamic chip (loaded via /api/categories) — wait for it.
+    // ── Step 2: Apply Dining category filter ──────────────────────────────────
+    // Drawer closed after step 1 — re-open it before selecting category.
+    // category-chip-dining is loaded dynamically via /api/categories — wait for it.
+    await openDrawer();
     await page.waitForSelector('[data-testid="category-chip-dining"]', {
       visible: true,
       timeout: 15_000,
     });
     await flow.startTimespan({ stepName: 'Apply Dining category filter' });
     await page.click('[data-testid="category-chip-dining"]');
+    await page.click('[data-testid="apply-filters"]'); // closes drawer + navigates
     await page.waitForFunction(
       () => new URL(window.location.href).searchParams.has('category'),
-      { timeout: 10_000 },
+      { timeout: 15_000 },
     );
     await flow.endTimespan();
 
-    // Step 3: Clear all filters (RSC nav: browser GETs / with no params)
+    // ── Step 3: Clear all filters ─────────────────────────────────────────────
+    // Drawer closed after step 2 — re-open before clicking clear-all.
+    // clear-all-filters navigates immediately (no Apply needed) and closes the drawer.
+    await openDrawer();
     await flow.startTimespan({ stepName: 'Clear all filters' });
     await page.click('[data-testid="clear-all-filters"]');
     await page.waitForFunction(
       () =>
         !new URL(window.location.href).searchParams.has('bank') &&
         !new URL(window.location.href).searchParams.has('category'),
-      { timeout: 10_000 },
+      { timeout: 15_000 },
     );
     await flow.endTimespan();
 
