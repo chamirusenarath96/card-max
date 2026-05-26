@@ -2,10 +2,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Category filters are currently hardcoded in three places (`FilterDrawer`, `SearchDrawer`, `FilterBar`). This means the UI shows categories that may have zero offers, and new categories added by crawlers never appear automatically. This spec replaces every hardcoded category list with a live query against the database so the UI only shows categories that contain at least one non-expired offer, sorted by offer count descending.
