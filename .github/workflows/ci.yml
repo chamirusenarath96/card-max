@@ -302,9 +302,10 @@ jobs:
           npm install -g lighthouse
           mkdir -p lighthouse-reports
           for i in 1 2 3; do
+            # --output=json,html writes lhr-runN.report.json + lhr-runN.report.html
             lighthouse https://card-max.vercel.app \
-              --output=json \
-              --output-path="$GITHUB_WORKSPACE/lighthouse-reports/lhr-run${i}.json" \
+              --output=json --output=html \
+              --output-path="$GITHUB_WORKSPACE/lighthouse-reports/lhr-run${i}" \
               --chrome-flags="--headless --no-sandbox --disable-gpu" \
               --quiet || true
           done

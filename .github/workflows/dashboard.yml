@@ -125,6 +125,44 @@ jobs:
           if_no_artifact_found: warn
         continue-on-error: true
 
+      # ── Step 4c: Normalize Lighthouse artefact directories ───────────────────
+      # dawidd6/action-download-artifact extracts into a SHA-named subdirectory.
+      # Flatten both directories so that:
+      #   dashboard/lighthouse/lhr-run1.report.html  (link: ./lighthouse/)
+      #   dashboard/lighthouse-user-flow/report.html (link: ./lighthouse-user-flow/report.html)
+      # are served correctly by GitHub Pages.
+      - name: Normalize Lighthouse artefact paths
+        if: always()
+        run: |
+          # ── Lighthouse CI ────────────────────────────────────────────────────
+          if [ -d "dashboard/lighthouse" ]; then
+            # Move all files out of any SHA subdirectory
+            find dashboard/lighthouse -mindepth 2 -type f \
+              -exec mv -n {} dashboard/lighthouse/ \; 2>/dev/null || true
+            # Remove now-empty subdirectories
+            find dashboard/lighthouse -mindepth 1 -maxdepth 1 -type d \
+              -exec rm -rf {} + 2>/dev/null || true
+            # Create index.html that redirects to the run-1 HTML report so
+            # ./lighthouse/ works as a clickable link on GitHub Pages.
+            echo '<!doctype html><meta http-equiv="refresh" content="0;url=lhr-run1.report.html"><a href="lhr-run1.report.html">Lighthouse Report (run 1)</a>' \
+              > dashboard/lighthouse/index.html
+            echo "lighthouse/ contents:"
+            ls -lh dashboard/lighthouse/
+          fi
+
+          # ── Lighthouse User Flow ─────────────────────────────────────────────
+          if [ -d "dashboard/lighthouse-user-flow" ]; then
+            # Move report.html from any SHA subdirectory up to the parent
+            find dashboard/lighthouse-user-flow -mindepth 2 -name "report.html" \
+              -exec mv -n {} dashboard/lighthouse-user-flow/ \; 2>/dev/null || true
+            # Remove now-empty subdirectories
+            find dashboard/lighthouse-user-flow -mindepth 1 -maxdepth 1 -type d \
+              -exec rm -rf {} + 2>/dev/null || true
+            echo "lighthouse-user-flow/ contents:"
+            ls -lh dashboard/lighthouse-user-flow/
+          fi
+        continue-on-error: true
+
       # ── Step 5: Fetch cron job run summaries ─────────────────────────────────
       - name: Fetch cron job run summaries
         if: always()

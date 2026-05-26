@@ -411,8 +411,10 @@ function main() {
     fs.mkdirSync(DASHBOARD_DIR, { recursive: true });
   }
 
-  const lighthouseAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse"));
-  const lhUserFlowAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse-user-flow"));
+  // Check for the specific HTML files, not just directory existence.
+  // The normalization step in dashboard.yml flattens SHA subdirs before this runs.
+  const lighthouseAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse", "index.html"));
+  const lhUserFlowAvailable = exists(path.join(DASHBOARD_DIR, "lighthouse-user-flow", "report.html"));
 
   const unitData = readAllureSuites(path.join(DASHBOARD_DIR, "allure-unit", "data", "suites.json"));
   const e2eData  = readAllureSuites(path.join(DASHBOARD_DIR, "allure-e2e",  "data", "suites.json"));

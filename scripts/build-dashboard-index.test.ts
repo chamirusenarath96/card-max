@@ -69,8 +69,10 @@ describe("build-dashboard-index (Feature 025 — AC5)", () => {
   });
 
   it("index.html links to lighthouse when lighthouse dir present", () => {
-    // Create lighthouse directory to simulate artefact download
+    // Create lighthouse directory with index.html to simulate normalized artefact
+    // (dashboard.yml normalization step creates index.html after flattening SHA subdirs)
     fs.mkdirSync(path.join(tmpDir, "lighthouse"));
+    fs.writeFileSync(path.join(tmpDir, "lighthouse", "index.html"), "<html></html>");
     runScript(tmpDir);
     const html = fs.readFileSync(path.join(tmpDir, "index.html"), "utf8");
     expect(html).toContain('data-testid="link-lighthouse"');
@@ -103,7 +105,10 @@ describe("build-dashboard-index (Feature 025 — AC5)", () => {
   });
 
   it("index.html links to user-flow report when lighthouse-user-flow dir present", () => {
+    // Create the directory with report.html to simulate normalized artefact
+    // (dashboard.yml normalization step moves report.html out of SHA subdir)
     fs.mkdirSync(path.join(tmpDir, "lighthouse-user-flow"));
+    fs.writeFileSync(path.join(tmpDir, "lighthouse-user-flow", "report.html"), "<html></html>");
     runScript(tmpDir);
     const html = fs.readFileSync(path.join(tmpDir, "index.html"), "utf8");
     expect(html).toContain('data-testid="link-lh-user-flow"');
