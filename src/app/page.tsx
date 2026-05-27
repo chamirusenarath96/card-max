@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/navigation-menu";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
+import { SearchDrawerDynamic } from "@/components/search/SearchDrawerDynamic";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -196,7 +197,10 @@ export default async function HomePage({ searchParams }: PageProps) {
             </NavigationMenuList>
           </NavigationMenu>
 
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <SearchDrawerDynamic />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 

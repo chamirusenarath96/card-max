@@ -3,7 +3,10 @@
 ## Status
 
 - [x] Spec drafted
+- [x] Spec reviewed
 - [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Source
 Lighthouse CI audit (production run, May 2026):
