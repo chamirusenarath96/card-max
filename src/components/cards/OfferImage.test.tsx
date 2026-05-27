@@ -22,7 +22,7 @@ vi.mock("next/image", () => ({
 
 // vi.hoisted makes the fn available inside the vi.mock factory (hoisted to top of file)
 const mockBuildClearbitUrl = vi.hoisted(() =>
-  vi.fn<[], string | null>(() => "https://logo.clearbit.com/keells.com")
+  vi.fn(() => "https://logo.clearbit.com/keells.com" as string | null)
 );
 
 vi.mock("../../../crawler/utils/logo", () => ({
