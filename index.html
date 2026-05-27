@@ -86,7 +86,7 @@
 </head>
 <body>
   <h1 data-testid="dashboard-title">card-max CI Dashboard</h1>
-  <p class="subtitle" data-testid="dashboard-timestamp">Generated: 2026-05-27T05:55:30.402Z</p>
+  <p class="subtitle" data-testid="dashboard-timestamp">Generated: 2026-05-27T06:32:10.037Z</p>
 
   <section class="badges" data-testid="badges-section">
       <a href="https://github.com/chamirusenarath96/card-max/actions/workflows/ci.yml" target="_blank" rel="noopener noreferrer" data-testid="badge-ci.yml">
@@ -104,8 +104,8 @@
     <section class="panel panel--pass" data-testid="allure-unit-panel">
       <h2>Unit / Component Tests</h2>
       <div class="total-bar total-bar--pass">
-      <span class="total-count">400 tests</span>
-      <span class="pill pill--pass">400 passed</span>
+      <span class="total-count">412 tests</span>
+      <span class="pill pill--pass">412 passed</span>
       
       
       
@@ -215,7 +215,7 @@
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">components/cards/OfferCard</td>
-          <td class="suite-pills"><span class="pill pill--pass">14✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">15✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
@@ -226,6 +226,11 @@
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">components/cards/OfferGrid</td>
           <td class="suite-pills"><span class="pill pill--pass">10✓</span></td>
+        </tr>
+<tr>
+          <td><span class="dot dot--pass"></span></td>
+          <td class="suite-name">components/cards/OfferImage</td>
+          <td class="suite-pills"><span class="pill pill--pass">3✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
@@ -264,6 +269,11 @@
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
+          <td class="suite-name">components/layout/Footer</td>
+          <td class="suite-pills"><span class="pill pill--pass">5✓</span></td>
+        </tr>
+<tr>
+          <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">components/layout/LoadTimeBadge</td>
           <td class="suite-pills"><span class="pill pill--pass">4✓</span></td>
         </tr>
@@ -295,7 +305,7 @@
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">components/search/HeroSearch</td>
-          <td class="suite-pills"><span class="pill pill--pass">23✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">26✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
@@ -327,18 +337,23 @@
       <a class="report-link" href="./allure-unit/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-unit">Open full Allure report →</a>
     </section>
 
-    <section class="panel panel--pass" data-testid="allure-e2e-panel">
+    <section class="panel panel--fail" data-testid="allure-e2e-panel">
       <h2>E2E Tests</h2>
-      <div class="total-bar total-bar--pass">
-      <span class="total-count">116 tests</span>
-      <span class="pill pill--pass">97 passed</span>
-      
+      <div class="total-bar total-bar--fail">
+      <span class="total-count">124 tests</span>
+      <span class="pill pill--pass">101 passed</span>
+      <span class="pill pill--fail">4 failed</span>
       
       <span class="pill pill--skip">19 skipped</span>
     </div>
     <table class="suite-table">
       <tbody>
         <tr>
+          <td><span class="dot dot--fail"></span></td>
+          <td class="suite-name">accessibility</td>
+          <td class="suite-pills"><span class="pill pill--pass">4✓</span> <span class="pill pill--fail">4✗</span></td>
+        </tr>
+<tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">adsense</td>
           <td class="suite-pills"><span class="pill pill--pass">6✓</span></td>
@@ -413,14 +428,14 @@
       <a class="report-link" href="./allure-e2e/index.html" target="_blank" rel="noopener noreferrer" data-testid="link-allure-e2e">Open full Allure report →</a>
     </section>
 
-    <section class="panel" data-testid="lighthouse-panel">
+    <section class="panel panel--unavailable" data-testid="lighthouse-panel">
       <h2>Lighthouse CI</h2>
-      <p><a href="./lighthouse/" target="_blank" rel="noopener noreferrer" data-testid="link-lighthouse">Open Lighthouse Report</a></p>
+      <p class="unavailable" data-testid="lighthouse-unavailable">Not available — deploy job must succeed to produce this artefact.</p>
     </section>
 
-    <section class="panel" data-testid="lh-user-flow-panel">
+    <section class="panel panel--unavailable" data-testid="lh-user-flow-panel">
       <h2>Lighthouse User Flow</h2>
-      <p><a href="./lighthouse-user-flow/report.html" target="_blank" rel="noopener noreferrer" data-testid="link-lh-user-flow">Open User Flow Report</a></p>
+      <p class="unavailable" data-testid="lh-user-flow-unavailable">Not available — deploy job must succeed to produce this artefact.</p>
     </section>
 
     <section class="panel panel--pass" data-testid="timing-panel">
@@ -433,17 +448,17 @@
           <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Bank filter (select + apply)</td>
-          <td class="suite-pills"><span class="pill pill--pass">150ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">164ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Category filter (select + apply)</td>
-          <td class="suite-pills"><span class="pill pill--pass">158ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">142ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Clear all filters</td>
-          <td class="suite-pills"><span class="pill pill--pass">70ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">79ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot" style="background:#555"></span></td>
@@ -453,12 +468,12 @@
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Filter drawer open</td>
-          <td class="suite-pills"><span class="pill pill--pass">134ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">127ms ✓</span></td>
         </tr>
 <tr>
           <td><span class="dot dot--pass"></span></td>
           <td class="suite-name">Filter drawer close</td>
-          <td class="suite-pills"><span class="pill pill--pass">358ms ✓</span></td>
+          <td class="suite-pills"><span class="pill pill--pass">359ms ✓</span></td>
         </tr>
         </tbody>
       </table>
