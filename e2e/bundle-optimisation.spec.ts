@@ -166,11 +166,14 @@ test.describe("Bundle Optimisation (Feature 033)", () => {
       await page.keyboard.press("Escape");
     }
 
-    // Filter out known non-critical warnings that are not errors
+    // Filter out known non-critical warnings and expected CI network failures.
+    // "Failed to load resource" covers images, adsense, and other external
+    // resources that are unavailable in the CI environment but are not JS errors.
     const realErrors = consoleErrors.filter(
       (msg) =>
         !msg.includes("Warning:") &&
-        !msg.includes("Download the React DevTools"),
+        !msg.includes("Download the React DevTools") &&
+        !msg.includes("Failed to load resource"),
     );
 
     expect(realErrors).toHaveLength(0);
