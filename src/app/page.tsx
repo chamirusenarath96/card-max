@@ -16,6 +16,7 @@ import {
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
 import { SearchDrawerDynamic } from "@/components/search/SearchDrawerDynamic";
+import { Footer } from "@/components/layout/Footer";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -297,21 +298,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       </main>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-border bg-muted">
-        <div className="mx-auto flex max-w-screen-2xl flex-col items-center justify-between gap-6 px-12 py-12 md:flex-row">
-          <div className="flex flex-col items-center gap-1 md:items-start">
-            <div className="text-lg font-bold tracking-tight">CardMax</div>
-            <p className="text-center text-sm text-muted-foreground md:text-left">
-              Sri Lanka&apos;s Credit Card Offers Aggregator
-            </p>
-          </div>
-          <div className="flex gap-8 text-sm text-muted-foreground">
-            <span>Privacy</span>
-            <span>Terms</span>
-            <span>Support</span>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
       {/* ── Floating scroll controls ──────────────────────────────────────── */}
       <ScrollControls />

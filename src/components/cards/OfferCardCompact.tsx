@@ -120,7 +120,7 @@ export function OfferCardCompact({ offer }: Props) {
             <div className="mt-auto flex flex-wrap items-center gap-1">
               <Badge
                 className="border-0 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white"
-                style={{ backgroundColor: `${bankMeta.color}dd` }}
+                style={{ backgroundColor: bankMeta.color }}
                 data-testid="offer-bank"
               >
                 {offer.bankDisplayName}

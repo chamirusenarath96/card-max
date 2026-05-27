@@ -143,7 +143,18 @@ export function HeroSearch({ initialQuery = "" }: Props) {
     <div className="flex flex-col items-center gap-5" data-testid="hero-search">
       {/* Search input row */}
       <div className="w-full max-w-2xl">
-        <div className="relative" ref={containerRef}>
+        {/* role="combobox" on the container so aria-expanded / aria-haspopup are on the
+            correct element — <input type="text"> has implicit role="textbox" which does
+            not allow aria-expanded (Lighthouse aria-allowed-attr audit). */}
+        <div
+          className="relative"
+          ref={containerRef}
+          role="combobox"
+          aria-expanded={dropdownOpen}
+          aria-haspopup="listbox"
+          aria-owns={dropdownOpen ? "hero-search-dropdown" : undefined}
+          aria-controls="hero-search-dropdown"
+        >
           <Search
             className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -170,8 +181,8 @@ export function HeroSearch({ initialQuery = "" }: Props) {
             placeholder={typewriterText || "Search offers, merchants, or banks…"}
             className="h-14 rounded-full border-border bg-background pl-12 pr-12 text-base shadow-md focus-visible:ring-primary/50"
             aria-label="Search offers"
-            aria-expanded={dropdownOpen}
             aria-autocomplete="list"
+            aria-controls="hero-search-dropdown"
           />
 
           {/* Clear button — only visible when there is text in the input */}
@@ -190,6 +201,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
           {/* Live results dropdown — shows only when query >= 2 chars and API has results */}
           {dropdownOpen && (
             <div
+              id="hero-search-dropdown"
               data-testid="search-dropdown"
               className="absolute top-full left-0 right-0 z-50 mt-2 overflow-hidden rounded-2xl border border-border bg-background shadow-xl"
               role="listbox"
