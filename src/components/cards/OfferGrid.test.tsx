@@ -124,4 +124,18 @@ describe("OfferGrid", () => {
     expect(screen.getByTestId("page-header")).toBe(headerNode);
     expect(screen.getByTestId("offer-grid")).toBeInTheDocument();
   });
+
+  // T4 (spec 034): OfferGrid accepts pre-fetched offers and renders without async fetching.
+  // The Suspense-compatible pattern: async data is resolved by the parent server component
+  // (OfferGridContent in page.tsx); OfferGrid itself is a pure render-from-props component.
+  it("renders pre-fetched offers synchronously (Suspense-compatible pattern, T4)", () => {
+    const offers: Offer[] = [
+      MOCK_OFFER,
+      { ...MOCK_OFFER, _id: "synth-002", merchant: "Burger King", title: "15% off at Burger King" },
+    ];
+    render(<OfferGrid offers={offers} />);
+    // All cards must be present immediately — no async fetch initiated by OfferGrid itself.
+    expect(screen.getAllByTestId("offer-card")).toHaveLength(2);
+    expect(screen.getByTestId("offer-grid")).toBeInTheDocument();
+  });
 });
