@@ -1,6 +1,12 @@
 "use client";
 
-import { FilterDrawer } from "./FilterDrawer";
+import dynamic from "next/dynamic";
+import { FilterDrawerSkeleton } from "./FilterDrawerSkeleton";
+
+const FilterDrawer = dynamic(
+  () => import("./FilterDrawer").then((m) => m.FilterDrawer),
+  { ssr: false, loading: () => <FilterDrawerSkeleton /> },
+);
 
 interface Props {
   activeBank?: string;

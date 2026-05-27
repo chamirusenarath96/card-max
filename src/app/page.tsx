@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 import { FilterBar } from "@/components/filters";
 import { OfferGrid } from "@/components/cards";
 import { HeroSearch } from "@/components/search/HeroSearch";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/navigation-menu";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
+import { SearchDrawerDynamic } from "@/components/search/SearchDrawerDynamic";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -58,7 +59,8 @@ function getBaseUrl(): string {
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-async function fetchOffers(params: SearchParams): Promise<ApiResponse> {
+// cache() deduplicates this call when OfferCount and OfferGridContent both invoke it
+const fetchOffers = cache(async (params: SearchParams): Promise<ApiResponse> => {
   const query = new URLSearchParams();
   if (params.bank) query.set("bank", params.bank);
   if (params.category) query.set("category", params.category);
@@ -80,7 +82,7 @@ async function fetchOffers(params: SearchParams): Promise<ApiResponse> {
   }
 
   return res.json();
-}
+});
 
 const BANK_LABEL: Record<string, string> = {
   commercial_bank: "Commercial Bank",
@@ -91,80 +93,45 @@ const BANK_LABEL: Record<string, string> = {
   bank_of_ceylon: "Bank of Ceylon",
 };
 
-function OfferGridSkeleton() {
+function GridOnlySkeleton() {
   return (
-    <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <Skeleton className="mb-2 h-9 w-48 rounded-lg" />
-          <Skeleton className="h-4 w-32 rounded" />
-        </div>
-        <Skeleton className="h-11 w-40 rounded-lg" />
-      </div>
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-48 rounded-2xl" />
-        ))}
-      </div>
+    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <Skeleton key={i} className="h-48 rounded-2xl" />
+      ))}
     </div>
   );
 }
 
-async function OfferGridSection({ params }: { params: SearchParams }) {
+async function OfferCount({ params }: { params: SearchParams }) {
+  const { pagination } = await fetchOffers(params);
+  return (
+    <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+      {pagination.total !== undefined
+        ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
+        : "Browsing offers"}
+      <LoadTimeBadge />
+    </p>
+  );
+}
+
+async function OfferGridContent({ params }: { params: SearchParams }) {
   const { data: offers, pagination } = await fetchOffers(params);
+  return (
+    <div data-testid="offer-grid-section">
+      <OfferGrid offers={offers} pagination={pagination} />
+    </div>
+  );
+}
+
+export default async function HomePage({ searchParams }: PageProps) {
+  const params = await searchParams;
 
   const hasActiveFilters =
     params.bank || params.category || params.offerType ||
     params.activeFrom || params.activeTo ||
     params.includeExpired === "true" ||
     (params.sort && params.sort !== "latest");
-
-  return (
-    <>
-      <div
-        className="mb-8 flex flex-wrap items-center justify-between gap-4"
-        data-testid="filter-section"
-      >
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
-            {params.q
-              ? `Results for "${params.q}"`
-              : params.bank
-                ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
-                : hasActiveFilters
-                  ? "Filtered Offers"
-                  : "All Offers"}
-          </h2>
-          <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            {pagination.total !== undefined
-              ? `${pagination.total} offer${pagination.total !== 1 ? "s" : ""} found`
-              : "Browsing offers"}
-            <LoadTimeBadge />
-          </p>
-        </div>
-
-        <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
-          <FilterBar
-            activeBank={params.bank}
-            activeCategory={params.category}
-            activeOfferType={params.offerType}
-            activeFrom={params.activeFrom}
-            activeTo={params.activeTo}
-            activeSort={params.sort}
-            includeExpired={params.includeExpired === "true"}
-          />
-        </Suspense>
-      </div>
-
-      <div data-testid="offer-grid-section">
-        <OfferGrid offers={offers} pagination={pagination} />
-      </div>
-    </>
-  );
-}
-
-export default async function HomePage({ searchParams }: PageProps) {
-  const params = await searchParams;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -196,7 +163,10 @@ export default async function HomePage({ searchParams }: PageProps) {
             </NavigationMenuList>
           </NavigationMenu>
 
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <SearchDrawerDynamic />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -250,8 +220,47 @@ export default async function HomePage({ searchParams }: PageProps) {
         {/* ── Offer grid ───────────────────────────────────────────────── */}
         <section className="mx-auto max-w-screen-xl px-6 py-8 xl:flex xl:gap-8">
           <div className="min-w-0 flex-1">
-            <Suspense fallback={<OfferGridSkeleton />}>
-              <OfferGridSection params={params} />
+            {/*
+             * filter-section renders without a DB dependency so the FilterBar
+             * client component (and its FilterDrawer dynamic chunk) can start
+             * loading at hydration time — well before the offers fetch returns.
+             * This keeps the drawer-open interaction within the 500 ms budget
+             * tested in interaction-timing.spec.ts.
+             */}
+            <div
+              className="mb-8 flex flex-wrap items-center justify-between gap-4"
+              data-testid="filter-section"
+            >
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
+                  {params.q
+                    ? `Results for "${params.q}"`
+                    : params.bank
+                      ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
+                      : hasActiveFilters
+                        ? "Filtered Offers"
+                        : "All Offers"}
+                </h2>
+                <Suspense fallback={<Skeleton className="mt-1.5 h-5 w-32 rounded" />}>
+                  <OfferCount params={params} />
+                </Suspense>
+              </div>
+
+              <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
+                <FilterBar
+                  activeBank={params.bank}
+                  activeCategory={params.category}
+                  activeOfferType={params.offerType}
+                  activeFrom={params.activeFrom}
+                  activeTo={params.activeTo}
+                  activeSort={params.sort}
+                  includeExpired={params.includeExpired === "true"}
+                />
+              </Suspense>
+            </div>
+
+            <Suspense fallback={<GridOnlySkeleton />}>
+              <OfferGridContent params={params} />
             </Suspense>
           </div>
 

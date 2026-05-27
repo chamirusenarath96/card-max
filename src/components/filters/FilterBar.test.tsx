@@ -1,13 +1,20 @@
-import { render, screen, fireEvent, waitFor } from "@/test-utils";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@/test-utils";
+import { describe, it, expect, vi } from "vitest";
 import { FilterBar } from "./FilterBar";
 
-// FilterBar renders FilterDrawer which calls useCategories.
+// FilterBar now lazy-loads FilterDrawer via next/dynamic.
+// Mock next/dynamic to show the loading skeleton synchronously so unit tests
+// stay fast and predictable. FilterDrawer interactions are covered by
+// FilterDrawer.test.tsx and the E2E bundle-optimisation spec.
+vi.mock("next/dynamic", () => ({
+  default: (_fn: unknown, opts?: { loading?: () => React.ReactElement }) =>
+    opts?.loading ?? (() => null),
+}));
+
 vi.mock("@/hooks/useCategories", () => ({
   useCategories: () => ({ data: [], isLoading: false, error: false }),
 }));
 
-const mockNavigate = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/",
@@ -16,49 +23,31 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/components/layout/NavigationProgressContext", () => ({
   useNavigationProgress: () => ({
-    navigate: mockNavigate,
+    navigate: vi.fn(),
     isPending: false,
     lastNavMs: null,
   }),
 }));
 
 describe("FilterBar", () => {
-  beforeEach(() => {
-    mockNavigate.mockClear();
-  });
-
   it("renders the filter bar container", () => {
     render(<FilterBar />);
     expect(screen.getByTestId("filter-bar")).toBeInTheDocument();
   });
 
-  it("renders the filter drawer trigger button", () => {
+  it("shows the loading skeleton while FilterDrawer is loading", () => {
     render(<FilterBar />);
-    expect(screen.getByTestId("filter-drawer-trigger")).toBeInTheDocument();
+    expect(screen.getByTestId("filter-drawer-skeleton")).toBeInTheDocument();
   });
 
-  it("shows no active-filter chips when no props are set", () => {
+  it("renders without props (no active filters)", () => {
     render(<FilterBar />);
-    // Active filter chips have been removed from FilterBar — only the Filters
-    // trigger button is rendered.
+    expect(screen.getByTestId("filter-bar")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Remove /i })).not.toBeInTheDocument();
   });
 
-  it("shows no active-filter chips even when filters are active", () => {
+  it("renders with active filter props without errors", () => {
     render(<FilterBar activeBank="commercial_bank" activeCategory="dining" />);
-    // Chips removed — filter state is managed inside the FilterDrawer only.
-    expect(screen.queryByRole("button", { name: /^Remove /i })).not.toBeInTheDocument();
-  });
-
-  it("filter by bank calls navigate with correct bank param (via Apply Filters)", async () => {
-    render(<FilterBar />);
-    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
-    const bankBtn = await screen.findByTestId("bank-filter-commercial_bank");
-    fireEvent.click(bankBtn);
-    // With multi-select, individual chip clicks don't navigate — Apply does.
-    fireEvent.click(screen.getByTestId("apply-filters"));
-    await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank")),
-    );
+    expect(screen.getByTestId("filter-bar")).toBeInTheDocument();
   });
 });
