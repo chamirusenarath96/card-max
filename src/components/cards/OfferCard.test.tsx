@@ -101,6 +101,14 @@ describe("OfferCard", () => {
     expect(card.className).toMatch(/grayscale/);
   });
 
+  it("bank badge uses full bank color without alpha reduction for WCAG contrast (T2)", () => {
+    render(<OfferCard offer={BASE_OFFER} />);
+    const bankBadge = screen.getByTestId("offer-bank");
+    expect(bankBadge).toBeInTheDocument();
+    // The hex color should not contain 'dd' appended to it
+    expect(bankBadge.getAttribute("style") ?? "").not.toMatch(/dd['";\s]|dddd/i);
+  });
+
   it('shows INSTALLMENT badge for percentage offer with 0% discount (legacy mis-classification)', () => {
     // Old scraper data stored "0% installments for 6 months" as offerType="percentage",
     // discountPercentage=0 before the generalised installment regex was added.

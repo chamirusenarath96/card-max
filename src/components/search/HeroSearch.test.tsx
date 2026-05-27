@@ -307,6 +307,36 @@ describe("HeroSearch", () => {
     expect(mockNavigate).toHaveBeenCalledWith("/");
   });
 
+  // --- AC3: ARIA attribute correctness (T3) ---
+
+  it("search input does not carry aria-expanded (invalid on role=textbox) (T3)", () => {
+    render(<HeroSearch />);
+    const input = screen.getByTestId("hero-search-input");
+    // aria-expanded must NOT be on the <input> — it belongs on the combobox container
+    expect(input).not.toHaveAttribute("aria-expanded");
+  });
+
+  it("combobox container carries aria-expanded and role=combobox (T3)", () => {
+    render(<HeroSearch />);
+    // The container div wrapping the input should have role="combobox"
+    const combobox = screen.getByRole("combobox");
+    expect(combobox).toBeInTheDocument();
+    expect(combobox).toHaveAttribute("aria-haspopup", "listbox");
+  });
+
+  it("combobox aria-expanded reflects dropdown open state (T3)", () => {
+    mockUseSearchSuggestions.mockReturnValue({
+      results: MOCK_RESULTS,
+      total: 2,
+      isLoading: false,
+      isActive: true,
+    });
+    render(<HeroSearch initialQuery="ke" />);
+    const combobox = screen.getByRole("combobox");
+    // Dropdown is open when isActive=true — aria-expanded should be true
+    expect(combobox).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("pressing Escape closes the dropdown", () => {
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
