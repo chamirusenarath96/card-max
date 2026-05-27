@@ -1,6 +1,8 @@
 # Feature 034 — Cold-Start Performance Improvement
 
-## Status: Todo
+## Status
+- [x] Spec drafted
+- [x] Implementation started
 
 ## Source
 Lighthouse CI audit (production run, May 2026) — 3-run comparison:
