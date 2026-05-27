@@ -1,6 +1,8 @@
 # Feature 032 — Accessibility Fixes (WCAG AA Compliance)
 
-## Status: Todo
+## Status
+- [x] Spec drafted
+- [x] Implementation started
 
 ## Source
 Lighthouse CI audit (production run, May 2026) — Accessibility score 91/100.
