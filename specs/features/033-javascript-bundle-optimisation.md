@@ -1,6 +1,9 @@
 # Feature 033 — JavaScript Bundle Optimisation
 
-## Status: Todo
+## Status
+
+- [x] Spec drafted
+- [x] Implementation started
 
 ## Source
 Lighthouse CI audit (production run, May 2026):
