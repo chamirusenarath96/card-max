@@ -20,7 +20,10 @@ import { Footer } from "@/components/layout/Footer";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
-export const revalidate = 3600;
+// ISR: serve cached HTML from CDN for 60 s, then revalidate in background.
+// Short enough to keep data fresh; long enough that most cold-start visitors
+// hit the cached version. Crawler busts this via /api/revalidate after each run.
+export const revalidate = 60;
 
 interface PageProps {
   searchParams: Promise<{
@@ -96,7 +99,7 @@ const BANK_LABEL: Record<string, string> = {
 
 function GridOnlySkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+    <div data-testid="offer-grid-skeleton" className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <Skeleton key={i} className="h-48 rounded-2xl" />
       ))}
