@@ -142,6 +142,9 @@ export function FilterDrawer({
     if (to) params.set("activeTo", to); else params.delete("activeTo");
 
     params.delete("page");
+    // Applying filters starts a new search intent — clear any freetext query
+    // so filter results are not unexpectedly constrained by a previous search.
+    params.delete("q");
 
     // Close drawer optimistically, then navigate (one DB call for all changes).
     setOpen(false);
