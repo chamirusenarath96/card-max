@@ -3,7 +3,7 @@
 ## Status
 - [x] Spec drafted
 - [x] Spec reviewed
-- [ ] Implementation started
+- [x] Implementation started
 - [ ] Tests written
 - [ ] Local gates passed
 - [ ] Done
