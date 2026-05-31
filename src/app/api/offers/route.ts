@@ -24,7 +24,20 @@ import { OfferQuerySchema } from "../../../../specs/data/offer.schema";
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
+    // Extract multi-value params with getAll() before building the object passed
+    // to Zod.  Object.fromEntries() only captures the last value for repeated keys
+    // (e.g. bank=hnb&bank=combank → { bank: 'combank' }), losing earlier values.
+    const sp = request.nextUrl.searchParams;
+    const banks     = sp.getAll("bank").filter(Boolean);
+    const categories = sp.getAll("category").filter(Boolean);
+    const offerTypes = sp.getAll("offerType").filter(Boolean);
+
+    const searchParams = {
+      ...Object.fromEntries(sp.entries()),
+      ...(banks.length     ? { bank: banks }          : {}),
+      ...(categories.length ? { category: categories } : {}),
+      ...(offerTypes.length ? { offerType: offerTypes } : {}),
+    };
     const parsed = OfferQuerySchema.safeParse(searchParams);
 
     if (!parsed.success) {
@@ -67,10 +80,10 @@ export async function GET(request: NextRequest) {
       filter.isExpired = false;
     }
 
-    // Standard dimension filters
-    if (bank) filter.bank = bank;
-    if (category) filter.category = category;
-    if (offerType) filter.offerType = offerType;
+    // Dimension filters — use $in so single-value and multi-value both work.
+    if (bank?.length)      filter.bank      = bank.length === 1 ? bank[0]      : { $in: bank };
+    if (category?.length)  filter.category  = category.length === 1 ? category[0]  : { $in: category };
+    if (offerType?.length) filter.offerType = offerType.length === 1 ? offerType[0] : { $in: offerType };
 
     // Discount percentage range
     if (minDiscount !== undefined || maxDiscount !== undefined) {

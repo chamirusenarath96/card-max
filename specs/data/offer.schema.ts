@@ -133,11 +133,28 @@ export type OfferInput = z.infer<typeof OfferInputSchema>;
  */
 export const SortSchema = z.enum(["latest", "expiringSoon"]);
 
+/**
+ * Normalises a query-param value so the schema accepts both a single string
+ * (e.g. `bank=hnb`) and a repeated-param array (e.g. `bank=hnb&bank=combank`).
+ * An empty array or absent value normalises to `undefined`.
+ */
+function toArray<T extends z.ZodTypeAny>(inner: T) {
+  return z.preprocess(
+    (v) =>
+      v === undefined || v === null || (Array.isArray(v) && v.length === 0)
+        ? undefined
+        : Array.isArray(v)
+          ? v
+          : [v],
+    z.array(inner).optional(),
+  );
+}
+
 export const OfferQuerySchema = z.object({
-  bank: BankSchema.optional(),
-  category: CategorySchema.optional(),
+  bank: toArray(BankSchema),
+  category: toArray(CategorySchema),
   merchant: z.string().optional(),
-  offerType: OfferTypeSchema.optional(),
+  offerType: toArray(OfferTypeSchema),
   minDiscount: z.coerce.number().min(0).max(100).optional(),
   maxDiscount: z.coerce.number().min(0).max(100).optional(),
   activeOn: z.coerce.date().optional(),

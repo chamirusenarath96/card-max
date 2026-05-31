@@ -38,9 +38,9 @@ const OFFER_TYPES: { value: string; label: string }[] = [
 ];
 
 interface Props {
-  activeBank?: string;
-  activeCategory?: string;
-  activeOfferType?: string;
+  activeBanks?: string[];
+  activeCategories?: string[];
+  activeOfferTypes?: string[];
   activeFrom?: string;
   activeTo?: string;
   activeSort?: string;
@@ -58,10 +58,15 @@ function toISODate(date: Date | undefined): string | null {
   return format(date, "yyyy-MM-dd");
 }
 
+/** Toggle a value in/out of an array. */
+function toggle(arr: string[], val: string): string[] {
+  return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
+}
+
 export function FilterDrawer({
-  activeBank,
-  activeCategory,
-  activeOfferType,
+  activeBanks = [],
+  activeCategories = [],
+  activeOfferTypes = [],
   activeFrom,
   activeTo,
   activeSort,
@@ -76,22 +81,21 @@ export function FilterDrawer({
   const [open, setOpen] = useState(false);
 
   // ── Pending filter state — updated locally, applied on "Apply Filters" ───
-  const [pendingBank, setPendingBank] = useState<string>("");
-  const [pendingCategory, setPendingCategory] = useState<string>("");
-  const [pendingOfferType, setPendingOfferType] = useState<string>("");
+  const [pendingBanks,      setPendingBanks]      = useState<string[]>([]);
+  const [pendingCategories, setPendingCategories] = useState<string[]>([]);
+  const [pendingOfferTypes, setPendingOfferTypes] = useState<string[]>([]);
   const [pendingSort, setPendingSort] = useState<string>("latest");
   const [pendingIncludeExpired, setPendingIncludeExpired] = useState<boolean>(false);
   const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>(undefined);
 
   /**
    * Sync pending state from URL params when the drawer opens.
-   * Called inside the onOpenChange event handler — not inside a useEffect —
-   * so setting state in a batch is correct and avoids cascading renders.
+   * Uses searchParams.getAll() so multi-value params are read correctly.
    */
   function syncPendingFromUrl() {
-    setPendingBank(activeBank ?? "");
-    setPendingCategory(activeCategory ?? "");
-    setPendingOfferType(activeOfferType ?? "");
+    setPendingBanks(searchParams.getAll("bank"));
+    setPendingCategories(searchParams.getAll("category"));
+    setPendingOfferTypes(searchParams.getAll("offerType"));
     setPendingSort(activeSort ?? "latest");
     setPendingIncludeExpired(includeExpired ?? false);
     const from = toDate(activeFrom);
@@ -105,34 +109,43 @@ export function FilterDrawer({
   }
 
   // ── Active count (reflects applied URL state, shown on trigger badge) ────
-  const activeCount = [
-    activeBank,
-    activeCategory,
-    activeOfferType,
-    activeFrom,
-    activeTo,
-    activeSort && activeSort !== "latest" ? activeSort : null,
-    includeExpired ? "expired" : null,
-  ].filter(Boolean).length;
+  const activeCount =
+    activeBanks.length +
+    activeCategories.length +
+    activeOfferTypes.length +
+    [
+      activeFrom,
+      activeTo,
+      activeSort && activeSort !== "latest" ? activeSort : null,
+      includeExpired ? "expired" : null,
+    ].filter(Boolean).length;
 
   // ── Pending count (reflects changes not yet applied) ─────────────────────
-  const pendingCount = [
-    pendingBank,
-    pendingCategory,
-    pendingOfferType,
-    pendingDateRange?.from ? toISODate(pendingDateRange.from) : null,
-    pendingDateRange?.to ? toISODate(pendingDateRange.to) : null,
-    pendingSort !== "latest" ? pendingSort : null,
-    pendingIncludeExpired ? "expired" : null,
-  ].filter(Boolean).length;
+  const pendingCount =
+    pendingBanks.length +
+    pendingCategories.length +
+    pendingOfferTypes.length +
+    [
+      pendingDateRange?.from ? toISODate(pendingDateRange.from) : null,
+      pendingDateRange?.to ? toISODate(pendingDateRange.to) : null,
+      pendingSort !== "latest" ? pendingSort : null,
+      pendingIncludeExpired ? "expired" : null,
+    ].filter(Boolean).length;
 
   // ── Apply all pending state to URL (single router.push call) ─────────────
   function applyFilters() {
     const params = new URLSearchParams(searchParams.toString());
 
-    if (pendingBank) params.set("bank", pendingBank); else params.delete("bank");
-    if (pendingCategory) params.set("category", pendingCategory); else params.delete("category");
-    if (pendingOfferType) params.set("offerType", pendingOfferType); else params.delete("offerType");
+    // Multi-value params: delete all existing values then append each selection.
+    params.delete("bank");
+    pendingBanks.forEach((b) => params.append("bank", b));
+
+    params.delete("category");
+    pendingCategories.forEach((c) => params.append("category", c));
+
+    params.delete("offerType");
+    pendingOfferTypes.forEach((t) => params.append("offerType", t));
+
     if (pendingSort !== "latest") params.set("sort", pendingSort); else params.delete("sort");
     if (pendingIncludeExpired) params.set("includeExpired", "true"); else params.delete("includeExpired");
 
@@ -154,9 +167,9 @@ export function FilterDrawer({
 
   // ── Clear all filters (immediate — no Apply needed) ───────────────────────
   function clearAll() {
-    setPendingBank("");
-    setPendingCategory("");
-    setPendingOfferType("");
+    setPendingBanks([]);
+    setPendingCategories([]);
+    setPendingOfferTypes([]);
     setPendingSort("latest");
     setPendingIncludeExpired(false);
     setPendingDateRange(undefined);
@@ -212,7 +225,7 @@ export function FilterDrawer({
                 className="h-8 gap-1.5 px-3 text-xs text-muted-foreground hover:text-destructive"
               >
                 <X className="size-3.5" />
-                Clear all
+                Clear all ({activeCount})
               </Button>
             )}
             <Button
@@ -272,14 +285,14 @@ export function FilterDrawer({
               <Button
                 type="button"
                 data-testid="bank-filter-all"
-                variant={!pendingBank ? "default" : "outline"}
+                variant={pendingBanks.length === 0 ? "default" : "outline"}
                 className="h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold"
-                onClick={() => setPendingBank("")}
+                onClick={() => setPendingBanks([])}
               >
                 All Banks
               </Button>
               {BANKS.map(([bank, meta]) => {
-                const isSelected = pendingBank === bank;
+                const isSelected = pendingBanks.includes(bank);
                 return (
                   <Button
                     key={bank}
@@ -294,7 +307,7 @@ export function FilterDrawer({
                         : "bg-background text-foreground hover:bg-accent",
                     )}
                     style={isSelected ? { backgroundColor: meta.color } : undefined}
-                    onClick={() => setPendingBank(pendingBank === bank ? "" : bank)}
+                    onClick={() => setPendingBanks(toggle(pendingBanks, bank))}
                   >
                     {meta.displayName}
                   </Button>
@@ -354,9 +367,9 @@ export function FilterDrawer({
               <Button
                 type="button"
                 data-testid="category-chip-all"
-                variant={!pendingCategory ? "default" : "outline"}
+                variant={pendingCategories.length === 0 ? "default" : "outline"}
                 className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                onClick={() => setPendingCategory("")}
+                onClick={() => setPendingCategories([])}
               >
                 All
               </Button>
@@ -371,23 +384,22 @@ export function FilterDrawer({
                 ))}
 
               {!categoriesLoading &&
-                categories.map((cat) => (
-                  <Button
-                    key={cat.category}
-                    type="button"
-                    data-testid={`category-chip-${cat.category}`}
-                    variant={pendingCategory === cat.category ? "default" : "outline"}
-                    aria-pressed={pendingCategory === cat.category}
-                    className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                    onClick={() =>
-                      setPendingCategory(
-                        pendingCategory === cat.category ? "" : cat.category,
-                      )
-                    }
-                  >
-                    {cat.label}
-                  </Button>
-                ))}
+                categories.map((cat) => {
+                  const isSelected = pendingCategories.includes(cat.category);
+                  return (
+                    <Button
+                      key={cat.category}
+                      type="button"
+                      data-testid={`category-chip-${cat.category}`}
+                      variant={isSelected ? "default" : "outline"}
+                      aria-pressed={isSelected}
+                      className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                      onClick={() => setPendingCategories(toggle(pendingCategories, cat.category))}
+                    >
+                      {cat.label}
+                    </Button>
+                  );
+                })}
             </div>
           </section>
 
@@ -404,29 +416,28 @@ export function FilterDrawer({
               <Button
                 type="button"
                 data-testid="offer-type-all"
-                variant={!pendingOfferType ? "default" : "outline"}
+                variant={pendingOfferTypes.length === 0 ? "default" : "outline"}
                 className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                onClick={() => setPendingOfferType("")}
+                onClick={() => setPendingOfferTypes([])}
               >
                 All Types
               </Button>
-              {OFFER_TYPES.map((type) => (
-                <Button
-                  key={type.value}
-                  type="button"
-                  data-testid={`offer-type-${type.value}`}
-                  variant={pendingOfferType === type.value ? "default" : "outline"}
-                  aria-pressed={pendingOfferType === type.value}
-                  className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                  onClick={() =>
-                    setPendingOfferType(
-                      pendingOfferType === type.value ? "" : type.value,
-                    )
-                  }
-                >
-                  {type.label}
-                </Button>
-              ))}
+              {OFFER_TYPES.map((type) => {
+                const isSelected = pendingOfferTypes.includes(type.value);
+                return (
+                  <Button
+                    key={type.value}
+                    type="button"
+                    data-testid={`offer-type-${type.value}`}
+                    variant={isSelected ? "default" : "outline"}
+                    aria-pressed={isSelected}
+                    className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                    onClick={() => setPendingOfferTypes(toggle(pendingOfferTypes, type.value))}
+                  >
+                    {type.label}
+                  </Button>
+                );
+              })}
             </div>
           </section>
 

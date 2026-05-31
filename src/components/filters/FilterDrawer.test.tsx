@@ -104,15 +104,15 @@ describe("FilterDrawer", () => {
     expect(screen.queryByTestId("category-skeleton")).not.toBeInTheDocument();
   });
 
-  // ── AC8: "All" pill always present ───────────────────────────────────────
+  // ── "All" pills always present ────────────────────────────────────────────
 
-  it("AC8 — 'All' category chip is always present regardless of API state", async () => {
+  it("'All' category chip is always present regardless of API state", async () => {
     render(<FilterDrawer />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     expect(await screen.findByTestId("category-chip-all")).toBeInTheDocument();
   });
 
-  it("AC8 — 'All' chip is present even when API returns empty data", async () => {
+  it("'All' chip is present even when API returns empty data", async () => {
     mockUseCategories.mockReturnValue({ data: [], isLoading: false, error: false });
 
     render(<FilterDrawer />);
@@ -121,7 +121,7 @@ describe("FilterDrawer", () => {
     expect(screen.queryByTestId("category-chip-dining")).not.toBeInTheDocument();
   });
 
-  it("AC8 — 'All' chip is present even when API errors", async () => {
+  it("'All' chip is present even when API errors", async () => {
     mockUseCategories.mockReturnValue({ data: [], isLoading: false, error: true });
 
     render(<FilterDrawer />);
@@ -129,39 +129,80 @@ describe("FilterDrawer", () => {
     expect(await screen.findByTestId("category-chip-all")).toBeInTheDocument();
   });
 
-  // ── Multi-select: filter chips update pending state, Apply navigates ─────
+  // ── Multi-select: chips toggle, Apply navigates ───────────────────────────
 
   it("clicking a bank chip highlights it without navigating", async () => {
     render(<FilterDrawer />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     const chip = await screen.findByTestId("bank-filter-commercial_bank");
     fireEvent.click(chip);
-    // Navigate should NOT be called yet (pending state only)
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it("clicking Apply after selecting bank navigates with bank param", async () => {
+  it("clicking Apply after selecting one bank navigates with bank param", async () => {
     render(<FilterDrawer />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
-    const chip = await screen.findByTestId("bank-filter-commercial_bank");
-    fireEvent.click(chip);
+    fireEvent.click(await screen.findByTestId("bank-filter-commercial_bank"));
     fireEvent.click(screen.getByTestId("apply-filters"));
     expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"));
   });
 
-  // ── AC7: clicking a chip and applying sets the URL param ─────────────────
+  it("AC1 — clicking two bank chips then Apply includes both banks in the URL", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    fireEvent.click(await screen.findByTestId("bank-filter-hnb"));
+    fireEvent.click(await screen.findByTestId("bank-filter-sampath_bank"));
+    fireEvent.click(screen.getByTestId("apply-filters"));
+    const url = mockNavigate.mock.calls[0]![0] as string;
+    expect(url).toContain("bank=hnb");
+    expect(url).toContain("bank=sampath_bank");
+  });
+
+  it("AC2 — clicking a selected bank chip again deselects it", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const chip = await screen.findByTestId("bank-filter-hnb");
+    fireEvent.click(chip); // select
+    fireEvent.click(chip); // deselect
+    fireEvent.click(screen.getByTestId("apply-filters"));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.not.stringContaining("bank=hnb"));
+  });
+
+  it("AC3 — 'All Banks' button clears multi-bank selection", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    fireEvent.click(await screen.findByTestId("bank-filter-hnb"));
+    fireEvent.click(await screen.findByTestId("bank-filter-sampath_bank"));
+    fireEvent.click(await screen.findByTestId("bank-filter-all"));
+    fireEvent.click(screen.getByTestId("apply-filters"));
+    const url = mockNavigate.mock.calls[0]![0] as string;
+    expect(url).not.toContain("bank=");
+  });
+
+  // ── Category multi-select ─────────────────────────────────────────────────
 
   it("AC7 — clicking a dynamic category chip then Apply sets the category filter", async () => {
     render(<FilterDrawer />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
-    const chip = await screen.findByTestId("category-chip-dining");
-    fireEvent.click(chip);
+    fireEvent.click(await screen.findByTestId("category-chip-dining"));
     fireEvent.click(screen.getByTestId("apply-filters"));
     expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("category=dining"));
   });
 
-  it("clicking 'All' category then Apply clears the category filter", async () => {
-    render(<FilterDrawer activeCategory="dining" />);
+  it("clicking two categories then Apply includes both in the URL", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    fireEvent.click(await screen.findByTestId("category-chip-dining"));
+    fireEvent.click(await screen.findByTestId("category-chip-groceries"));
+    fireEvent.click(screen.getByTestId("apply-filters"));
+    const url = mockNavigate.mock.calls[0]![0] as string;
+    expect(url).toContain("category=dining");
+    expect(url).toContain("category=groceries");
+  });
+
+  it("clicking 'All' category chip clears all category selections", async () => {
+    mockSearchParams.params = new URLSearchParams("category=dining");
+    render(<FilterDrawer activeCategories={["dining"]} />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     fireEvent.click(await screen.findByTestId("category-chip-all"));
     fireEvent.click(screen.getByTestId("apply-filters"));
@@ -170,16 +211,23 @@ describe("FilterDrawer", () => {
     );
   });
 
+  // ── Active count badge ────────────────────────────────────────────────────
+
+  it("AC6 — active count badge reflects total number of selections", () => {
+    render(<FilterDrawer activeBanks={["hnb", "sampath_bank"]} activeCategories={["dining"]} />);
+    // 2 banks + 1 category = 3 active filters
+    const trigger = screen.getByTestId("filter-drawer-trigger");
+    expect(trigger.textContent).toContain("3");
+  });
+
   // ── Apply clears freetext search query ───────────────────────────────────
 
   it("applying filters clears the 'q' search param from the URL", async () => {
     mockSearchParams.params = new URLSearchParams("q=pizza&category=dining");
 
-    render(<FilterDrawer activeCategory="dining" />);
+    render(<FilterDrawer activeCategories={["dining"]} />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
-    // Pick a bank then apply
-    const chip = await screen.findByTestId("bank-filter-commercial_bank");
-    fireEvent.click(chip);
+    fireEvent.click(await screen.findByTestId("bank-filter-commercial_bank"));
     fireEvent.click(screen.getByTestId("apply-filters"));
 
     expect(mockNavigate).toHaveBeenCalledWith(expect.not.stringContaining("q="));
@@ -189,7 +237,7 @@ describe("FilterDrawer", () => {
   // ── Clear all: immediate navigation without Apply ─────────────────────────
 
   it("Clear all navigates immediately to pathname without any params", async () => {
-    render(<FilterDrawer activeBank="hnb" activeCategory="dining" />);
+    render(<FilterDrawer activeBanks={["hnb"]} activeCategories={["dining"]} />);
     fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
     await screen.findByTestId("filter-drawer");
     fireEvent.click(screen.getByTestId("clear-all-filters"));
@@ -204,7 +252,7 @@ describe("FilterDrawer", () => {
   });
 
   it("trigger button does not have glow animation when filters are active", () => {
-    render(<FilterDrawer activeBank="hnb" />);
+    render(<FilterDrawer activeBanks={["hnb"]} />);
     expect(screen.getByTestId("filter-drawer-trigger")).not.toHaveClass("animate-filter-glow");
   });
 });

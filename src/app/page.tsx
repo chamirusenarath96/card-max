@@ -25,11 +25,14 @@ import type { Pagination } from "@/components/cards";
 // hit the cached version. Crawler busts this via /api/revalidate after each run.
 export const revalidate = 60;
 
+/** Next.js may return `string` or `string[]` for repeated query params. */
+type RawParam = string | string[] | undefined;
+
 interface PageProps {
   searchParams: Promise<{
-    bank?: string;
-    category?: string;
-    offerType?: string;
+    bank?: RawParam;
+    category?: RawParam;
+    offerType?: RawParam;
     activeFrom?: string;
     activeTo?: string;
     sort?: string;
@@ -39,15 +42,21 @@ interface PageProps {
   }>;
 }
 
+/** Normalise a Next.js searchParam value to a `string[]` (never undefined). */
+function asArray(v: RawParam): string[] {
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
 interface ApiResponse {
   data: Offer[];
   pagination: Pagination;
 }
 
 type SearchParams = {
-  bank?: string;
-  category?: string;
-  offerType?: string;
+  banks?: string[];
+  categories?: string[];
+  offerTypes?: string[];
   activeFrom?: string;
   activeTo?: string;
   sort?: string;
@@ -66,9 +75,10 @@ function getBaseUrl(): string {
 // cache() deduplicates this call when OfferCount and OfferGridContent both invoke it
 const fetchOffers = cache(async (params: SearchParams): Promise<ApiResponse> => {
   const query = new URLSearchParams();
-  if (params.bank) query.set("bank", params.bank);
-  if (params.category) query.set("category", params.category);
-  if (params.offerType) query.set("offerType", params.offerType);
+  // Multi-value params use repeated keys (bank=a&bank=b)
+  params.banks?.forEach((b) => query.append("bank", b));
+  params.categories?.forEach((c) => query.append("category", c));
+  params.offerTypes?.forEach((t) => query.append("offerType", t));
   if (params.activeFrom) query.set("activeFrom", params.activeFrom);
   if (params.activeTo) query.set("activeTo", params.activeTo);
   if (params.sort) query.set("sort", params.sort);
@@ -129,13 +139,41 @@ async function OfferGridContent({ params }: { params: SearchParams }) {
 }
 
 export default async function HomePage({ searchParams }: PageProps) {
-  const params = await searchParams;
+  const raw = await searchParams;
+
+  // Normalise multi-value params to string arrays
+  const activeBanks      = asArray(raw.bank);
+  const activeCategories = asArray(raw.category);
+  const activeOfferTypes = asArray(raw.offerType);
+
+  const params: SearchParams = {
+    banks:          activeBanks.length      ? activeBanks      : undefined,
+    categories:     activeCategories.length ? activeCategories : undefined,
+    offerTypes:     activeOfferTypes.length ? activeOfferTypes : undefined,
+    activeFrom:     raw.activeFrom,
+    activeTo:       raw.activeTo,
+    sort:           raw.sort,
+    q:              raw.q,
+    page:           raw.page,
+    includeExpired: raw.includeExpired,
+  };
 
   const hasActiveFilters =
-    params.bank || params.category || params.offerType ||
-    params.activeFrom || params.activeTo ||
-    params.includeExpired === "true" ||
-    (params.sort && params.sort !== "latest");
+    activeBanks.length > 0 ||
+    activeCategories.length > 0 ||
+    activeOfferTypes.length > 0 ||
+    raw.activeFrom || raw.activeTo ||
+    raw.includeExpired === "true" ||
+    (raw.sort && raw.sort !== "latest");
+
+  // Page heading: specific bank name only when exactly one bank is selected.
+  const headingTitle = raw.q
+    ? `Results for "${raw.q}"`
+    : activeBanks.length === 1
+      ? `${BANK_LABEL[activeBanks[0]!] ?? "Bank"} Offers`
+      : hasActiveFilters
+        ? "Filtered Offers"
+        : "All Offers";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -216,7 +254,7 @@ export default async function HomePage({ searchParams }: PageProps) {
                 </div>
               }
             >
-              <HeroSearch initialQuery={params.q} />
+              <HeroSearch initialQuery={raw.q} />
             </Suspense>
           </div>
         </section>
@@ -237,13 +275,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             >
               <div>
                 <h2 className="text-2xl font-bold tracking-tight md:text-3xl lg:text-4xl">
-                  {params.q
-                    ? `Results for "${params.q}"`
-                    : params.bank
-                      ? `${BANK_LABEL[params.bank] ?? "Bank"} Offers`
-                      : hasActiveFilters
-                        ? "Filtered Offers"
-                        : "All Offers"}
+                  {headingTitle}
                 </h2>
                 <Suspense fallback={<Skeleton className="mt-1.5 h-5 w-32 rounded" />}>
                   <OfferCount params={params} />
@@ -252,13 +284,13 @@ export default async function HomePage({ searchParams }: PageProps) {
 
               <Suspense fallback={<Skeleton className="h-11 w-40 rounded-lg" />}>
                 <FilterBar
-                  activeBank={params.bank}
-                  activeCategory={params.category}
-                  activeOfferType={params.offerType}
-                  activeFrom={params.activeFrom}
-                  activeTo={params.activeTo}
-                  activeSort={params.sort}
-                  includeExpired={params.includeExpired === "true"}
+                  activeBanks={activeBanks}
+                  activeCategories={activeCategories}
+                  activeOfferTypes={activeOfferTypes}
+                  activeFrom={raw.activeFrom}
+                  activeTo={raw.activeTo}
+                  activeSort={raw.sort}
+                  includeExpired={raw.includeExpired === "true"}
                 />
               </Suspense>
             </div>

@@ -134,28 +134,58 @@ describe("GET /api/offers", () => {
 
   // ── Filter: bank ──────────────────────────────────────────────────────────
 
-  it("passes bank filter to OfferModel.find", async () => {
+  it("passes single bank as equality filter to OfferModel.find", async () => {
     await GET(makeRequest({ bank: "hnb" }));
     expect(mockFind).toHaveBeenCalledWith(
       expect.objectContaining({ bank: "hnb" })
     );
   });
 
+  it("AC9 — multiple bank params produce a $in filter", async () => {
+    const url = new URL("http://localhost:3000/api/offers");
+    url.searchParams.append("bank", "hnb");
+    url.searchParams.append("bank", "sampath_bank");
+    await GET(new NextRequest(url));
+    expect(mockFind).toHaveBeenCalledWith(
+      expect.objectContaining({ bank: { $in: ["hnb", "sampath_bank"] } })
+    );
+  });
+
   // ── Filter: category ─────────────────────────────────────────────────────
 
-  it("passes category filter to OfferModel.find", async () => {
+  it("passes single category as equality filter to OfferModel.find", async () => {
     await GET(makeRequest({ category: "dining" }));
     expect(mockFind).toHaveBeenCalledWith(
       expect.objectContaining({ category: "dining" })
     );
   });
 
+  it("multiple category params produce a $in filter", async () => {
+    const url = new URL("http://localhost:3000/api/offers");
+    url.searchParams.append("category", "dining");
+    url.searchParams.append("category", "travel");
+    await GET(new NextRequest(url));
+    expect(mockFind).toHaveBeenCalledWith(
+      expect.objectContaining({ category: { $in: ["dining", "travel"] } })
+    );
+  });
+
   // ── Filter: offerType ─────────────────────────────────────────────────────
 
-  it("passes offerType filter to OfferModel.find", async () => {
+  it("passes single offerType as equality filter to OfferModel.find", async () => {
     await GET(makeRequest({ offerType: "bogo" }));
     expect(mockFind).toHaveBeenCalledWith(
       expect.objectContaining({ offerType: "bogo" })
+    );
+  });
+
+  it("multiple offerType params produce a $in filter", async () => {
+    const url = new URL("http://localhost:3000/api/offers");
+    url.searchParams.append("offerType", "percentage");
+    url.searchParams.append("offerType", "cashback");
+    await GET(new NextRequest(url));
+    expect(mockFind).toHaveBeenCalledWith(
+      expect.objectContaining({ offerType: { $in: ["percentage", "cashback"] } })
     );
   });
 
