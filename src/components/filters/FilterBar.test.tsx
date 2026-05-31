@@ -47,7 +47,7 @@ describe("FilterBar", () => {
   });
 
   it("renders with active filter props without errors", () => {
-    render(<FilterBar activeBank="commercial_bank" activeCategory="dining" />);
+    render(<FilterBar activeBanks={["commercial_bank"]} activeCategories={["dining"]} />);
     expect(screen.getByTestId("filter-bar")).toBeInTheDocument();
   });
 });

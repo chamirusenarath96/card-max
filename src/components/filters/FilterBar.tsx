@@ -9,9 +9,9 @@ const FilterDrawer = dynamic(
 );
 
 interface Props {
-  activeBank?: string;
-  activeCategory?: string;
-  activeOfferType?: string;
+  activeBanks?: string[];
+  activeCategories?: string[];
+  activeOfferTypes?: string[];
   activeFrom?: string;
   activeTo?: string;
   activeSort?: string;
@@ -19,9 +19,9 @@ interface Props {
 }
 
 export function FilterBar({
-  activeBank,
-  activeCategory,
-  activeOfferType,
+  activeBanks,
+  activeCategories,
+  activeOfferTypes,
   activeFrom,
   activeTo,
   activeSort,
@@ -30,9 +30,9 @@ export function FilterBar({
   return (
     <div data-testid="filter-bar">
       <FilterDrawer
-        activeBank={activeBank}
-        activeCategory={activeCategory}
-        activeOfferType={activeOfferType}
+        activeBanks={activeBanks}
+        activeCategories={activeCategories}
+        activeOfferTypes={activeOfferTypes}
         activeFrom={activeFrom}
         activeTo={activeTo}
         activeSort={activeSort}
