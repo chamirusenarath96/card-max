@@ -3,10 +3,10 @@
 ## Status
 - [x] Spec drafted
 - [x] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Local gates passed
-- [ ] Done
+- [x] Implementation started
+- [x] Tests written
+- [x] Local gates passed
+- [x] Done
 
 ## Overview
 Allow users to select **multiple values** for the bank, category, and offer-type
