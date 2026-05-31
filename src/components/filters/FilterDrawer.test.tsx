@@ -5,10 +5,12 @@ import type { UseCategoriesResult } from "@/hooks/useCategories";
 
 const mockNavigate = vi.fn();
 
+const mockSearchParams = { params: new URLSearchParams() };
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams.params,
 }));
 
 vi.mock("@/components/layout/NavigationProgressContext", () => ({
@@ -34,6 +36,7 @@ const MOCK_CATEGORIES: UseCategoriesResult["data"] = [
 describe("FilterDrawer", () => {
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockSearchParams.params = new URLSearchParams();
     mockUseCategories.mockReturnValue({
       data: MOCK_CATEGORIES,
       isLoading: false,
@@ -165,6 +168,22 @@ describe("FilterDrawer", () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith(expect.not.stringContaining("category=")),
     );
+  });
+
+  // ── Apply clears freetext search query ───────────────────────────────────
+
+  it("applying filters clears the 'q' search param from the URL", async () => {
+    mockSearchParams.params = new URLSearchParams("q=pizza&category=dining");
+
+    render(<FilterDrawer activeCategory="dining" />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    // Pick a bank then apply
+    const chip = await screen.findByTestId("bank-filter-commercial_bank");
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByTestId("apply-filters"));
+
+    expect(mockNavigate).toHaveBeenCalledWith(expect.not.stringContaining("q="));
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"));
   });
 
   // ── Clear all: immediate navigation without Apply ─────────────────────────

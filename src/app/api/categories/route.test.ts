@@ -32,7 +32,7 @@ describe("GET /api/categories", () => {
     mockAggregate.mockReset();
   });
 
-  it("AC1 — returns sorted categories with counts from non-expired offers", async () => {
+  it("AC1 — returns all categories with counts sorted by count desc", async () => {
     mockAggregate.mockResolvedValue([
       { _id: "dining", count: 42 },
       { _id: "groceries", count: 31 },
@@ -57,17 +57,20 @@ describe("GET /api/categories", () => {
     expect(res.headers.get("Cache-Control")).toContain("s-maxage=3600");
   });
 
-  it("AC1 — filters out category values that are not in the CategorySchema enum", async () => {
+  it("AC1 — includes categories not in the schema enum with a derived label", async () => {
     mockAggregate.mockResolvedValue([
       { _id: "dining", count: 10 },
-      { _id: "unknown_future_category", count: 5 }, // not in schema
+      { _id: "unknown_future_category", count: 5 }, // not in schema — still included
     ]);
 
     const res = await GET();
-    const body = await res.json() as { data: Array<{ category: string }> };
+    const body = await res.json() as { data: Array<{ category: string; label: string }> };
 
-    expect(body.data).toHaveLength(1);
+    expect(body.data).toHaveLength(2);
     expect(body.data[0]!.category).toBe("dining");
+    expect(body.data[1]!.category).toBe("unknown_future_category");
+    // Label derived from raw value: title-case each word
+    expect(body.data[1]!.label).toBe("Unknown Future Category");
   });
 
   it("AC1 — returns correct human-readable labels for all known categories", async () => {
