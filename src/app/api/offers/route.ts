@@ -252,6 +252,13 @@ export async function GET(request: NextRequest) {
         total = fallbackTotal;
       }
     } else {
+      // For the simplest query (only isExpired filter, no other dimensions) use
+      // estimatedDocumentCount() which reads collection metadata in O(1) instead
+      // of scanning every matching document.  Any additional filter must fall back
+      // to countDocuments() for an accurate count.
+      const isSimpleFilter =
+        Object.keys(filter).length === 1 && filter.isExpired === false;
+
       const [findRaw, findTotal] = await Promise.all([
         OfferModel.find(filter)
           .sort(sortOrder)
@@ -259,7 +266,9 @@ export async function GET(request: NextRequest) {
           .limit(limit)
           .select("-__v")
           .lean(),
-        OfferModel.countDocuments(filter),
+        isSimpleFilter
+          ? OfferModel.estimatedDocumentCount()
+          : OfferModel.countDocuments(filter),
       ]);
       raw = findRaw;
       total = findTotal;
@@ -287,16 +296,27 @@ export async function GET(request: NextRequest) {
       console.log(`[api/offers] ${tTotalMs}ms (connect:${tConnect}ms query:${tQueryMs}ms) → ${raw.length} results`);
     }
 
-    return NextResponse.json({
-      data,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+    // Cache public (non-personalised) responses at the CDN edge for 60 s so
+    // that repeat visitors to the same URL skip the DB entirely.  Search queries
+    // and includeExpired requests are user-intent-specific — keep them private.
+    const isPublicCacheable = !q && !includeExpired;
+    const cacheHeader = isPublicCacheable
+      ? "public, s-maxage=60, stale-while-revalidate=300"
+      : "private, no-cache";
+
+    return NextResponse.json(
+      {
+        data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        _timing: { totalMs: tTotalMs, connectMs: tConnect, queryMs: tQueryMs },
       },
-      _timing: { totalMs: tTotalMs, connectMs: tConnect, queryMs: tQueryMs },
-    });
+      { headers: { "Cache-Control": cacheHeader } },
+    );
   } catch (err) {
     console.error("[api/offers] Error:", err);
     // Return 503 for DB configuration/connection errors so E2E tests can distinguish

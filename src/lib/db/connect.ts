@@ -28,7 +28,18 @@ export async function dbConnect(): Promise<typeof mongoose> {
   if (cache.conn) return cache.conn;
 
   if (!cache.promise) {
-    cache.promise = mongoose.connect(uri, { bufferCommands: false, dbName: "card-max" });
+    cache.promise = mongoose.connect(uri, {
+      bufferCommands: false,
+      dbName: "card-max",
+      // Pool tuning: keep more connections ready, hold warm sockets between
+      // requests.  minPoolSize prevents the driver from closing all sockets
+      // during brief idle periods — the next request reuses them immediately.
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      // Fail fast on cold-start rather than hanging for the default 30 s.
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 30000,
+    });
   }
 
   cache.conn = await cache.promise;
