@@ -26,6 +26,7 @@ const {
   mockSort,
   mockFind,
   mockCount,
+  mockEstimatedCount,
 } = vi.hoisted(() => {
   const mockLean = vi.fn();
   const mockSelect = vi.fn(() => ({ lean: mockLean }));
@@ -34,8 +35,9 @@ const {
   const mockSort = vi.fn(() => ({ skip: mockSkip }));
   const mockFind = vi.fn((/* filter */) => ({ sort: mockSort }));
   const mockCount = vi.fn();
+  const mockEstimatedCount = vi.fn();
   const mockAggregate = vi.fn();
-  return { mockAggregate, mockLean, mockSkip, mockSort, mockFind, mockCount };
+  return { mockAggregate, mockLean, mockSkip, mockSort, mockFind, mockCount, mockEstimatedCount };
 });
 
 vi.mock("@/lib/db/connect", () => ({
@@ -46,6 +48,7 @@ vi.mock("@/lib/models/offer.model", () => ({
   OfferModel: {
     find: mockFind,
     countDocuments: mockCount,
+    estimatedDocumentCount: mockEstimatedCount,
     aggregate: mockAggregate,
   },
 }));
@@ -99,6 +102,7 @@ describe("GET /api/offers", () => {
     vi.clearAllMocks();
     mockLean.mockResolvedValue([makeOffer()]);
     mockCount.mockResolvedValue(1);
+    mockEstimatedCount.mockResolvedValue(1);
     // aggregate is NOT set up here — each Atlas Search test configures its own mock
     // so that mockResolvedValueOnce queues don't cross-contaminate tests
   });
@@ -454,7 +458,8 @@ describe("GET /api/offers", () => {
   // ── Pagination ────────────────────────────────────────────────────────────
 
   it("calculates totalPages from total and limit", async () => {
-    mockCount.mockResolvedValue(45);
+    // Default listing (no extra filters) → estimatedDocumentCount path
+    mockEstimatedCount.mockResolvedValue(45);
     const res = await GET(makeRequest({ limit: "20" }));
     const { pagination } = await res.json();
     expect(pagination.totalPages).toBe(3);
@@ -483,6 +488,49 @@ describe("GET /api/offers", () => {
   it("returns 400 for minDiscount above 100", async () => {
     const res = await GET(makeRequest({ minDiscount: "101" }));
     expect(res.status).toBe(400);
+  });
+
+  // ── estimatedDocumentCount optimisation ──────────────────────────────────
+
+  it("uses estimatedDocumentCount for simple isExpired-only filter", async () => {
+    await GET(makeRequest()); // no filters → filter = { isExpired: false }
+    expect(mockEstimatedCount).toHaveBeenCalled();
+    expect(mockCount).not.toHaveBeenCalled();
+  });
+
+  it("uses countDocuments (not estimated) when additional filters are present", async () => {
+    await GET(makeRequest({ bank: "hnb" })); // extra filter → needs exact count
+    expect(mockCount).toHaveBeenCalled();
+    expect(mockEstimatedCount).not.toHaveBeenCalled();
+  });
+
+  // ── Cache-Control header ──────────────────────────────────────────────────
+
+  it("returns public Cache-Control for default listing (no q, no includeExpired)", async () => {
+    const res = await GET(makeRequest());
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, s-maxage=60, stale-while-revalidate=300",
+    );
+  });
+
+  it("returns public Cache-Control for filtered listing (bank filter, no search)", async () => {
+    const res = await GET(makeRequest({ bank: "hnb" }));
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, s-maxage=60, stale-while-revalidate=300",
+    );
+  });
+
+  it("returns private Cache-Control when q is present (search results)", async () => {
+    mockAggregate
+      .mockResolvedValueOnce([makeOffer()])
+      .mockResolvedValueOnce([{ total: 1 }]);
+    const res = await GET(makeRequest({ q: "pizza" }));
+    expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
+  });
+
+  it("returns private Cache-Control when includeExpired=true", async () => {
+    const res = await GET(makeRequest({ includeExpired: "true" }));
+    expect(res.headers.get("Cache-Control")).toBe("private, no-cache");
   });
 
   // ── Error handling ────────────────────────────────────────────────────────
