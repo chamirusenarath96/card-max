@@ -215,68 +215,11 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Run Lighthouse CI
-        run: |
-          if [ -z "$VERCEL_BYPASS_TOKEN" ]; then
-            echo "VERCEL_BYPASS_TOKEN not set — skipping Lighthouse CI (cannot reach protected preview deployment)"
-            echo "To enable: Vercel dashboard → Project → Settings → Deployment Protection → Protection Bypass for Automation"
-            echo "Then add the token as VERCEL_BYPASS_TOKEN in GitHub → Settings → Secrets → Actions."
-            exit 0
-          fi
-          npm install -g lighthouse
-          mkdir -p "$GITHUB_WORKSPACE/lighthouse-reports-preview"
-          for i in 1 2 3; do
-            lighthouse "${{ steps.deploy.outputs.preview_url }}" \
-              --output=json \
-              --output-path="$GITHUB_WORKSPACE/lighthouse-reports-preview/lhr-run${i}.json" \
-              --chrome-flags="--headless --no-sandbox --disable-gpu" \
-              --extra-headers='{"x-vercel-protection-bypass":"${{ secrets.VERCEL_BYPASS_TOKEN }}"}' \
-              --quiet || true
-          done
-          echo "=== lighthouse-reports-preview/ contents ==="
-          ls -lh "$GITHUB_WORKSPACE/lighthouse-reports-preview/"
-        env:
-          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
-          VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
-        timeout-minutes: 10
-        continue-on-error: true
-
-      # Preview Lighthouse only runs when VERCEL_BYPASS_TOKEN is set.
-      # Uploaded under a different name so the production upload below can
-      # always claim the canonical "lighthouse-report-*" name.
-      - name: Upload Lighthouse preview report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lighthouse-preview-report-${{ github.sha }}
-          path: lighthouse-reports-preview/
-          retention-days: 14
-
-      # Assert AFTER artifact is saved — lhci assert wipes the dir on init.
-      - name: Assert Lighthouse SLA thresholds (preview)
-        if: always()
-        run: |
-          npm install -g @lhci/cli@0.14.x
-          lhci assert --inputDir=lighthouse-reports-preview || echo "⚠️  Lighthouse assertion failed — see results above"
-        continue-on-error: true
-
-      # User-flow deps installed regardless — used for both preview and
-      # production runs below.
       - name: Install Lighthouse for user-flow audit
         run: npm install --no-save lighthouse@^12 puppeteer-core
 
       - name: Install Playwright browsers (for user-flow audit)
         run: npx playwright install --with-deps chromium
-
-      # Preview user-flow: exits 0 gracefully when VERCEL_BYPASS_TOKEN is
-      # absent (protected preview URL cannot be reached without it).
-      - name: Run Lighthouse user-flow audit (preview)
-        run: |
-          node scripts/lhci-user-flow.js
-        env:
-          TARGET_URL: ${{ steps.deploy.outputs.preview_url }}
-          VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
-        timeout-minutes: 10
 
       - name: Promote to production
         run: |
