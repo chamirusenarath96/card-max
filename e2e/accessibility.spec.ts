@@ -48,10 +48,11 @@ test.describe("Accessibility fixes (Feature 032)", () => {
   test("hero search input does not carry aria-expanded (T3 — ARIA mismatch fix)", async ({ page }) => {
     await page.goto("/");
 
-    // Wait for the page to render
+    // Wait for the page to render — use first() because both hero-search and
+    // empty-state can coexist on the page (strict mode would fail otherwise)
     const heroSearch = page.getByTestId("hero-search");
     const notFound = page.getByTestId("empty-state");
-    await expect(heroSearch.or(notFound)).toBeVisible({ timeout: 10000 });
+    await expect(heroSearch.or(notFound).first()).toBeVisible({ timeout: 10000 });
 
     // The <input> itself must NOT have aria-expanded
     const input = page.getByTestId("hero-search-input");
@@ -64,7 +65,7 @@ test.describe("Accessibility fixes (Feature 032)", () => {
 
     const heroSearch = page.getByTestId("hero-search");
     const notFound = page.getByTestId("empty-state");
-    await expect(heroSearch.or(notFound)).toBeVisible({ timeout: 10000 });
+    await expect(heroSearch.or(notFound).first()).toBeVisible({ timeout: 10000 });
 
     // The container wrapping the input should have role="combobox"
     const combobox = page.locator('[role="combobox"]').first();
