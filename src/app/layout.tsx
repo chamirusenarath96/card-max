@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CardMax — Sri Lanka Credit Card Offers",
   description:
-    "Discover the best credit card deals from Commercial Bank, Sampath Bank, HNB, and Nations Trust Bank in Sri Lanka.",
+    "Browse credit card deals from all major Sri Lankan banks — updated daily.",
 };
 
 export default function RootLayout({

@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
 import { SearchDrawerDynamic } from "@/components/search/SearchDrawerDynamic";
 import { Footer } from "@/components/layout/Footer";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -238,8 +239,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             </h1>
 
             <p className="mx-auto mb-10 max-w-2xl text-lg text-muted-foreground">
-              Exclusive offers from Commercial Bank, Sampath, HNB &amp; Nations
-              Trust Bank — updated daily.
+              Browse credit card deals from all major Sri Lankan banks — updated daily.
             </p>
 
             <Suspense
@@ -331,6 +331,9 @@ export default async function HomePage({ searchParams }: PageProps) {
           <div aria-hidden className="absolute top-0 right-0 h-full w-1/3 -skew-x-12 bg-primary-foreground/5" />
         </section>
       </main>
+
+      {/* ── Feedback ─────────────────────────────────────────────────────── */}
+      <FeedbackWidget />
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <Footer />
