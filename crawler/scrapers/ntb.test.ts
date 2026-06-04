@@ -54,26 +54,30 @@ const BLOCK_HTML = `<html><body>Incapsula incident ID 12345</body></html>`;
 
 /** Wire up PlaywrightCrawler so .run() invokes requestHandler for each queued request */
 function setupCrawlerMock(pageFactory: (label: string) => Record<string, unknown>) {
+  // vitest v4 (rolldown): mock constructor implementations must use regular functions,
+  // not arrow functions, to be constructable with `new`.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (PlaywrightCrawler as any).mockImplementation((options: Record<string, any>) => ({
-    run: vi.fn().mockImplementation(async (requests: Array<{ url: string; label: string }>) => {
-      const pending = [...requests];
-      while (pending.length > 0) {
-        const req = pending.shift()!;
-        const page = pageFactory(req.label);
-        const addRequests = vi.fn().mockImplementation(
-          async (newReqs: Array<{ url: string; label: string }>) => {
+  (PlaywrightCrawler as any).mockImplementation(function (this: unknown, options: Record<string, any>) {
+    return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      run: vi.fn().mockImplementation(async function (requests: Array<{ url: string; label: string }>) {
+        const pending = [...requests];
+        while (pending.length > 0) {
+          const req = pending.shift()!;
+          const page = pageFactory(req.label);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const addRequests = vi.fn().mockImplementation(async function (newReqs: Array<{ url: string; label: string }>) {
             for (const r of newReqs) pending.push(r);
-          }
-        );
-        await options.requestHandler?.({
-          page: page as never,
-          request: { url: req.url, label: req.label } as never,
-          addRequests,
-        } as never);
-      }
-    }),
-  }));
+          });
+          await options.requestHandler?.({
+            page: page as never,
+            request: { url: req.url, label: req.label } as never,
+            addRequests,
+          } as never);
+        }
+      }),
+    };
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -194,10 +198,11 @@ describe("ntb scraper", () => {
     });
 
     it("returns [] when Crawlee throws", async () => {
+      // vitest v4: use regular function, not arrow, for constructor mock
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (PlaywrightCrawler as any).mockImplementation(() => ({
-        run: vi.fn().mockRejectedValue(new Error("Chromium binary not found")),
-      }));
+      (PlaywrightCrawler as any).mockImplementation(function (this: unknown) {
+        return { run: vi.fn().mockRejectedValue(new Error("Chromium binary not found")) };
+      });
 
       const offers = await scrape();
       expect(offers).toHaveLength(0);

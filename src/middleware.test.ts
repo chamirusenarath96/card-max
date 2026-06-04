@@ -16,14 +16,23 @@ const { mockLimit } = vi.hoisted(() => ({
 }));
 
 vi.mock("@upstash/ratelimit", () => {
-  const MockRatelimit = vi.fn(() => ({ limit: mockLimit }));
+  // vitest v4 (rolldown): mock constructors must use regular functions, not arrow fns
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (MockRatelimit as any).slidingWindow = vi.fn(() => ({}));
+  function MockRatelimit(this: any) {
+    return { limit: mockLimit };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (MockRatelimit as any).slidingWindow = vi.fn(function () {
+    return {};
+  });
   return { Ratelimit: MockRatelimit };
 });
 
 vi.mock("@upstash/redis", () => ({
-  Redis: vi.fn(() => ({})),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Redis: vi.fn(function (this: any) {
+    return {};
+  }),
 }));
 
 import { middleware } from "./middleware";

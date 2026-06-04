@@ -73,13 +73,14 @@ describe("Mobile Performance SLA — spec 018", () => {
       expect(ciYml).toContain("lhci assert");
     });
 
-    it("Lighthouse step appears before Promote to production step", () => {
-      // First occurrence of lhci assert is in the preview step (before promote).
+    it("Lighthouse step appears after Promote to production step", () => {
+      // Preview Lighthouse steps were removed (VERCEL_BYPASS_TOKEN not configured).
+      // The only lhci assert now runs in the production step, after promote.
       const lhciPos = ciYml.indexOf("lhci assert");
       const promotePos = ciYml.indexOf("Promote to production");
       expect(lhciPos).toBeGreaterThan(-1);
       expect(promotePos).toBeGreaterThan(-1);
-      expect(lhciPos).toBeLessThan(promotePos);
+      expect(lhciPos).toBeGreaterThan(promotePos);
     });
 
     it("Lighthouse step appears after Deploy to Vercel step (AC2)", () => {

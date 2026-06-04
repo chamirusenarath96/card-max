@@ -10,13 +10,16 @@ beforeEach(() => {
   mockObserve.mockClear();
   mockDisconnect.mockClear();
 
-  vi.stubGlobal(
-    "IntersectionObserver",
-    vi.fn((cb: IntersectionObserverCallback) => {
+  // vitest v4 (rolldown): mock must be a real constructor — use class syntax
+  class MockIntersectionObserver {
+    observe = mockObserve;
+    disconnect = mockDisconnect;
+    unobserve = vi.fn();
+    constructor(cb: IntersectionObserverCallback) {
       observerCallback = cb;
-      return { observe: mockObserve, disconnect: mockDisconnect, unobserve: vi.fn() };
-    }),
-  );
+    }
+  }
+  vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
 });
 
 afterEach(() => {
