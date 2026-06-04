@@ -255,8 +255,7 @@ describe("HeroSearch", () => {
     expect(screen.getByTestId("search-see-all")).toHaveTextContent("42");
   });
 
-  it("clicking a result opens the original offer URL in a new tab", () => {
-    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+  it("clicking a result navigates in-app with the offer title as the search query", () => {
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
       total: 2,
@@ -266,12 +265,9 @@ describe("HeroSearch", () => {
     render(<HeroSearch initialQuery="ke" />);
     const items = screen.getAllByTestId("search-result-item");
     fireEvent.click(items[0]);
-    expect(openSpy).toHaveBeenCalledWith(
-      MOCK_RESULTS[0].sourceUrl,
-      "_blank",
-      "noopener,noreferrer",
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringContaining(`q=${encodeURIComponent(MOCK_RESULTS[0].title)}`),
     );
-    openSpy.mockRestore();
   });
 
   // --- Clear button ---

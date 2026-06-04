@@ -134,9 +134,9 @@ export function HeroSearch({ initialQuery = "" }: Props) {
   // Alias used by result-item / see-all clicks (same behaviour, clearer intent)
   const freshSearch = pushSearch;
 
-  function handleResultClick(sourceUrl: string) {
+  function handleResultClick(title: string) {
     setDropdownOpen(false);
-    window.open(sourceUrl, "_blank", "noopener,noreferrer");
+    freshSearch(title); // stay in-app — search by the offer title
   }
 
   return (
@@ -233,7 +233,7 @@ export function HeroSearch({ initialQuery = "" }: Props) {
                     role="option"
                     aria-selected="false"
                     data-testid="search-result-item"
-                    onClick={() => handleResultClick(item.sourceUrl)}
+                    onClick={() => handleResultClick(item.title)}
                     className="flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left last:border-0 hover:bg-accent focus:bg-accent focus:outline-none"
                   >
                     <Search
