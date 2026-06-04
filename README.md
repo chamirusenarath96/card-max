@@ -1,6 +1,6 @@
 # card-max
 
-> Sri Lankan credit card offers aggregator — scrapes all current deals from Commercial Bank, Sampath Bank, HNB, Nations Trust Bank, and American Express (NTB) into one searchable, filterable feed.
+> Sri Lankan credit card offers aggregator — scrapes all current deals from Commercial Bank, Sampath Bank, HNB, Nations Trust Bank, American Express (NTB), People's Bank, and Bank of Ceylon into one searchable, filterable feed.
 
 **Live:** https://card-max.vercel.app &nbsp;|&nbsp; **Stack:** Next.js 16 · MongoDB Atlas · GitHub Actions · Vercel
 
@@ -564,7 +564,8 @@ The full OpenAPI 3.1 specification lives at [`specs/api/openapi.yaml`](specs/api
 
 ```
 Query params (all optional, all combinable):
-  bank           commercial_bank | sampath_bank | hnb | nations_trust_bank | amex_ntb
+  bank           commercial_bank | sampath_bank | hnb | nations_trust_bank | amex_ntb |
+                 peoples_bank | boc
   category       dining | shopping | travel | lodging | homecare | clothing |
                  fuel | groceries | entertainment | wellness | healthcare |
                  installments | online | other
@@ -594,11 +595,41 @@ Response:
 
 Returns a single offer by its MongoDB `_id` (24-character hex string).
 
+### `GET /api/categories`
+
+Returns an aggregated list of all category values present in the database, sorted by offer count descending. Includes categories not in the schema enum (with auto-derived labels).
+
+```json
+{ "data": [{ "category": "dining", "label": "Dining", "count": 293 }, ...] }
+```
+
 ### `GET /api/health`
 
 ```json
 { "status": "ok", "db": "connected" }
 ```
+
+### `POST /api/feedback`
+
+Saves a user feedback submission.
+
+```
+Body (JSON):
+  type     "suggestion" | "bug" | "other"  (required)
+  message  string, 10–1000 chars           (required)
+  email    string, valid email             (optional)
+
+Response 201:
+  { "success": true, "id": "<feedback-id>" }
+```
+
+### `GET /api/feedback?token=<ADMIN_TOKEN>`
+
+Returns all feedback submissions, newest first. Requires the `ADMIN_TOKEN` env var.
+
+### `POST /api/feedback/<id>/to-issue?token=<ADMIN_TOKEN>`
+
+Creates a GitHub issue from a feedback submission using `GITHUB_FEEDBACK_TOKEN`. Marks the submission as `converted` and stores the issue URL. Returns 409 if already converted.
 
 ### `POST /api/revalidate`
 
@@ -675,12 +706,18 @@ npm run dev
 |----------|----------|-------------|
 | `MONGODB_URI` | Yes | MongoDB Atlas connection string |
 | `VERCEL_REVALIDATION_SECRET` | No | Only needed to test cache revalidation locally |
+| `ADMIN_TOKEN` | No | Secret protecting `/admin/feedback` and admin API endpoints |
+| `GITHUB_FEEDBACK_TOKEN` | No | GitHub PAT with `issues:write` — converts feedback into GitHub issues |
 
 #### Vercel (set in Vercel dashboard → Settings → Environment Variables)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `MONGODB_URI` | Yes | MongoDB Atlas connection string — used by serverless functions at runtime |
+| `ADMIN_TOKEN` | Yes | Protects `/admin/feedback?token=` and `POST /api/feedback/[id]/to-issue` |
+| `GITHUB_FEEDBACK_TOKEN` | Yes | GitHub PAT (`issues:write`) — creates GitHub issues from user feedback |
+| `GITHUB_REPO_OWNER` | No | GitHub repo owner (default: `chamirusenarath96`) |
+| `GITHUB_REPO_NAME` | No | GitHub repo name (default: `card-max`) |
 
 #### Vercel system variables (auto-populated, do not set manually)
 

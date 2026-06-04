@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
-import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
+import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo, formatValidityPeriod } from "./offer-card-shared";
 import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
@@ -115,6 +115,13 @@ export function OfferCardCompact({ offer }: Props) {
               size="sm"
               className="mb-2"
             />
+
+            {/* Validity period */}
+            {formatValidityPeriod(offer.validFrom, offer.validUntil) && (
+              <p className="mb-2 text-[10px] text-muted-foreground" data-testid="offer-expiry">
+                {formatValidityPeriod(offer.validFrom, offer.validUntil)}
+              </p>
+            )}
 
             {/* Bank + category */}
             <div className="mt-auto flex flex-wrap items-center gap-1">

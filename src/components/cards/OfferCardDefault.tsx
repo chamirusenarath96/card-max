@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
-import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
+import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo, formatValidityPeriod } from "./offer-card-shared";
 import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,15 +124,10 @@ export function OfferCardDefault({ offer }: Props) {
               className="mb-2"
             />
 
-            {/* Validity */}
-            {offer.validUntil && (
+            {/* Validity period */}
+            {formatValidityPeriod(offer.validFrom, offer.validUntil) && (
               <p className="mb-3 text-[11px] text-muted-foreground" data-testid="offer-expiry">
-                Until{" "}
-                {new Date(offer.validUntil).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {formatValidityPeriod(offer.validFrom, offer.validUntil)}
               </p>
             )}
 

@@ -50,6 +50,9 @@ npm run type-check   # TypeScript strict check
 ## Environment Variables
 Copy `.env.example` to `.env.local` and fill in:
 - `MONGODB_URI` — MongoDB Atlas connection string (required)
+- `ADMIN_TOKEN` — random secret protecting `/admin/feedback` and the admin API endpoints
+- `GITHUB_FEEDBACK_TOKEN` — GitHub PAT with `issues:write` scope; used to create issues from feedback
+- `GITHUB_REPO_OWNER` / `GITHUB_REPO_NAME` — defaults to `chamirusenarath96` / `card-max`
 
 ## Coding Standards
 - **TypeScript strict mode** — no `any`, no `@ts-ignore` without comment

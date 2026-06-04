@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
-import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo } from "./offer-card-shared";
+import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo, formatValidityPeriod } from "./offer-card-shared";
 import { OfferImage } from "./OfferImage";
 import { DiscountDisplay } from "./DiscountDisplay";
 import { Card, CardContent } from "@/components/ui/card";
@@ -114,29 +114,12 @@ export function OfferCardExpanded({ offer }: Props) {
               className="mb-3"
             />
 
-            {/* Dates */}
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              {offer.validFrom && (
-                <p className="text-xs text-muted-foreground">
-                  From{" "}
-                  {new Date(offer.validFrom).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </p>
-              )}
-              {offer.validUntil && (
-                <p className="text-xs text-muted-foreground" data-testid="offer-expiry">
-                  Until{" "}
-                  {new Date(offer.validUntil).toLocaleDateString("en-GB", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </p>
-              )}
-            </div>
+            {/* Validity period */}
+            {formatValidityPeriod(offer.validFrom, offer.validUntil) && (
+              <p className="mb-4 text-xs text-muted-foreground" data-testid="offer-expiry">
+                {formatValidityPeriod(offer.validFrom, offer.validUntil)}
+              </p>
+            )}
 
             {/* Bank + category row */}
             <div className="mt-auto flex flex-wrap items-center gap-1.5">

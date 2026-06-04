@@ -31,6 +31,40 @@ export const OFFER_TYPE_BADGE_LABEL: Record<OfferType, string> = {
 
 export type CardSize = "compact" | "default" | "expanded";
 
+/**
+ * Returns a human-readable validity period string for an offer.
+ *
+ * - Both dates present: "15 Nov – 31 Dec 2026" (omits year on `from` if same year)
+ * - Only validFrom:    "From 15 Nov 2026"
+ * - Only validUntil:  "Until 31 Dec 2026"
+ * - Neither:          null
+ */
+export function formatValidityPeriod(
+  validFrom?: Date | string | null,
+  validUntil?: Date | string | null,
+): string | null {
+  const from = validFrom ? new Date(validFrom) : null;
+  const until = validUntil ? new Date(validUntil) : null;
+  if (from && isNaN(from.getTime())) return null;
+  if (until && isNaN(until.getTime())) return null;
+
+  function fmt(d: Date, includeYear: boolean): string {
+    return d.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      ...(includeYear ? { year: "numeric" } : {}),
+    });
+  }
+
+  if (from && until) {
+    const sameYear = from.getFullYear() === until.getFullYear();
+    return `${fmt(from, !sameYear)} – ${fmt(until, true)}`;
+  }
+  if (from) return `From ${fmt(from, true)}`;
+  if (until) return `Until ${fmt(until, true)}`;
+  return null;
+}
+
 export function getExpiryInfo(validUntil?: Date | string): { label: string; isExpired: boolean } | null {
   if (!validUntil) return null;
   const date = validUntil instanceof Date ? validUntil : new Date(validUntil);
