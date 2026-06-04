@@ -266,7 +266,7 @@ describe("HeroSearch", () => {
     const items = screen.getAllByTestId("search-result-item");
     fireEvent.click(items[0]);
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.stringContaining(`q=${encodeURIComponent(MOCK_RESULTS[0].title)}`),
+      expect.stringContaining(new URLSearchParams({ q: MOCK_RESULTS[0].title }).toString()),
     );
   });
 
