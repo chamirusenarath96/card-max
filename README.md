@@ -513,23 +513,35 @@ interface Offer {
 ```
 src/
 ├── app/
-│   ├── page.tsx              Server Component — fetches API, renders grid + LoadTimeBadge
+│   ├── page.tsx              Server Component — fetches API, renders grid + LoadTimeBadge + FeedbackWidget
 │   ├── layout.tsx            Root layout — wraps tree in NavigationProgressProvider
 │   ├── globals.css           Tailwind base styles + custom keyframe animations
+│   ├── admin/
+│   │   └── feedback/
+│   │       ├── page.tsx          Admin page — lists all feedback; token-protected via ?token=ADMIN_TOKEN
+│   │       └── FeedbackActions.tsx  "Create GitHub Issue" / "View issue" client actions per row
 │   └── api/
 │       ├── offers/
 │       │   ├── route.ts      GET /api/offers — list + filter + paginate
 │       │   └── [id]/
 │       │       └── route.ts  GET /api/offers/:id — single offer
+│       ├── feedback/
+│       │   ├── route.ts      POST /api/feedback (public) · GET /api/feedback (admin)
+│       │   └── [id]/
+│       │       └── to-issue/
+│       │           └── route.ts  POST — create GitHub issue from feedback (admin)
 │       └── health/
 │           └── route.ts      GET /api/health — DB connectivity check
 └── components/
     ├── cards/
     │   ├── OfferCard.tsx         Offer card dispatcher (compact/default/expanded)
-    │   ├── OfferCardDefault.tsx  Default card with "View Offer Details" external link
-    │   ├── OfferCardCompact.tsx  Compact card variant
-    │   ├── OfferCardExpanded.tsx Expanded card variant
+    │   ├── OfferCardDefault.tsx  Default card — merchant, title, discount, validity period
+    │   ├── OfferCardCompact.tsx  Compact card variant — same fields, smaller typography
+    │   ├── OfferCardExpanded.tsx Expanded card variant — full description + side-by-side layout
+    │   ├── offer-card-shared.ts  Shared helpers: getBadgeLabel, getExpiryInfo, formatValidityPeriod
     │   └── OfferImage.tsx        3-stage image fallback (scraped → Clearbit → icon)
+    ├── feedback/
+    │   └── FeedbackWidget.tsx    "Send feedback" section above footer — dialog with type/message/email
     ├── filters/
     │   ├── FilterBar.tsx         Filters trigger button + FilterDrawer (Client Component)
     │   └── FilterDrawer.tsx      Multi-select drawer with pending state + Apply button
@@ -539,7 +551,7 @@ src/
     │   └── LoadTimeBadge.tsx              "⚡ Xms" badge shown after each navigation
     ├── OfferGrid.tsx         Responsive grid + empty state (Server Component)
     └── search/
-        └── HeroSearch.tsx        Hero search bar (uses NavigationProgressContext)
+        └── HeroSearch.tsx        Hero search bar — suggestions navigate in-app (not bank site)
 ```
 
 **Rendering model:**
@@ -553,6 +565,19 @@ src/
 - `FilterDrawer` — multi-select mode: chip clicks update local `pending*` state only; a single "Apply Filters" click calls `navigate()` once, collapsing all changes into one DB round-trip
 - Filters trigger button has a pulsing glow animation (`animate-filter-glow`) when no filters are active, drawing attention for first-time users
 - `LoadTimeBadge` — displays "⚡ Xms" beside the offer count after each navigation completes, showing real browser-domain timing
+- `HeroSearch` suggestion clicks call `freshSearch(title)` — stays in-app, no external bank URL redirect
+
+**Offer cards:**
+- All three card variants (Default, Compact, Expanded) display a validity period via `formatValidityPeriod(validFrom, validUntil)`:
+  - Both dates → "1 Jan – 31 Mar 2026"
+  - `validFrom` only → "From 1 Jan 2026"
+  - `validUntil` only → "Until 31 Mar 2026"
+  - Neither → field hidden
+
+**Feedback system:**
+- `FeedbackWidget` renders above the footer on every page — a "Send feedback" button opens a dialog for type (suggestion/bug/other), message (10–1000 chars), and optional email
+- Submissions saved to MongoDB `feedbacks` collection via `POST /api/feedback`
+- Admin view at `/admin/feedback?token=<ADMIN_TOKEN>` — table of all submissions with a "Create GitHub Issue" action per row that calls `POST /api/feedback/<id>/to-issue`
 
 ---
 
