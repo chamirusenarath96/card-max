@@ -1,6 +1,7 @@
 import { dbConnect } from "@/lib/db/connect";
 import { FeedbackModel } from "@/lib/models/feedback.model";
-import { CheckCircle, XCircle, Clock, MessageSquare, GitBranch, Rocket } from "lucide-react";
+import { OfferModel } from "@/lib/models/offer.model";
+import { CheckCircle, XCircle, Clock, MessageSquare, GitBranch, Rocket, Database } from "lucide-react";
 import Link from "next/link";
 
 const REPO = "chamirusenarath96/card-max";
@@ -12,11 +13,21 @@ const GH_HEADERS: HeadersInit = {
     : {}),
 };
 
+const BANK_LABELS: Record<string, string> = {
+  commercial_bank:   "Commercial Bank",
+  sampath_bank:      "Sampath Bank",
+  hnb:               "HNB",
+  nations_trust_bank:"Nations Trust Bank",
+  amex_ntb:          "American Express",
+  peoples_bank:      "People's Bank",
+  bank_of_ceylon:    "Bank of Ceylon",
+};
+
 async function fetchRecentRuns() {
   try {
     const res = await fetch(
       `https://api.github.com/repos/${REPO}/actions/runs?per_page=30`,
-      { headers: GH_HEADERS, next: { revalidate: 60 } },
+      { headers: GH_HEADERS, cache: "no-store" },
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -30,7 +41,7 @@ async function fetchLatestDeployment() {
   try {
     const res = await fetch(
       `https://api.github.com/repos/${REPO}/deployments?per_page=1&environment=Production`,
-      { headers: GH_HEADERS, next: { revalidate: 60 } },
+      { headers: GH_HEADERS, cache: "no-store" },
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -67,16 +78,21 @@ function timeAgo(iso: string) {
   return "just now";
 }
 
+interface BankStat { _id: string; lastScraped: Date; count: number }
+
 export default async function AdminOverviewPage() {
   const [runs, deployment] = await Promise.all([fetchRecentRuns(), fetchLatestDeployment()]);
 
   await dbConnect();
-  const totalFeedback = await FeedbackModel.countDocuments();
-  const newFeedback = await FeedbackModel.countDocuments({ status: "new" });
-  const recentFeedback = await FeedbackModel.find()
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .lean();
+  const [totalFeedback, newFeedback, recentFeedback, bankStats] = await Promise.all([
+    FeedbackModel.countDocuments(),
+    FeedbackModel.countDocuments({ status: "new" }),
+    FeedbackModel.find().sort({ createdAt: -1 }).limit(5).lean(),
+    OfferModel.aggregate<BankStat>([
+      { $group: { _id: "$bank", lastScraped: { $max: "$scrapedAt" }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]),
+  ]);
 
   const ciRuns = runs ?? [];
   const masterRuns = ciRuns.filter((r) => r.head_branch === "master" && r.name === "CI / Deploy");
@@ -118,6 +134,42 @@ export default async function AdminOverviewPage() {
           icon={<GitBranch className="h-5 w-5 text-muted-foreground" />}
         />
       </div>
+
+      {/* Bank Crawler Status */}
+      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-semibold text-foreground">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            Bank Crawler Status
+          </h2>
+          <Link href="/admin/ci" className="text-xs text-primary hover:underline">
+            Crawler history →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+          {Object.entries(BANK_LABELS).map(([bankKey, label]) => {
+            const stat = bankStats.find((s) => s._id === bankKey);
+            const hoursAgo = stat
+              ? (Date.now() - new Date(stat.lastScraped).getTime()) / 3_600_000
+              : Infinity;
+            const status = hoursAgo < 26 ? "ok" : hoursAgo < 50 ? "warn" : "fail";
+            return (
+              <div key={bankKey} className="flex flex-col items-center rounded-lg border border-border bg-muted/30 p-3 text-center">
+                <span
+                  className={`mb-1.5 h-2.5 w-2.5 rounded-full ${
+                    status === "ok" ? "bg-green-500" : status === "warn" ? "bg-yellow-500" : "bg-red-500"
+                  }`}
+                />
+                <p className="text-[11px] font-medium leading-tight text-foreground">{label}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {stat ? timeAgo(new Date(stat.lastScraped).toISOString()) : "never"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">{stat?.count ?? 0} offers</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent CI runs */}
