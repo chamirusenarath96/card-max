@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "../auth";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
@@ -20,16 +21,24 @@ const limiters: Record<string, Ratelimit> = {
   }),
 };
 
-export async function middleware(request: NextRequest) {
+export default auth(async (request: NextRequest & { auth: unknown }) => {
   const path = request.nextUrl.pathname;
-  const limiter = limiters[path];
 
+  // Protect /admin routes — redirect to /login if not authenticated
+  if (path.startsWith("/admin")) {
+    if (!request.auth) {
+      const loginUrl = new URL("/login", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+    return NextResponse.next();
+  }
+
+  // Rate limiting for API routes
+  const limiter = limiters[path];
   if (!limiter) return NextResponse.next();
 
-  // Real IP: Vercel sets x-forwarded-for; fallback to "anonymous"
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "anonymous";
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anonymous";
 
   try {
     const { success, limit, remaining, reset } = await limiter.limit(ip);
@@ -44,7 +53,7 @@ export async function middleware(request: NextRequest) {
       headers.set("Retry-After", String(retryAfter));
       return NextResponse.json(
         { error: "Too many requests", retryAfter },
-        { status: 429, headers }
+        { status: 429, headers },
       );
     }
 
@@ -52,12 +61,11 @@ export async function middleware(request: NextRequest) {
     headers.forEach((v, k) => response.headers.set(k, v));
     return response;
   } catch {
-    // Upstash unreachable — fail open, allow the request
     console.warn("[middleware] Rate limit check failed — allowing request");
     return NextResponse.next();
   }
-}
+});
 
 export const config = {
-  matcher: ["/api/offers", "/api/search"],
+  matcher: ["/admin/:path*", "/api/offers", "/api/search"],
 };

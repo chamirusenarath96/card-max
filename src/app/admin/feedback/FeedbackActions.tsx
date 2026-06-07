@@ -6,14 +6,13 @@ import { Button } from "@/components/ui/button";
 
 interface Props {
   id: string;
-  token: string;
   initialStatus: string;
-  initialIssueUrl?: string;
+  initialIssueUrl?: string | null;
 }
 
-export function FeedbackActions({ id, token, initialStatus, initialIssueUrl }: Props) {
+export function FeedbackActions({ id, initialStatus, initialIssueUrl }: Props) {
   const [status, setStatus] = useState(initialStatus);
-  const [issueUrl, setIssueUrl] = useState(initialIssueUrl);
+  const [issueUrl, setIssueUrl] = useState(initialIssueUrl ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,13 +20,12 @@ export function FeedbackActions({ id, token, initialStatus, initialIssueUrl }: P
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/feedback/${id}/to-issue?token=${encodeURIComponent(token)}`, {
-        method: "POST",
-      });
+      // Session cookie is sent automatically — no token needed
+      const res = await fetch(`/api/feedback/${id}/to-issue`, { method: "POST" });
       const data = (await res.json()) as { issueUrl?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setStatus("converted");
-      setIssueUrl(data.issueUrl);
+      setIssueUrl(data.issueUrl ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {

@@ -35,7 +35,15 @@ vi.mock("@upstash/redis", () => ({
   }),
 }));
 
-import { middleware } from "./middleware";
+// Mock auth: unwrap the callback so tests can call the inner middleware directly
+vi.mock("../auth", () => ({
+  auth: (fn: (req: unknown) => unknown) => (req: unknown) => fn(req),
+}));
+
+import middleware from "./middleware";
+
+// Cast to single-arg signature — auth mock unwraps the callback, event unused
+const runMiddleware = middleware as unknown as (req: NextRequest) => Promise<Response>;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +75,7 @@ describe("middleware — rate limiting", () => {
   // TODO: integration test needs real DB (real Upstash counter reaching 61st request)
   it("returns 429 for /api/offers when rate limit is exceeded", async () => {
     mockLimit.mockResolvedValueOnce(blockedResult(60));
-    const res = await middleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
+    const res = await runMiddleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
     expect(res.status).toBe(429);
     const body = await res.json();
     expect(body.error).toBe("Too many requests");
@@ -78,7 +86,7 @@ describe("middleware — rate limiting", () => {
   // TODO: integration test needs real DB (real Upstash counter reaching 21st request)
   it("returns 429 for /api/search when rate limit is exceeded", async () => {
     mockLimit.mockResolvedValueOnce(blockedResult(20));
-    const res = await middleware(makeRequest("/api/search", { ip: "1.2.3.4" }));
+    const res = await runMiddleware(makeRequest("/api/search", { ip: "1.2.3.4" }));
     expect(res.status).toBe(429);
     const body = await res.json();
     expect(body.error).toBe("Too many requests");
@@ -88,7 +96,7 @@ describe("middleware — rate limiting", () => {
   // TODO: integration test needs real DB
   it("sets X-RateLimit-* headers on an allowed response", async () => {
     mockLimit.mockResolvedValueOnce(allowedResult(47));
-    const res = await middleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
+    const res = await runMiddleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
     expect(res.status).toBe(200);
     expect(res.headers.get("X-RateLimit-Limit")).toBe("60");
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("47");
@@ -98,7 +106,7 @@ describe("middleware — rate limiting", () => {
   // ── AC5: rate limit headers + Retry-After present on 429 response
   it("sets X-RateLimit-* and Retry-After headers on a 429 response", async () => {
     mockLimit.mockResolvedValueOnce(blockedResult(60));
-    const res = await middleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
+    const res = await runMiddleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
     expect(res.status).toBe(429);
     expect(res.headers.get("X-RateLimit-Limit")).toBe("60");
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("0");
@@ -108,7 +116,7 @@ describe("middleware — rate limiting", () => {
   // ── AC6: Upstash unreachable / missing env → fail open (pass request through)
   it("passes request through when Upstash limit() throws (fail open)", async () => {
     mockLimit.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
-    const res = await middleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
+    const res = await runMiddleware(makeRequest("/api/offers", { ip: "1.2.3.4" }));
     expect(res.status).toBe(200);
     // No rate limit headers on fail-open path
     expect(res.headers.get("Retry-After")).toBeNull();
@@ -116,14 +124,14 @@ describe("middleware — rate limiting", () => {
 
   // ── AC8: non-rate-limited path passes through without calling limit()
   it("does not rate limit a page route (passes through without calling limit)", async () => {
-    const res = await middleware(makeRequest("/"));
+    const res = await runMiddleware(makeRequest("/"));
     expect(res.status).toBe(200);
     expect(mockLimit).not.toHaveBeenCalled();
   });
 
   // ── AC8: other /api/* paths not in the limiter map pass through
   it("passes through /api/health without rate limiting", async () => {
-    const res = await middleware(makeRequest("/api/health"));
+    const res = await runMiddleware(makeRequest("/api/health"));
     expect(res.status).toBe(200);
     expect(mockLimit).not.toHaveBeenCalled();
   });
@@ -131,7 +139,7 @@ describe("middleware — rate limiting", () => {
   // ── IP extraction: uses first IP from x-forwarded-for chain
   it("uses the first IP from a comma-separated x-forwarded-for header", async () => {
     mockLimit.mockResolvedValueOnce(allowedResult());
-    await middleware(
+    await runMiddleware(
       makeRequest("/api/offers", { ip: "10.0.0.1, 10.0.0.2, 10.0.0.3" })
     );
     expect(mockLimit).toHaveBeenCalledWith("10.0.0.1");
@@ -140,14 +148,14 @@ describe("middleware — rate limiting", () => {
   // ── IP fallback: no x-forwarded-for → "anonymous"
   it('falls back to "anonymous" when x-forwarded-for is absent', async () => {
     mockLimit.mockResolvedValueOnce(allowedResult());
-    await middleware(makeRequest("/api/offers"));
+    await runMiddleware(makeRequest("/api/offers"));
     expect(mockLimit).toHaveBeenCalledWith("anonymous");
   });
 
   // ── Allowed request passes through (status 200, no Retry-After)
   it("passes an allowed request through with status 200", async () => {
     mockLimit.mockResolvedValueOnce(allowedResult(59));
-    const res = await middleware(makeRequest("/api/offers", { ip: "5.5.5.5" }));
+    const res = await runMiddleware(makeRequest("/api/offers", { ip: "5.5.5.5" }));
     expect(res.status).toBe(200);
     expect(res.headers.get("Retry-After")).toBeNull();
   });

@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "../../../../../../auth";
 import { dbConnect } from "@/lib/db/connect";
 import { FeedbackModel } from "@/lib/models/feedback.model";
-
-function isAdmin(request: NextRequest): boolean {
-  const token = request.nextUrl.searchParams.get("token");
-  const adminToken = process.env.ADMIN_TOKEN;
-  return !!adminToken && token === adminToken;
-}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!isAdmin(request)) {
+  const session = await auth();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

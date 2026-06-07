@@ -3,35 +3,19 @@ import { FeedbackModel, type IFeedback } from "@/lib/models/feedback.model";
 import { Badge } from "@/components/ui/badge";
 import { FeedbackActions } from "./FeedbackActions";
 
-interface Props {
-  searchParams: Promise<{ token?: string }>;
-}
-
 const TYPE_COLOR: Record<string, string> = {
   suggestion: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
   bug: "bg-red-500/10 text-red-700 dark:text-red-300",
   other: "bg-muted text-muted-foreground",
 };
 
-export default async function AdminFeedbackPage({ searchParams }: Props) {
-  const { token } = await searchParams;
-  const adminToken = process.env.ADMIN_TOKEN;
-
-  if (!adminToken || token !== adminToken) {
-    return (
-      <main className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Unauthorized. Append ?token=ADMIN_TOKEN to the URL.</p>
-      </main>
-    );
-  }
-
+export default async function AdminFeedbackPage() {
   await dbConnect();
   const items = (await FeedbackModel.find().sort({ createdAt: -1 }).lean()) as IFeedback[];
-
   const newCount = items.filter((i) => i.status === "new").length;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12">
+    <div className="px-8 py-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Feedback</h1>
@@ -42,7 +26,7 @@ export default async function AdminFeedbackPage({ searchParams }: Props) {
       </div>
 
       {items.length === 0 && (
-        <p className="text-center text-muted-foreground py-16">No feedback yet.</p>
+        <p className="py-16 text-center text-muted-foreground">No feedback yet.</p>
       )}
 
       <div className="flex flex-col gap-4">
@@ -82,7 +66,6 @@ export default async function AdminFeedbackPage({ searchParams }: Props) {
             <div className="mt-4 border-t border-border pt-3">
               <FeedbackActions
                 id={item._id.toString()}
-                token={token}
                 initialStatus={item.status}
                 initialIssueUrl={item.githubIssueUrl}
               />
@@ -90,6 +73,6 @@ export default async function AdminFeedbackPage({ searchParams }: Props) {
           </div>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

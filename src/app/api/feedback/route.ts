@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { auth } from "../../../../auth";
 import { dbConnect } from "@/lib/db/connect";
 import { FeedbackModel } from "@/lib/models/feedback.model";
 
@@ -8,12 +9,6 @@ const FeedbackInputSchema = z.object({
   message: z.string().min(10, "Message must be at least 10 characters").max(1000),
   email: z.string().email().optional().or(z.literal("")),
 });
-
-function isAdmin(request: NextRequest): boolean {
-  const token = request.nextUrl.searchParams.get("token");
-  const adminToken = process.env.ADMIN_TOKEN;
-  return !!adminToken && token === adminToken;
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,8 +35,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  if (!isAdmin(request)) {
+export async function GET() {
+  const session = await auth();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

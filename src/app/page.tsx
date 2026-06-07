@@ -6,18 +6,13 @@ import { AdUnit } from "@/components/ads/AdUnit";
 import { ScrollControls } from "@/components/layout/ScrollControls";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuList,
-  NavigationMenuLink,
-  navigationMenuTriggerStyle,
-} from "@/components/ui/navigation-menu";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
 import { SearchDrawerDynamic } from "@/components/search/SearchDrawerDynamic";
 import { Footer } from "@/components/layout/Footer";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
+import { auth } from "../../auth";
+import Link from "next/link";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -176,6 +171,8 @@ export default async function HomePage({ searchParams }: PageProps) {
         ? "Filtered Offers"
         : "All Offers";
 
+  const session = await auth();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ── Header ───────────────────────────────────────────────────────── */}
@@ -183,32 +180,16 @@ export default async function HomePage({ searchParams }: PageProps) {
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-3">
           <div className="text-xl font-bold tracking-tight">CardMax</div>
 
-          <NavigationMenu className="hidden md:flex">
-            <NavigationMenuList>
-              <NavigationMenuItem>
-                <NavigationMenuLink
-                  href="#"
-                  className={navigationMenuTriggerStyle()}
-                  aria-disabled="true"
-                >
-                  Cards
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink
-                  href="/"
-                  className={navigationMenuTriggerStyle()}
-                  data-active
-                >
-                  Offers
-                </NavigationMenuLink>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
-
           <div className="flex items-center gap-2">
             <SearchDrawerDynamic />
             <ThemeToggle />
+            <Link
+              href={session ? "/admin" : "/login"}
+              className="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:inline-flex"
+              data-testid="admin-link"
+            >
+              {session ? "Dashboard" : "Admin"}
+            </Link>
           </div>
         </div>
       </header>

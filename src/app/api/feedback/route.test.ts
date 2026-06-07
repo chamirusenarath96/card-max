@@ -1,27 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockCreate, mockFind, mockSort, mockLean } = vi.hoisted(() => ({
+const { mockCreate, mockFind, mockSort, mockLean, mockAuth } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
   mockFind: vi.fn(),
   mockSort: vi.fn(),
   mockLean: vi.fn(),
+  mockAuth: vi.fn(),
 }));
 
 vi.mock("@/lib/db/connect", () => ({ dbConnect: vi.fn() }));
-
 vi.mock("@/lib/models/feedback.model", () => ({
-  FeedbackModel: {
-    create: mockCreate,
-    find: mockFind,
-  },
+  FeedbackModel: { create: mockCreate, find: mockFind },
 }));
+vi.mock("../../../../auth", () => ({ auth: mockAuth }));
 
 // Must import after mocks
 import { POST, GET } from "./route";
 
-function makeRequest(body?: unknown, searchParams?: string): NextRequest {
-  const url = `http://localhost:3000/api/feedback${searchParams ? `?${searchParams}` : ""}`;
+function makeRequest(body?: unknown): NextRequest {
+  const url = "http://localhost:3000/api/feedback";
   return new NextRequest(url, {
     method: body ? "POST" : "GET",
     ...(body ? { body: JSON.stringify(body), headers: { "Content-Type": "application/json" } } : {}),
@@ -82,10 +80,8 @@ describe("POST /api/feedback", () => {
 });
 
 describe("GET /api/feedback", () => {
-  const ADMIN_TOKEN = "test-admin-token";
-
   beforeEach(() => {
-    vi.stubEnv("ADMIN_TOKEN", ADMIN_TOKEN);
+    mockAuth.mockClear();
     mockFind.mockClear();
     mockSort.mockClear();
     mockLean.mockClear();
@@ -94,21 +90,15 @@ describe("GET /api/feedback", () => {
     mockFind.mockReturnValue({ sort: mockSort });
   });
 
-  it("returns 401 when no token provided", async () => {
-    const req = makeRequest(undefined, "");
-    const res = await GET(req);
+  it("returns 401 when not authenticated", async () => {
+    mockAuth.mockResolvedValue(null);
+    const res = await GET();
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 when wrong token provided", async () => {
-    const req = makeRequest(undefined, "token=wrong");
-    const res = await GET(req);
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 200 with data when correct token provided", async () => {
-    const req = makeRequest(undefined, `token=${ADMIN_TOKEN}`);
-    const res = await GET(req);
+  it("returns 200 with data when authenticated", async () => {
+    mockAuth.mockResolvedValue({ user: { email: "admin@example.com" } });
+    const res = await GET();
     expect(res.status).toBe(200);
     const data = await res.json() as { data: unknown[] };
     expect(Array.isArray(data.data)).toBe(true);
