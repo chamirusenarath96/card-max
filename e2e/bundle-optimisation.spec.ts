@@ -78,8 +78,8 @@ test.describe("Bundle Optimisation (Feature 033)", () => {
     await expect(page).toHaveURL(/bank=commercial_bank/, { timeout: 10000 });
   });
 
-  // T3: Search drawer opens and functions correctly after dynamic load
-  test("search drawer opens and searches correctly after dynamic load (T3)", async ({ page }) => {
+  // T3: Hero search input loads and functions correctly after dynamic load
+  test("hero search input loads and searches correctly after dynamic load (T3)", async ({ page }) => {
     await page.route("**/api/offers**", (route) =>
       route.fulfill({
         status: 200,
@@ -98,16 +98,9 @@ test.describe("Bundle Optimisation (Feature 033)", () => {
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
 
-    // Search drawer trigger must be present in the header after dynamic load
-    const searchTrigger = page.getByTestId("search-drawer-trigger");
-    await expect(searchTrigger).toBeVisible({ timeout: 10000 });
-
-    // Open search drawer by clicking the trigger
-    await searchTrigger.click();
-
-    // Drawer input must become visible
-    const searchInput = page.getByTestId("search-drawer-input");
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    // Hero search input must be present after dynamic load
+    const searchInput = page.getByTestId("hero-search-input");
+    await expect(searchInput).toBeVisible({ timeout: 10000 });
 
     // Type a search query and submit
     await searchInput.fill("keells");
