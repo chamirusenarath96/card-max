@@ -1,0 +1,39 @@
+<svg width="400" height="320" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg">
+  <title>Card Max — Primary Logo</title>
+  <desc>Card Max primary stacked logo with slogan Find the Best Card Deals</desc>
+
+  <!-- Card 3 back -->
+  <g transform="translate(164, 32) rotate(-12)">
+    <rect x="0" y="0" width="72" height="46" rx="5" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.7"/>
+    <rect x="0" y="28" width="72" height="10" fill="#B4B2A9"/>
+    <rect x="8" y="32" width="24" height="4" rx="1.5" fill="#888780"/>
+  </g>
+  <!-- Card 2 mid -->
+  <g transform="translate(164, 32) rotate(-4)">
+    <rect x="0" y="0" width="72" height="46" rx="5" fill="#5F5E5A" stroke="#444441" stroke-width="0.7"/>
+    <rect x="0" y="28" width="72" height="10" fill="#444441"/>
+    <rect x="8" y="32" width="24" height="4" rx="1.5" fill="#888780"/>
+    <rect x="8" y="8" width="14" height="10" rx="2" fill="#888780"/>
+  </g>
+  <!-- Card 1 front -->
+  <g transform="translate(164, 32) rotate(6)">
+    <rect x="0" y="0" width="72" height="46" rx="5" fill="#0A0A09" stroke="#2C2C2A" stroke-width="0.5"/>
+    <rect x="8" y="8" width="14" height="10" rx="2" fill="#444441" stroke="#5F5E5A" stroke-width="0.5"/>
+    <line x1="8" y1="13" x2="22" y2="13" stroke="#2C2C2A" stroke-width="0.5"/>
+    <line x1="15" y1="8" x2="15" y2="18" stroke="#2C2C2A" stroke-width="0.5"/>
+    <rect x="0" y="28" width="72" height="10" fill="#1A1A18"/>
+    <circle cx="30" cy="20" r="1.8" fill="#444441"/>
+    <circle cx="36" cy="20" r="1.8" fill="#444441"/>
+    <circle cx="42" cy="20" r="1.8" fill="#444441"/>
+    <circle cx="48" cy="20" r="1.8" fill="#444441"/>
+  </g>
+
+  <!-- CARD wordmark -->
+  <text x="200" y="178" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="80" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="-2">CARD</text>
+  <!-- MAX wordmark -->
+  <text x="200" y="248" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="80" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="-2">MAX</text>
+  <!-- Rule -->
+  <line x1="60" y1="260" x2="340" y2="260" stroke="#0A0A09" stroke-width="1"/>
+  <!-- Slogan -->
+  <text x="200" y="282" font-family="'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="400" fill="#5F5E5A" text-anchor="middle" letter-spacing="4">FIND THE BEST CARD DEALS</text>
+</svg>

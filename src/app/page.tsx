@@ -12,6 +12,7 @@ import { Footer } from "@/components/layout/Footer";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { auth } from "../../auth";
 import Link from "next/link";
+import { Logo } from "@/components/brand/Logo";
 import type { Offer } from "../../specs/data/offer.schema";
 import type { Pagination } from "@/components/cards";
 
@@ -177,7 +178,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-3">
-          <div className="text-xl font-bold tracking-tight">CardMax</div>
+          <Logo variant="horizontal" className="h-7" />
 
           <div className="flex items-center gap-2">
             <ThemeToggle />

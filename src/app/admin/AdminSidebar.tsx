@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { LayoutDashboard, MessageSquare, LogOut, BarChart2, Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session } from "next-auth";
+import { Logo } from "@/components/brand/Logo";
 
 interface Props {
   user: Session["user"];
@@ -26,10 +27,10 @@ export function AdminSidebar({ user }: Props) {
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden w-56 flex-shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="border-b border-border px-5 py-4">
-          <Link href="/" className="text-lg font-bold tracking-tight text-foreground hover:opacity-80">
-            CardMax
+          <Link href="/" className="hover:opacity-80">
+            <Logo variant="horizontal" className="h-6" />
           </Link>
-          <p className="mt-0.5 text-xs text-muted-foreground">Admin</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">Admin</p>
         </div>
 
         <nav className="flex-1 space-y-0.5 px-3 py-4">
@@ -76,8 +77,9 @@ export function AdminSidebar({ user }: Props) {
 
       {/* ── Mobile top bar ──────────────────────────────────── */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
-        <Link href="/" className="text-base font-bold tracking-tight text-foreground">
-          CardMax <span className="text-xs font-normal text-muted-foreground">Admin</span>
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80">
+          <Logo variant="horizontal" className="h-5" />
+          <span className="text-xs font-normal text-muted-foreground">Admin</span>
         </Link>
         <div className="flex items-center gap-3">
           {user?.image && (

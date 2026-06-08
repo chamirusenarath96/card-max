@@ -1,0 +1,161 @@
+<svg width="680" height="1140" viewBox="0 0 680 1140" xmlns="http://www.w3.org/2000/svg">
+  <title>Card Max — Full Brand System</title>
+  <desc>Complete Card Max logo system: primary, icons, horizontal, secondary, monochrome and reversed.</desc>
+
+  <!-- PRIMARY LOGO label -->
+  <text x="40" y="34" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" letter-spacing="3" font-weight="500">PRIMARY LOGO</text>
+  <line x1="40" y1="40" x2="640" y2="40" stroke="#2C2C2A" stroke-width="0.5"/>
+
+  <g transform="translate(340, 190)">
+    <g transform="translate(-36, -88) rotate(-12)">
+      <rect x="0" y="0" width="72" height="46" rx="5" fill="#D3D1C7" stroke="#B4B2A9" stroke-width="0.7"/>
+      <rect x="0" y="28" width="72" height="10" fill="#B4B2A9"/>
+      <rect x="8" y="32" width="24" height="4" rx="1.5" fill="#888780"/>
+    </g>
+    <g transform="translate(-36, -88) rotate(-4)">
+      <rect x="0" y="0" width="72" height="46" rx="5" fill="#5F5E5A" stroke="#444441" stroke-width="0.7"/>
+      <rect x="0" y="28" width="72" height="10" fill="#444441"/>
+      <rect x="8" y="8" width="14" height="10" rx="2" fill="#888780"/>
+    </g>
+    <g transform="translate(-36, -88) rotate(6)">
+      <rect x="0" y="0" width="72" height="46" rx="5" fill="#0A0A09"/>
+      <rect x="8" y="8" width="14" height="10" rx="2" fill="#444441" stroke="#5F5E5A" stroke-width="0.5"/>
+      <line x1="8" y1="13" x2="22" y2="13" stroke="#2C2C2A" stroke-width="0.5"/>
+      <line x1="15" y1="8" x2="15" y2="18" stroke="#2C2C2A" stroke-width="0.5"/>
+      <rect x="0" y="28" width="72" height="10" fill="#1A1A18"/>
+      <circle cx="30" cy="20" r="1.8" fill="#444441"/>
+      <circle cx="36" cy="20" r="1.8" fill="#444441"/>
+      <circle cx="42" cy="20" r="1.8" fill="#444441"/>
+      <circle cx="48" cy="20" r="1.8" fill="#444441"/>
+    </g>
+    <text x="0" y="20" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="48" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="-1">CARD</text>
+    <text x="0" y="58" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="48" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="-1">MAX</text>
+    <line x1="-110" y1="66" x2="110" y2="66" stroke="#0A0A09" stroke-width="0.7"/>
+    <text x="0" y="82" font-family="'Helvetica Neue', Arial, sans-serif" font-size="11" font-weight="400" fill="#5F5E5A" text-anchor="middle" letter-spacing="4">FIND THE BEST CARD DEALS</text>
+  </g>
+
+  <!-- ICON MARK label -->
+  <text x="40" y="346" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" letter-spacing="3" font-weight="500">STANDALONE ICON MARK</text>
+  <line x1="40" y1="352" x2="640" y2="352" stroke="#2C2C2A" stroke-width="0.5"/>
+
+  <!-- Black icon -->
+  <g transform="translate(150, 430)">
+    <rect x="-60" y="-60" width="120" height="120" rx="22" fill="#0A0A09"/>
+    <g transform="translate(-26, -14) rotate(-10)" opacity="0.35">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(-26, -14) rotate(-2)" opacity="0.65">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(-26, -14) rotate(7)">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+      <rect x="4" y="5" width="10" height="7" rx="1.5" fill="#FFFFFF" opacity="0.6"/>
+      <rect x="0" y="18" width="52" height="7" fill="#FFFFFF" opacity="0.18"/>
+    </g>
+    <text x="0" y="38" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="20" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="3">CM</text>
+  </g>
+  <!-- Reversed icon -->
+  <g transform="translate(340, 430)">
+    <rect x="-60" y="-60" width="120" height="120" rx="22" fill="#FFFFFF" stroke="#0A0A09" stroke-width="1.5"/>
+    <g transform="translate(-26, -14) rotate(-10)" opacity="0.18">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="#0A0A09"/>
+    </g>
+    <g transform="translate(-26, -14) rotate(-2)" opacity="0.45">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="#0A0A09"/>
+    </g>
+    <g transform="translate(-26, -14) rotate(7)">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="none" stroke="#0A0A09" stroke-width="2"/>
+      <rect x="4" y="5" width="10" height="7" rx="1.5" fill="#0A0A09" opacity="0.5"/>
+    </g>
+    <text x="0" y="38" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="20" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="3">CM</text>
+  </g>
+  <!-- Mono icon -->
+  <g transform="translate(530, 430)">
+    <rect x="-60" y="-60" width="120" height="120" rx="22" fill="#444441"/>
+    <g transform="translate(-26, -14) rotate(-10)" opacity="0.3">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(-26, -14) rotate(-2)" opacity="0.6">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(-26, -14) rotate(7)">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+      <rect x="4" y="5" width="10" height="7" rx="1.5" fill="#FFFFFF" opacity="0.55"/>
+    </g>
+    <text x="0" y="38" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="20" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="3">CM</text>
+  </g>
+  <text x="150" y="510" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" text-anchor="middle" letter-spacing="1.5">Black</text>
+  <text x="340" y="510" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" text-anchor="middle" letter-spacing="1.5">Reversed</text>
+  <text x="530" y="510" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" text-anchor="middle" letter-spacing="1.5">Monochrome</text>
+
+  <!-- HORIZONTAL label -->
+  <text x="40" y="545" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" letter-spacing="3" font-weight="500">HORIZONTAL LAYOUT</text>
+  <line x1="40" y1="551" x2="640" y2="551" stroke="#2C2C2A" stroke-width="0.5"/>
+  <g transform="translate(340, 618)">
+    <g transform="translate(-230, -22)">
+      <g transform="rotate(-10)" opacity="0.3"><rect x="0" y="0" width="40" height="26" rx="3.5" fill="#0A0A09"/></g>
+      <g transform="rotate(-3)" opacity="0.6"><rect x="0" y="0" width="40" height="26" rx="3.5" fill="#0A0A09"/></g>
+      <g transform="rotate(6)">
+        <rect x="0" y="0" width="40" height="26" rx="3.5" fill="#0A0A09"/>
+        <rect x="4" y="4" width="8" height="6" rx="1.5" fill="#FFFFFF" opacity="0.55"/>
+      </g>
+    </g>
+    <line x1="-174" y1="-32" x2="-174" y2="32" stroke="#0A0A09" stroke-width="0.7"/>
+    <text x="-158" y="10" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="40" font-weight="900" fill="#0A0A09" letter-spacing="-0.5">CARD MAX</text>
+    <text x="-158" y="28" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="400" fill="#5F5E5A" letter-spacing="3">FIND THE BEST CARD DEALS</text>
+  </g>
+
+  <!-- SECONDARY label -->
+  <text x="40" y="682" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" letter-spacing="3" font-weight="500">SECONDARY — COMPACT LOCKUP</text>
+  <line x1="40" y1="688" x2="640" y2="688" stroke="#2C2C2A" stroke-width="0.5"/>
+  <g transform="translate(340, 755)">
+    <rect x="-180" y="-40" width="360" height="80" rx="40" fill="#0A0A09"/>
+    <g transform="translate(-142, -12)">
+      <g transform="rotate(-8)" opacity="0.4"><rect x="0" y="0" width="28" height="18" rx="3" fill="#FFFFFF"/></g>
+      <g transform="rotate(5)">
+        <rect x="0" y="0" width="28" height="18" rx="3" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+        <rect x="3" y="3" width="6" height="5" rx="1" fill="#FFFFFF" opacity="0.6"/>
+      </g>
+    </g>
+    <line x1="-100" y1="-22" x2="-100" y2="22" stroke="#444441" stroke-width="0.8"/>
+    <text x="-80" y="13" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="32" font-weight="900" fill="#FFFFFF" letter-spacing="1">CARD MAX</text>
+  </g>
+
+  <!-- MONOCHROME label -->
+  <text x="40" y="828" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" letter-spacing="3" font-weight="500">MONOCHROME + REVERSED FULL LOGOS</text>
+  <line x1="40" y1="834" x2="640" y2="834" stroke="#2C2C2A" stroke-width="0.5"/>
+
+  <!-- Mono light -->
+  <g transform="translate(190, 990)">
+    <g transform="translate(-26, -140) rotate(-10)" opacity="0.2"><rect x="0" y="0" width="52" height="34" rx="4" fill="#0A0A09"/></g>
+    <g transform="translate(-26, -140) rotate(-2)" opacity="0.5"><rect x="0" y="0" width="52" height="34" rx="4" fill="#0A0A09"/></g>
+    <g transform="translate(-26, -140) rotate(7)">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="none" stroke="#0A0A09" stroke-width="2"/>
+      <rect x="4" y="5" width="10" height="7" rx="1.5" fill="#0A0A09" opacity="0.4"/>
+    </g>
+    <text x="0" y="-48" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="36" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="-1">CARD</text>
+    <text x="0" y="-14" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="36" font-weight="900" fill="#0A0A09" text-anchor="middle" letter-spacing="-1">MAX</text>
+    <line x1="-88" y1="-6" x2="88" y2="-6" stroke="#0A0A09" stroke-width="0.6"/>
+    <text x="0" y="10" font-family="'Helvetica Neue', Arial, sans-serif" font-size="9" fill="#5F5E5A" text-anchor="middle" letter-spacing="2.5">FIND THE BEST CARD DEALS</text>
+  </g>
+
+  <!-- Reversed dark -->
+  <g transform="translate(490, 970)">
+    <rect x="-140" y="-130" width="280" height="180" rx="8" fill="#0A0A09"/>
+    <g transform="translate(-26, -120) rotate(-10)" opacity="0.25"><rect x="0" y="0" width="52" height="34" rx="4" fill="#FFFFFF"/></g>
+    <g transform="translate(-26, -120) rotate(-2)" opacity="0.55"><rect x="0" y="0" width="52" height="34" rx="4" fill="#FFFFFF"/></g>
+    <g transform="translate(-26, -120) rotate(7)">
+      <rect x="0" y="0" width="52" height="34" rx="4" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+      <rect x="4" y="5" width="10" height="7" rx="1.5" fill="#FFFFFF" opacity="0.45"/>
+    </g>
+    <text x="0" y="-28" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="36" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="-1">CARD</text>
+    <text x="0" y="6" font-family="'Helvetica Neue', 'Arial Black', Arial, sans-serif" font-size="36" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="-1">MAX</text>
+    <line x1="-88" y1="14" x2="88" y2="14" stroke="#444441" stroke-width="0.6"/>
+    <text x="0" y="30" font-family="'Helvetica Neue', Arial, sans-serif" font-size="9" fill="#888780" text-anchor="middle" letter-spacing="2.5">FIND THE BEST CARD DEALS</text>
+  </g>
+
+  <text x="190" y="1068" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" text-anchor="middle" letter-spacing="1.5">Mono — light bg</text>
+  <text x="490" y="1068" font-family="'Helvetica Neue', Arial, sans-serif" font-size="10" fill="#888780" text-anchor="middle" letter-spacing="1.5">Reversed — dark bg</text>
+  <line x1="40" y1="1100" x2="640" y2="1100" stroke="#2C2C2A" stroke-width="0.3" opacity="0.4"/>
+  <text x="340" y="1120" font-family="'Helvetica Neue', Arial, sans-serif" font-size="9" fill="#888780" text-anchor="middle" letter-spacing="3">CARD MAX — BRAND IDENTITY SYSTEM</text>
+</svg>

@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/brand/Logo";
 
 function LoginContent() {
   const params = useSearchParams();
@@ -13,7 +14,8 @@ function LoginContent() {
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-lg">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">CardMax Admin</h1>
+          <Logo variant="stacked" className="mx-auto mb-4 h-28" />
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Admin Dashboard</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Sign in with your Google account to access the dashboard.
           </p>
