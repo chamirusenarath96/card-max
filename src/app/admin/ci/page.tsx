@@ -37,6 +37,40 @@ interface CiRun {
 
 interface BankStat { _id: string; lastScraped: Date; count: number }
 
+interface BankStatusRow {
+  bankKey: string;
+  label: string;
+  stat: BankStat | undefined;
+  statusLabel: string;
+  statusColor: string;
+  lastScrapedStr: string;
+}
+
+async function fetchBankStatusRows(): Promise<BankStatusRow[]> {
+  const stats = await OfferModel.aggregate<BankStat>([
+    { $group: { _id: "$bank", lastScraped: { $max: "$scrapedAt" }, count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+  const now = Date.now();
+  return Object.entries(BANK_LABELS).map(([bankKey, label]) => {
+    const stat = stats.find((s) => s._id === bankKey);
+    const hoursAgo = stat ? (now - new Date(stat.lastScraped).getTime()) / 3_600_000 : Infinity;
+    const statusLabel = hoursAgo < 26 ? "Today ✓" : hoursAgo < 50 ? "Yesterday" : "Stale";
+    const statusColor =
+      hoursAgo < 26
+        ? "text-green-700 dark:text-green-400"
+        : hoursAgo < 50
+          ? "text-yellow-700 dark:text-yellow-400"
+          : "text-red-700 dark:text-red-400";
+    const lastScrapedStr = stat
+      ? new Date(stat.lastScraped).toLocaleString("en-GB", {
+          day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+        })
+      : "—";
+    return { bankKey, label, stat, statusLabel, statusColor, lastScrapedStr };
+  });
+}
+
 async function fetchRuns(): Promise<CiRun[]> {
   try {
     const res = await fetch(
@@ -102,13 +136,8 @@ function timeAgo(iso: string) {
 }
 
 export default async function CiRunsPage() {
-  const [runs] = await Promise.all([fetchRuns()]);
-
   await dbConnect();
-  const bankStats = await OfferModel.aggregate<BankStat>([
-    { $group: { _id: "$bank", lastScraped: { $max: "$scrapedAt" }, count: { $sum: 1 } } },
-    { $sort: { _id: 1 } },
-  ]);
+  const [runs, bankStatusRows] = await Promise.all([fetchRuns(), fetchBankStatusRows()]);
 
   const byWorkflow = runs.reduce<Record<string, CiRun[]>>((acc, r) => {
     (acc[r.name] ??= []).push(r);
@@ -140,37 +169,14 @@ export default async function CiRunsPage() {
               </tr>
             </thead>
             <tbody>
-              {Object.entries(BANK_LABELS).map(([bankKey, label]) => {
-                const stat = bankStats.find((s) => s._id === bankKey);
-                const hoursAgo = stat
-                  ? (Date.now() - new Date(stat.lastScraped).getTime()) / 3_600_000
-                  : Infinity;
-                const statusLabel =
-                  hoursAgo < 26 ? "Today ✓" : hoursAgo < 50 ? "Yesterday" : "Stale";
-                const statusColor =
-                  hoursAgo < 26
-                    ? "text-green-700 dark:text-green-400"
-                    : hoursAgo < 50
-                      ? "text-yellow-700 dark:text-yellow-400"
-                      : "text-red-700 dark:text-red-400";
-                return (
-                  <tr key={bankKey} className="border-b border-border/50">
-                    <td className="py-2.5 pr-6 font-medium text-foreground">{label}</td>
-                    <td className="py-2.5 pr-6 text-muted-foreground">
-                      {stat
-                        ? new Date(stat.lastScraped).toLocaleString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
-                    </td>
-                    <td className={`py-2.5 pr-6 font-medium ${statusColor}`}>{statusLabel}</td>
-                    <td className="py-2.5 text-muted-foreground">{stat?.count ?? 0}</td>
-                  </tr>
-                );
-              })}
+              {bankStatusRows.map(({ bankKey, label, stat, statusLabel, statusColor, lastScrapedStr }) => (
+                <tr key={bankKey} className="border-b border-border/50">
+                  <td className="py-2.5 pr-6 font-medium text-foreground">{label}</td>
+                  <td className="py-2.5 pr-6 text-muted-foreground">{lastScrapedStr}</td>
+                  <td className={`py-2.5 pr-6 font-medium ${statusColor}`}>{statusLabel}</td>
+                  <td className="py-2.5 text-muted-foreground">{stat?.count ?? 0}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

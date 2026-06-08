@@ -51,6 +51,27 @@ async function fetchLatestDeployment() {
   }
 }
 
+interface BankStatusItem {
+  bankKey: string;
+  label: string;
+  stat: BankStat | undefined;
+  status: "ok" | "warn" | "fail";
+}
+
+async function fetchBankStatusMap(): Promise<BankStatusItem[]> {
+  const stats = await OfferModel.aggregate<BankStat>([
+    { $group: { _id: "$bank", lastScraped: { $max: "$scrapedAt" }, count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+  const now = Date.now();
+  return Object.entries(BANK_LABELS).map(([bankKey, label]) => {
+    const stat = stats.find((s) => s._id === bankKey);
+    const hoursAgo = stat ? (now - new Date(stat.lastScraped).getTime()) / 3_600_000 : Infinity;
+    const status: "ok" | "warn" | "fail" = hoursAgo < 26 ? "ok" : hoursAgo < 50 ? "warn" : "fail";
+    return { bankKey, label, stat, status };
+  });
+}
+
 interface CiRun {
   id: number;
   name: string;
@@ -84,14 +105,11 @@ export default async function AdminOverviewPage() {
   const [runs, deployment] = await Promise.all([fetchRecentRuns(), fetchLatestDeployment()]);
 
   await dbConnect();
-  const [totalFeedback, newFeedback, recentFeedback, bankStats] = await Promise.all([
+  const [totalFeedback, newFeedback, recentFeedback, bankStatusMap] = await Promise.all([
     FeedbackModel.countDocuments(),
     FeedbackModel.countDocuments({ status: "new" }),
     FeedbackModel.find().sort({ createdAt: -1 }).limit(5).lean(),
-    OfferModel.aggregate<BankStat>([
-      { $group: { _id: "$bank", lastScraped: { $max: "$scrapedAt" }, count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]),
+    fetchBankStatusMap(),
   ]);
 
   const ciRuns = runs ?? [];
@@ -147,27 +165,20 @@ export default async function AdminOverviewPage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
-          {Object.entries(BANK_LABELS).map(([bankKey, label]) => {
-            const stat = bankStats.find((s) => s._id === bankKey);
-            const hoursAgo = stat
-              ? (Date.now() - new Date(stat.lastScraped).getTime()) / 3_600_000
-              : Infinity;
-            const status = hoursAgo < 26 ? "ok" : hoursAgo < 50 ? "warn" : "fail";
-            return (
-              <div key={bankKey} className="flex flex-col items-center rounded-lg border border-border bg-muted/30 p-3 text-center">
-                <span
-                  className={`mb-1.5 h-2.5 w-2.5 rounded-full ${
-                    status === "ok" ? "bg-green-500" : status === "warn" ? "bg-yellow-500" : "bg-red-500"
-                  }`}
-                />
-                <p className="text-[11px] font-medium leading-tight text-foreground">{label}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  {stat ? timeAgo(new Date(stat.lastScraped).toISOString()) : "never"}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{stat?.count ?? 0} offers</p>
-              </div>
-            );
-          })}
+          {bankStatusMap.map(({ bankKey, label, stat, status }) => (
+            <div key={bankKey} className="flex flex-col items-center rounded-lg border border-border bg-muted/30 p-3 text-center">
+              <span
+                className={`mb-1.5 h-2.5 w-2.5 rounded-full ${
+                  status === "ok" ? "bg-green-500" : status === "warn" ? "bg-yellow-500" : "bg-red-500"
+                }`}
+              />
+              <p className="text-[11px] font-medium leading-tight text-foreground">{label}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {stat ? timeAgo(new Date(stat.lastScraped).toISOString()) : "never"}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{stat?.count ?? 0} offers</p>
+            </div>
+          ))}
         </div>
       </section>
 
