@@ -25,8 +25,9 @@ const BANK_LABELS: Record<string, string> = {
 
 async function fetchRecentRuns() {
   try {
+    // Query ci.yml directly so Atlas Warmup runs don't push CI/Deploy out of the page
     const res = await fetch(
-      `https://api.github.com/repos/${REPO}/actions/runs?per_page=30`,
+      `https://api.github.com/repos/${REPO}/actions/workflows/ci.yml/runs?per_page=20`,
       { headers: GH_HEADERS, cache: "no-store" },
     );
     if (!res.ok) return null;
@@ -113,7 +114,7 @@ export default async function AdminOverviewPage() {
   ]);
 
   const ciRuns = runs ?? [];
-  const masterRuns = ciRuns.filter((r) => r.head_branch === "master" && r.name === "CI / Deploy");
+  const masterRuns = ciRuns.filter((r) => r.head_branch === "master");
   const successCount = masterRuns.filter((r) => r.conclusion === "success").length;
   const successRate = masterRuns.length > 0
     ? Math.round((successCount / masterRuns.length) * 100)

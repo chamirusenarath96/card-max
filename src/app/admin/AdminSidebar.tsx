@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, MessageSquare, LogOut, BarChart2 } from "lucide-react";
+import { LayoutDashboard, MessageSquare, LogOut, BarChart2, Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session } from "next-auth";
 
@@ -14,6 +14,7 @@ interface Props {
 const NAV = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/ci", label: "CI Runs", icon: BarChart2, exact: false },
+  { href: "/admin/crawler", label: "Crawler", icon: Bug, exact: false },
   { href: "/admin/feedback", label: "Feedback", icon: MessageSquare, exact: false },
 ];
 

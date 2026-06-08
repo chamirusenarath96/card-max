@@ -73,13 +73,22 @@ async function fetchBankStatusRows(): Promise<BankStatusRow[]> {
 
 async function fetchRuns(): Promise<CiRun[]> {
   try {
-    const res = await fetch(
-      `https://api.github.com/repos/${REPO}/actions/runs?per_page=50`,
-      { headers: GH_HEADERS, cache: "no-store" },
+    // Fetch all meaningful workflows, excluding Atlas warmup noise
+    const workflows = ["ci.yml", "crawler.yml", "scraper-smoke.yml"];
+    const results = await Promise.all(
+      workflows.map((wf) =>
+        fetch(
+          `https://api.github.com/repos/${REPO}/actions/workflows/${wf}/runs?per_page=20`,
+          { headers: GH_HEADERS, cache: "no-store" },
+        )
+          .then((r) => (r.ok ? r.json() : { workflow_runs: [] }))
+          .then((d) => (d.workflow_runs ?? []) as CiRun[])
+          .catch(() => [] as CiRun[]),
+      ),
     );
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.workflow_runs ?? [];
+    return results.flat().sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
   } catch {
     return [];
   }
