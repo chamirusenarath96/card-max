@@ -122,8 +122,8 @@ export default async function AdminOverviewPage() {
   const lastSuccessfulDeploy = masterRuns.find((r) => r.conclusion === "success");
 
   return (
-    <div className="px-8 py-8">
-      <h1 className="mb-6 text-2xl font-bold text-foreground">Overview</h1>
+    <div className="px-4 py-6 md:px-8 md:py-8">
+      <h1 className="mb-6 text-xl font-bold text-foreground md:text-2xl">Overview</h1>
 
       {/* Stats row */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">

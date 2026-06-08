@@ -185,7 +185,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             <ThemeToggle />
             <Link
               href={session ? "/admin" : "/login"}
-              className="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:inline-flex"
+              className="inline-flex rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               data-testid="admin-link"
             >
               {session ? "Dashboard" : "Admin"}

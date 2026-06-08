@@ -151,8 +151,8 @@ export default async function CiRunsPage() {
     .sort((a, b) => b[1].length - a[1].length);
 
   return (
-    <div className="px-8 py-8">
-      <h1 className="mb-2 text-2xl font-bold text-foreground">CI Runs</h1>
+    <div className="px-4 py-6 md:px-8 md:py-8">
+      <h1 className="mb-2 text-xl font-bold text-foreground md:text-2xl">CI Runs</h1>
       <p className="mb-6 text-sm text-muted-foreground">Last {runs.length} workflow runs across all branches.</p>
 
       {/* ── Per-bank crawler status ─────────────────────────────────── */}
@@ -256,32 +256,32 @@ export default async function CiRunsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-5 py-3 font-medium">#</th>
-                <th className="px-5 py-3 font-medium">Workflow</th>
-                <th className="px-5 py-3 font-medium">Branch</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Duration</th>
-                <th className="px-5 py-3 font-medium">Started</th>
+                <th className="px-3 py-3 font-medium md:px-5">#</th>
+                <th className="px-3 py-3 font-medium md:px-5">Workflow</th>
+                <th className="hidden px-5 py-3 font-medium sm:table-cell">Branch</th>
+                <th className="px-3 py-3 font-medium md:px-5">Status</th>
+                <th className="hidden px-5 py-3 font-medium md:table-cell">Duration</th>
+                <th className="hidden px-5 py-3 font-medium sm:table-cell">Started</th>
               </tr>
             </thead>
             <tbody>
               {runs.map((run) => (
                 <tr key={run.id} className="border-b border-border/50 hover:bg-muted/30">
-                  <td className="px-5 py-3 text-muted-foreground">
+                  <td className="px-3 py-3 text-muted-foreground md:px-5">
                     <a href={run.html_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                       #{run.run_number}
                     </a>
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-3 py-3 md:px-5">
                     <a href={run.html_url} target="_blank" rel="noopener noreferrer" className="font-medium text-foreground hover:underline">
                       {run.name}
                     </a>
-                    <p className="mt-0.5 max-w-xs truncate text-xs text-muted-foreground">{run.display_title}</p>
+                    <p className="mt-0.5 max-w-[160px] truncate text-xs text-muted-foreground sm:max-w-xs">{run.display_title}</p>
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{run.head_branch}</td>
-                  <td className="px-5 py-3">{conclusionBadge(run.conclusion, run.status)}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{duration(run.created_at, run.updated_at)}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{timeAgo(run.created_at)}</td>
+                  <td className="hidden px-5 py-3 text-muted-foreground sm:table-cell">{run.head_branch}</td>
+                  <td className="px-3 py-3 md:px-5">{conclusionBadge(run.conclusion, run.status)}</td>
+                  <td className="hidden px-5 py-3 text-muted-foreground md:table-cell">{duration(run.created_at, run.updated_at)}</td>
+                  <td className="hidden px-5 py-3 text-muted-foreground sm:table-cell">{timeAgo(run.created_at)}</td>
                 </tr>
               ))}
             </tbody>

@@ -7,9 +7,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!session) redirect("/login");
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="min-h-screen bg-background md:flex">
       <AdminSidebar user={session.user} />
-      <main className="flex-1 overflow-auto">{children}</main>
+      {/* pb-16 reserves space for the fixed mobile bottom tab bar */}
+      <main className="flex-1 overflow-auto pb-16 md:pb-0">
+        {children}
+      </main>
     </div>
   );
 }
