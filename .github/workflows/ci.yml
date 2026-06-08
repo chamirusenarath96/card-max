@@ -272,23 +272,6 @@ jobs:
           lhci assert --inputDir=lighthouse-reports || echo "⚠️  Lighthouse assertion failed — see results above"
         continue-on-error: true
 
-      # Production user-flow — runs against card-max.vercel.app after
-      # promote. No bypass token needed. Always produces report data.
-      - name: Run Lighthouse user-flow audit (production)
-        run: node scripts/lhci-user-flow.js
-        env:
-          TARGET_URL: https://card-max.vercel.app
-        timeout-minutes: 10
-        continue-on-error: true
-
-      - name: Upload Lighthouse user-flow report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lhci-user-flow-${{ github.sha }}
-          path: .lighthouseci/user-flow/
-          retention-days: 14
-
       - name: Invalidate ISR cache
         run: |
           STATUS=$(curl -s -o /tmp/revalidate.txt -w "%{http_code}" \
