@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { LoadTimeBadge } from "@/components/layout/LoadTimeBadge";
-import { SearchDrawerDynamic } from "@/components/search/SearchDrawerDynamic";
 import { Footer } from "@/components/layout/Footer";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import { auth } from "../../auth";
@@ -181,7 +180,6 @@ export default async function HomePage({ searchParams }: PageProps) {
           <div className="text-xl font-bold tracking-tight">CardMax</div>
 
           <div className="flex items-center gap-2">
-            <SearchDrawerDynamic />
             <ThemeToggle />
             <Link
               href={session ? "/admin" : "/login"}
