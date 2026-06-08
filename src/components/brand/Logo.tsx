@@ -13,6 +13,7 @@ export function Logo({ variant = "horizontal", className }: LogoProps) {
     return (
       <svg
         viewBox="0 0 400 320"
+        role="img"
         aria-label="CardMax"
         className={cn("h-32 w-auto text-foreground", className)}
       >
@@ -76,6 +77,7 @@ export function Logo({ variant = "horizontal", className }: LogoProps) {
   return (
     <svg
       viewBox="0 0 560 100"
+      role="img"
       aria-label="CardMax"
       className={cn("h-8 w-auto text-foreground", className)}
     >

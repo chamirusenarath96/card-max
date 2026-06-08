@@ -3,9 +3,9 @@ import { describe, it, expect } from "vitest";
 import { Footer } from "./Footer";
 
 describe("Footer", () => {
-  it("renders the site name", () => {
+  it("renders the site logo", () => {
     render(<Footer />);
-    expect(screen.getByText("CardMax")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "CardMax" })).toBeInTheDocument();
   });
 
   it("renders the tagline with text-foreground/70 class for WCAG contrast (T1)", () => {
