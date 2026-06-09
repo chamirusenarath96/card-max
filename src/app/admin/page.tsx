@@ -1,7 +1,7 @@
 import { dbConnect } from "@/lib/db/connect";
 import { FeedbackModel } from "@/lib/models/feedback.model";
 import { OfferModel } from "@/lib/models/offer.model";
-import { CheckCircle, XCircle, Clock, MessageSquare, GitBranch, Rocket, Database } from "lucide-react";
+import { CheckCircle, XCircle, Clock, MessageSquare, GitBranch, Rocket, Database, FlaskConical } from "lucide-react";
 import Link from "next/link";
 
 const REPO = "chamirusenarath96/card-max";
@@ -23,9 +23,52 @@ const BANK_LABELS: Record<string, string> = {
   bank_of_ceylon:    "Bank of Ceylon",
 };
 
-async function fetchRecentRuns() {
+interface CiRun {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  created_at: string;
+  html_url: string;
+  head_branch: string;
+  run_number: number;
+}
+
+interface JobStep {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  number: number;
+}
+
+interface GitHubJob {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  html_url: string;
+  steps: JobStep[];
+}
+
+interface TestSuiteResult {
+  runNumber: number;
+  runUrl: string;
+  createdAt: string;
+  overallConclusion: string | null;
+  checks: { label: string; conclusion: string | null; status: string }[];
+}
+
+interface BankStat { _id: string; lastScraped: Date; count: number }
+
+interface BankStatusItem {
+  bankKey: string;
+  label: string;
+  stat: BankStat | undefined;
+  status: "ok" | "warn" | "fail";
+}
+
+async function fetchRecentRuns(): Promise<CiRun[] | null> {
   try {
-    // Query ci.yml directly so Atlas Warmup runs don't push CI/Deploy out of the page
     const res = await fetch(
       `https://api.github.com/repos/${REPO}/actions/workflows/ci.yml/runs?per_page=20`,
       { headers: GH_HEADERS, cache: "no-store" },
@@ -52,11 +95,64 @@ async function fetchLatestDeployment() {
   }
 }
 
-interface BankStatusItem {
-  bankKey: string;
-  label: string;
-  stat: BankStat | undefined;
-  status: "ok" | "warn" | "fail";
+async function fetchTestSuiteResults(): Promise<TestSuiteResult | null> {
+  try {
+    // Latest master run
+    const runRes = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/workflows/ci.yml/runs?per_page=1&branch=master`,
+      { headers: GH_HEADERS, cache: "no-store" },
+    );
+    if (!runRes.ok) return null;
+    const runData = await runRes.json();
+    const run: CiRun = runData.workflow_runs?.[0];
+    if (!run) return null;
+
+    // Jobs + steps for that run
+    const jobsRes = await fetch(
+      `https://api.github.com/repos/${REPO}/actions/runs/${run.id}/jobs`,
+      { headers: GH_HEADERS, cache: "no-store" },
+    );
+    if (!jobsRes.ok) return null;
+    const jobsData = await jobsRes.json();
+    const jobs: GitHubJob[] = jobsData.jobs ?? [];
+
+    const ciJob  = jobs.find((j) => j.name === "Lint, Type Check & Test");
+    const e2eJob = jobs.find((j) => j.name === "E2E Tests");
+
+    const STEP_MAP: Record<string, string> = {
+      "Lint":                    "Lint",
+      "Type check":              "Type Check",
+      "Unit & Component tests":  "Unit Tests",
+      "Build":                   "Build",
+    };
+
+    const ciChecks = ciJob
+      ? Object.entries(STEP_MAP).map(([raw, label]) => {
+          const step = ciJob.steps.find((s) => s.name === raw);
+          return {
+            label,
+            conclusion: step?.conclusion ?? null,
+            status:     step?.status     ?? "not_started",
+          };
+        })
+      : [];
+
+    const e2eCheck = {
+      label:      "E2E Tests",
+      conclusion: e2eJob?.conclusion ?? null,
+      status:     e2eJob?.status     ?? "not_started",
+    };
+
+    return {
+      runNumber:         run.run_number,
+      runUrl:            run.html_url,
+      createdAt:         run.created_at,
+      overallConclusion: run.conclusion,
+      checks:            [...ciChecks, e2eCheck],
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchBankStatusMap(): Promise<BankStatusItem[]> {
@@ -73,21 +169,13 @@ async function fetchBankStatusMap(): Promise<BankStatusItem[]> {
   });
 }
 
-interface CiRun {
-  id: number;
-  name: string;
-  status: string;
-  conclusion: string | null;
-  created_at: string;
-  html_url: string;
-  head_branch: string;
-}
-
-function conclusionIcon(conclusion: string | null, status: string) {
+function StepIcon({ conclusion, status }: { conclusion: string | null; status: string }) {
   if (status === "in_progress" || status === "queued")
     return <Clock className="h-4 w-4 text-yellow-500" />;
   if (conclusion === "success")
     return <CheckCircle className="h-4 w-4 text-green-500" />;
+  if (conclusion === null)
+    return <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />;
   return <XCircle className="h-4 w-4 text-red-500" />;
 }
 
@@ -100,10 +188,12 @@ function timeAgo(iso: string) {
   return "just now";
 }
 
-interface BankStat { _id: string; lastScraped: Date; count: number }
-
 export default async function AdminOverviewPage() {
-  const [runs, deployment] = await Promise.all([fetchRecentRuns(), fetchLatestDeployment()]);
+  const [runs, deployment, testSuite] = await Promise.all([
+    fetchRecentRuns(),
+    fetchLatestDeployment(),
+    fetchTestSuiteResults(),
+  ]);
 
   await dbConnect();
   const [totalFeedback, newFeedback, recentFeedback, bankStatusMap] = await Promise.all([
@@ -184,33 +274,73 @@ export default async function AdminOverviewPage() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent CI runs */}
+        {/* Test Suite Results */}
         <section className="rounded-xl border border-border bg-card p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold text-foreground">Recent CI Runs</h2>
-            <Link href="/admin/ci" className="text-xs text-primary hover:underline">
-              View all →
-            </Link>
+            <h2 className="flex items-center gap-2 font-semibold text-foreground">
+              <FlaskConical className="h-4 w-4 text-muted-foreground" />
+              Test Suite
+            </h2>
+            {testSuite ? (
+              <a
+                href={testSuite.runUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline"
+              >
+                Run #{testSuite.runNumber} · {timeAgo(testSuite.createdAt)} →
+              </a>
+            ) : (
+              <Link href="/admin/ci" className="text-xs text-primary hover:underline">
+                View CI →
+              </Link>
+            )}
           </div>
-          {ciRuns.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No runs found.</p>
+          {!testSuite ? (
+            <p className="text-sm text-muted-foreground">No CI data available.</p>
           ) : (
-            <ul className="space-y-2">
-              {ciRuns.slice(0, 8).map((run) => (
-                <li key={run.id} className="flex items-center gap-3 text-sm">
-                  {conclusionIcon(run.conclusion, run.status)}
-                  <a
-                    href={run.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 truncate font-medium text-foreground hover:underline"
+            <ul className="space-y-2.5">
+              {testSuite.checks.map((check) => (
+                <li key={check.label} className="flex items-center gap-3 text-sm">
+                  <StepIcon conclusion={check.conclusion} status={check.status} />
+                  <span className="flex-1 font-medium text-foreground">{check.label}</span>
+                  <span
+                    className={`text-xs font-medium ${
+                      check.conclusion === "success"
+                        ? "text-green-600 dark:text-green-400"
+                        : check.status === "in_progress" || check.status === "queued"
+                          ? "text-yellow-600 dark:text-yellow-400"
+                          : check.conclusion === null
+                            ? "text-muted-foreground"
+                            : "text-red-600 dark:text-red-400"
+                    }`}
                   >
-                    {run.name}
-                  </a>
-                  <span className="text-xs text-muted-foreground">{timeAgo(run.created_at)}</span>
+                    {check.status === "in_progress"
+                      ? "running"
+                      : check.status === "queued"
+                        ? "queued"
+                        : check.conclusion ?? "—"}
+                  </span>
                 </li>
               ))}
             </ul>
+          )}
+          {testSuite && (
+            <div
+              className={`mt-4 rounded-lg px-3 py-2 text-xs font-medium ${
+                testSuite.overallConclusion === "success"
+                  ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                  : testSuite.overallConclusion === null
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-red-500/10 text-red-700 dark:text-red-400"
+              }`}
+            >
+              {testSuite.overallConclusion === "success"
+                ? "✓ All checks passed"
+                : testSuite.overallConclusion === null
+                  ? "⏳ In progress…"
+                  : "✗ One or more checks failed"}
+            </div>
           )}
         </section>
 

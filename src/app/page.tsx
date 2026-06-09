@@ -178,7 +178,7 @@ export default async function HomePage({ searchParams }: PageProps) {
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-6 py-3">
-          <Logo variant="horizontal" className="h-7" />
+          <Logo variant="horizontal" className="h-10" />
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
