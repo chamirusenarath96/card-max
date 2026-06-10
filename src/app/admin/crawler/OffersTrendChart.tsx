@@ -2,8 +2,8 @@
 
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -52,7 +52,7 @@ export function OffersTrendChart({ data, banks }: Props) {
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+      <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
         <XAxis
           dataKey="date"
@@ -83,16 +83,17 @@ export function OffersTrendChart({ data, banks }: Props) {
           )}
         />
         {banks.map((bank) => (
-          <Bar
+          <Line
             key={bank}
             dataKey={bank}
-            stackId="a"
-            fill={BANK_COLORS[bank] ?? "#94a3b8"}
+            stroke={BANK_COLORS[bank] ?? "#94a3b8"}
+            strokeWidth={2}
+            dot={false}
             name={bank}
-            radius={banks.indexOf(bank) === banks.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+            connectNulls
           />
         ))}
-      </BarChart>
+      </LineChart>
     </ResponsiveContainer>
   );
 }
