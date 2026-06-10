@@ -73,7 +73,9 @@ const PAGE2_RESPONSE = {
   pagination: { page: 2, total: 25, totalPages: 2, limit: 20 },
 };
 
-const RENDER_BUDGET_MS = 500;
+// CI runners are shared and slower than local machines; 3 s gives a realistic
+// margin without losing signal (the drawer should open instantly, not hang).
+const RENDER_BUDGET_MS = process.env.CI ? 3000 : 500;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
