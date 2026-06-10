@@ -49,6 +49,11 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       MONGODB_URI: process.env.MONGODB_URI ?? "",
+      // Allow Auth.js to trust http://localhost in the E2E production build.
+      // Without this the server rejects /api/auth/session with UntrustedHost,
+      // causing the client to retry indefinitely and blocking networkidle.
+      AUTH_TRUST_HOST: "true",
+      AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-placeholder-secret",
     },
   },
 });
