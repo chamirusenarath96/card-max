@@ -1282,7 +1282,7 @@ sequenceDiagram
 | Issue | Bank | Status | Fix |
 |-------|------|--------|-----|
 | Incapsula JS challenge blocks scraper | NTB | 🟡 Mitigated | HTTP-first + Crawlee PlaywrightCrawler fallback with waitForSelector |
-| All offers link to same listing page | Sampath | 🟡 Minor | Parse per-offer detail URL from `cards_new` |
+| All offers link to same listing page | Sampath | ✅ Fixed (spec 036) | `buildDetailUrl(id)` constructs per-offer URL from the promotion `id` field |
 | HNB API occasionally returns empty | HNB | 🟡 Intermittent | Retry + alert threshold |
 | No individual offer detail URLs | HNB | 🟡 Minor | Use `id` field to construct detail URL |
 
