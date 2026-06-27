@@ -28,6 +28,7 @@ import { parseDiscount } from "../utils/parseDiscount";
 const API_URL =
   "https://www.sampath.lk/api/card-promotions?page_number=1&size=200";
 const SOURCE_URL = "https://www.sampath.lk/sampath-cards/credit-card-offer";
+const DETAIL_BASE = "https://www.sampath.lk/sampath-cards/credit-card-offer";
 
 /**
  * The Sampath API requires a Referer pointing to the card offers page,
@@ -115,6 +116,15 @@ interface SampathPromotion {
   display_on?: number;    // Unix ms
   image_url?: string;
   cards_new?: SampathCardEntry[];
+}
+
+/**
+ * Constructs a per-offer detail URL from the Sampath promotion id.
+ * Returns undefined when id is absent, 0, or NaN so callers can fall back.
+ */
+function buildDetailUrl(id: number | undefined): string | undefined {
+  if (!id || isNaN(id)) return undefined;
+  return `${DETAIL_BASE}/${id}`;
 }
 
 // The API returns the list under a "data" key
@@ -224,7 +234,7 @@ function mapPromotion(item: SampathPromotion): Partial<OfferInput> {
     merchantLogoUrl: item.image_url || undefined,
     validFrom: parseTimestamp(item.display_on),
     validUntil: parseTimestamp(item.expire_on),
-    sourceUrl: SOURCE_URL,
+    sourceUrl: buildDetailUrl(item.id) ?? SOURCE_URL,
     scrapedAt: new Date(),
   };
 }
