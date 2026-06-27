@@ -1,6 +1,7 @@
 /**
  * HNB scraper — unit tests
  * Spec: specs/features/002-crawler.md (AC1, AC2)
+ *       specs/features/038-hnb-scraper-reliability.md (AC1–AC7)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -10,10 +11,10 @@ vi.mock("../utils/http", () => ({
 }));
 
 import { scrape } from "./hnb";
-import { fetchJson } from "../utils/http";
+import { fetchJson, sleep } from "../utils/http";
 
 const VALID_PROMOTION = {
-  id: 1,
+  id: 101,
   title: "15% discount at Pizza Hut",
   thumbUrl: "/uploads/pizza-hut.jpg",
   from: "2026-01-01",
@@ -41,6 +42,16 @@ const DEBIT_PROMOTION = {
   to: "2026-12-31",
   card_type: "debit",
   content: "<p>Debit card only offer.</p>",
+};
+
+const PROMO_NO_ID = {
+  id: 0,
+  title: "10% off at Keells",
+  thumbUrl: "",
+  from: "2026-01-01",
+  to: "2026-12-31",
+  card_type: "credit",
+  content: "<p>10% off at Keells Super.</p>",
 };
 
 describe("hnb scraper", () => {
@@ -105,5 +116,72 @@ describe("hnb scraper", () => {
     vi.mocked(fetchJson).mockResolvedValue({ status: 500, data: [] });
 
     await expect(scrape()).rejects.toThrow();
+  });
+
+  // Spec 038 — retry and per-offer URL tests
+
+  it("returns real data when API returns empty data on first 2 attempts then succeeds (AC3)", async () => {
+    vi.mocked(fetchJson)
+      .mockResolvedValueOnce({ status: 200, data: [] })
+      .mockResolvedValueOnce({ status: 200, data: [] })
+      .mockResolvedValueOnce({ status: 200, data: [VALID_PROMOTION] });
+
+    const offers = await scrape();
+
+    expect(offers).toHaveLength(1);
+    expect(offers[0].bank).toBe("hnb");
+    expect(vi.mocked(fetchJson)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(sleep)).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns [] and logs WARNING when all 3 attempts return empty data (AC1, AC2)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ status: 200, data: [] });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const offers = await scrape();
+
+    expect(offers).toHaveLength(0);
+    expect(vi.mocked(fetchJson)).toHaveBeenCalledTimes(3);
+    const warningCalls = warnSpy.mock.calls.map((c) => c[0] as string);
+    expect(warningCalls.some((msg) => msg.includes("[hnb] WARNING"))).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it("does not retry when API returns non-empty data on first attempt (AC1)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({
+      status: 200,
+      data: [VALID_PROMOTION],
+    });
+
+    await scrape();
+
+    expect(vi.mocked(fetchJson)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sleep)).not.toHaveBeenCalled();
+  });
+
+  it("sets sourceUrl to per-offer detail URL when id is present (AC5)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({
+      status: 200,
+      data: [VALID_PROMOTION], // id: 101
+    });
+
+    const offers = await scrape();
+
+    expect(offers[0].sourceUrl).toBe(
+      "https://www.hnb.lk/personal/cards/credit-cards/promotions/101"
+    );
+  });
+
+  it("falls back to generic SOURCE_URL when id is 0 (AC6)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({
+      status: 200,
+      data: [PROMO_NO_ID], // id: 0
+    });
+
+    const offers = await scrape();
+
+    expect(offers[0].sourceUrl).toBe(
+      "https://www.hnb.lk/personal/cards/credit-cards"
+    );
   });
 });

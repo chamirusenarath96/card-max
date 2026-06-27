@@ -2,10 +2,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
+- [x] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 The HNB scraper hits `venus.hnb.lk/api/get_all_pcard_promotions` which occasionally

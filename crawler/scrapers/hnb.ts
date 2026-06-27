@@ -8,12 +8,16 @@
  *   card_type ("credit"|"debit"|"credit/debit"), content (HTML)
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
-import { fetchJson } from "../utils/http";
+import { fetchJson, sleep } from "../utils/http";
 import { parseDiscount } from "../utils/parseDiscount";
 
 const API_URL = "https://venus.hnb.lk/api/get_all_pcard_promotions";
 const SOURCE_URL = "https://www.hnb.lk/personal/cards/credit-cards";
+const DETAIL_BASE = "https://www.hnb.lk/personal/cards/credit-cards/promotions";
 const THUMB_BASE = "https://www.hnb.lk";
+
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
 
 interface HnbPromotion {
   id: number;
@@ -30,18 +34,35 @@ interface HnbApiResponse {
   data: HnbPromotion[];
 }
 
+async function fetchWithRetry(): Promise<HnbPromotion[]> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await fetchJson<HnbApiResponse>(API_URL);
+    if (response.status !== 200 || !Array.isArray(response.data)) {
+      throw new Error(`Unexpected API response: status=${response.status}`);
+    }
+    if (response.data.length > 0) {
+      return response.data;
+    }
+    console.warn(`[hnb] API returned 0 promotions (attempt ${attempt}/${MAX_ATTEMPTS})`);
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(RETRY_DELAY_MS);
+    }
+  }
+  // All retries exhausted — warn but do not throw so stale expiry is skipped by caller
+  console.warn(
+    `[hnb] WARNING: API returned 0 offers after ${MAX_ATTEMPTS} attempt(s) — HNB offers will NOT be expired this run`
+  );
+  return [];
+}
+
 export async function scrape(): Promise<OfferInput[]> {
   console.log("[hnb] Starting scrape…");
   const offers: OfferInput[] = [];
 
   try {
-    const response = await fetchJson<HnbApiResponse>(API_URL);
+    const promotions = await fetchWithRetry();
 
-    if (response.status !== 200 || !Array.isArray(response.data)) {
-      throw new Error(`Unexpected API response: status=${response.status}`);
-    }
-
-    for (const item of response.data) {
+    for (const item of promotions) {
       // Only include credit card promotions
       if (item.card_type && !item.card_type.toLowerCase().includes("credit")) {
         continue;
@@ -64,6 +85,11 @@ export async function scrape(): Promise<OfferInput[]> {
   return offers;
 }
 
+function buildDetailUrl(id: number | undefined): string | undefined {
+  if (!id) return undefined;
+  return `${DETAIL_BASE}/${id}`;
+}
+
 function mapPromotion(item: HnbPromotion): Partial<OfferInput> {
   const title = cleanText(item.title);
   const merchant = extractMerchant(title);
@@ -82,7 +108,7 @@ function mapPromotion(item: HnbPromotion): Partial<OfferInput> {
     merchantLogoUrl: resolveThumbUrl(item.thumbUrl),
     validFrom: parseApiDate(item.from),
     validUntil: parseApiDate(item.to),
-    sourceUrl: SOURCE_URL,
+    sourceUrl: buildDetailUrl(item.id) ?? SOURCE_URL,
     scrapedAt: new Date(),
   };
 }

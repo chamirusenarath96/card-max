@@ -67,7 +67,12 @@ async function main(): Promise<void> {
       try {
         const offers = await module.scrape();
         const { inserted, updated } = await upsertOffers(offers);
-        const expired = await expireStaleOffers(name, offers);
+        let expired = 0;
+        if (offers.length > 0) {
+          expired = await expireStaleOffers(name, offers);
+        } else {
+          console.warn(`[run] Skipping expiry for ${name} — 0 offers returned`);
+        }
         const durationMs = Date.now() - start;
 
         const summary: RunSummary = {
