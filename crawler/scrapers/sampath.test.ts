@@ -1,6 +1,7 @@
 /**
  * Sampath Bank scraper — unit tests
  * Spec: specs/features/002-crawler.md (AC1, AC2)
+ * Spec: specs/features/036-sampath-per-offer-detail-url.md (AC1, AC2)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -102,7 +103,8 @@ describe("sampath scraper", () => {
       bankDisplayName: "Sampath Bank",
       merchant: "Pizza Hut",
       category: "dining",
-      sourceUrl: expect.stringContaining("sampath.lk"),
+      // id=1 → per-offer detail URL (spec 036 AC1)
+      sourceUrl: "https://www.sampath.lk/sampath-cards/credit-card-offer/1",
     });
     // Title should be descriptive, not just the merchant name
     expect(offers[0].title).toContain("15% off");
@@ -196,5 +198,39 @@ describe("sampath scraper", () => {
 
     expect(offers[0].description).toBeDefined();
     expect(offers[0].description).toContain("20% discount on room rates");
+  });
+
+  // spec 036 — per-offer detail URL
+  it("sets sourceUrl to per-offer detail URL when id is present (spec 036 AC1)", async () => {
+    const promotion = { ...VALID_PROMOTION, id: 42 };
+    vi.mocked(fetchJson).mockResolvedValue({ data: [promotion] });
+
+    const offers = await scrape();
+
+    expect(offers[0].sourceUrl).toBe(
+      "https://www.sampath.lk/sampath-cards/credit-card-offer/42"
+    );
+  });
+
+  it("falls back to SOURCE_URL when id is undefined (spec 036 AC2)", async () => {
+    const promotion = { ...VALID_PROMOTION, id: undefined };
+    vi.mocked(fetchJson).mockResolvedValue({ data: [promotion] });
+
+    const offers = await scrape();
+
+    expect(offers[0].sourceUrl).toBe(
+      "https://www.sampath.lk/sampath-cards/credit-card-offer"
+    );
+  });
+
+  it("falls back to SOURCE_URL when id is 0 (spec 036 AC2)", async () => {
+    const promotion = { ...VALID_PROMOTION, id: 0 };
+    vi.mocked(fetchJson).mockResolvedValue({ data: [promotion] });
+
+    const offers = await scrape();
+
+    expect(offers[0].sourceUrl).toBe(
+      "https://www.sampath.lk/sampath-cards/credit-card-offer"
+    );
   });
 });

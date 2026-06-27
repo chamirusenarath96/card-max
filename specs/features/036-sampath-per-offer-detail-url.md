@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 All Sampath Bank offers currently link to the same generic listing page
