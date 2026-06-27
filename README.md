@@ -1309,6 +1309,7 @@ sequenceDiagram
 - [x] **People's Bank** and **Bank of Ceylon** (state-owned, large customer base) — HTML scrapers added; both banks available as filter options in the frontend
 - [x] **Atlas warmup cron** — keep the MongoDB Atlas connection warm to eliminate cold-start latency
 - [x] **Atlas Search migration** — Lucene-based full-text search for better relevance and faceting
+- [x] **HNB scraper reliability (spec 038)** — retry-with-backoff (3 attempts, 2 s delay) when `venus.hnb.lk` returns `200 OK` with empty `data`; prominent `[hnb] WARNING` log after all retries exhausted; `expireStaleOffers` skipped on zero-offer runs to prevent silent data loss; per-offer `sourceUrl` constructed from promotion `id` (`/personal/cards/credit-cards/promotions/{id}`)
 
 #### 🖥️ Frontend features
 
