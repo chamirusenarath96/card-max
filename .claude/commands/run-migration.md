@@ -1,6 +1,10 @@
-# Run a DB Migration
+---
+description: Write and run a one-off MongoDB migration script for card-max
+---
 
-Use this skill whenever you need to write and execute a one-off MongoDB migration for card-max.
+# Run a DB Migration — $ARGUMENTS
+
+Write and execute a MongoDB migration for: **$ARGUMENTS**
 
 ---
 

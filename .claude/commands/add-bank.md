@@ -1,7 +1,12 @@
-# Add a New Bank Scraper
+---
+description: Add a new Sri Lankan bank scraper to the card-max crawler
+---
 
-Use this skill when asked to add a new Sri Lankan bank to the card-max crawler.
-It walks through every file that must be created or updated, enforcing the
+# Add a New Bank Scraper — $ARGUMENTS
+
+Add a complete scraper for the bank: **$ARGUMENTS**
+
+Walk through every file that must be created or updated, enforcing the
 project's spec-first, test-driven standards.
 
 ---

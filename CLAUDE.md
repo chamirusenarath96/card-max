@@ -50,7 +50,12 @@ npm run type-check   # TypeScript strict check
 ## Environment Variables
 Copy `.env.example` to `.env.local` and fill in:
 - `MONGODB_URI` — MongoDB Atlas connection string (required)
-- `ADMIN_TOKEN` — random secret protecting `/admin/feedback` and the admin API endpoints
+- `AUTH_SECRET` — random secret for encrypting NextAuth session JWTs
+- `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — Google OAuth credentials for the admin dashboard
+- `ADMIN_EMAIL` — the single Google account allowed to access `/admin`
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — Redis for API rate limiting (omit locally to skip)
+- `VERCEL_REVALIDATION_SECRET` — protects the `/api/revalidate` ISR endpoint
+- `BRANDFETCH_API_KEY` — secondary logo fallback (free tier: 50 calls/month)
 - `GITHUB_FEEDBACK_TOKEN` — GitHub PAT with `issues:write` scope; used to create issues from feedback
 - `GITHUB_REPO_OWNER` / `GITHUB_REPO_NAME` — defaults to `chamirusenarath96` / `card-max`
 
@@ -339,11 +344,15 @@ Both tasks read this file (`CLAUDE.md`) and the `.claude/commands/` directory fo
 
 ## Claude Commands (slash commands)
 
-Available in `.claude/commands/` — use these when implementing features:
+Slash commands live in `.claude/commands/` — use these when implementing features:
 
 | Command | Use when |
 |---------|----------|
-| `/add-bank` | Adding a new bank scraper to the crawler |
-| `/new-page` | Adding a new Next.js page or route |
-| `/new-github-action` | Adding a new CI/CD workflow |
-| `/run-migration` | Writing and running a DB migration script |
+| `/add-bank <bank-name>` | Adding a new bank scraper to the crawler |
+| `/run-migration <description>` | Writing and running a DB migration script |
+
+Agents live in `.claude/agents/` — invoked via the Agent tool:
+
+| Agent | Use when |
+|-------|----------|
+| `new-page` | Scaffolding a new Next.js page with spec, component tests, and E2E |
