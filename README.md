@@ -514,11 +514,22 @@ interface Offer {
 src/
 ├── app/
 │   ├── page.tsx              Server Component — fetches API, renders grid + LoadTimeBadge + FeedbackWidget
-│   ├── layout.tsx            Root layout — wraps tree in NavigationProgressProvider
+│   ├── layout.tsx            Root layout — wraps tree in NavigationProgressProvider; explicit favicon metadata
+│   ├── icon.svg              Favicon — card-fan graphic with "CM" monogram; picked up by Next.js automatically
 │   ├── globals.css           Tailwind base styles + custom keyframe animations
+│   ├── login/
+│   │   └── page.tsx          Google OAuth sign-in page — shows CardMax stacked logo + "Sign in with Google"
 │   ├── admin/
+│   │   ├── layout.tsx        Admin layout — server-side auth gate; redirects unauthenticated to /login
+│   │   ├── page.tsx          Admin overview — CI test suite pass/fail (Lint/TypeCheck/Unit/Build/E2E) + crawler stats
+│   │   ├── AdminSidebar.tsx  Sidebar nav (desktop) + mobile top-bar + bottom tab-bar; shows user avatar
+│   │   ├── ci/
+│   │   │   └── page.tsx      CI Runs — per-check icons, pass/fail count cards, last-20 run history boxes
+│   │   ├── crawler/
+│   │   │   ├── page.tsx          Crawler — per-bank offer counts + last-run status table
+│   │   │   └── OffersTrendChart.tsx  Line chart of daily scraped offers per bank (Recharts)
 │   │   └── feedback/
-│   │       ├── page.tsx          Admin page — lists all feedback; token-protected via ?token=ADMIN_TOKEN
+│   │       ├── page.tsx          Feedback list — all submissions; Google OAuth protected
 │   │       └── FeedbackActions.tsx  "Create GitHub Issue" / "View issue" client actions per row
 │   └── api/
 │       ├── offers/
@@ -533,6 +544,9 @@ src/
 │       └── health/
 │           └── route.ts      GET /api/health — DB connectivity check
 └── components/
+    ├── brand/
+    │   └── Logo.tsx          Inline SVG logo — `horizontal` (560×100) and `stacked` (400×320) variants;
+    │                         uses currentColor so it adapts to light/dark mode automatically
     ├── cards/
     │   ├── OfferCard.tsx         Offer card dispatcher (compact/default/expanded)
     │   ├── OfferCardDefault.tsx  Default card — merchant, title, discount, validity period
@@ -548,7 +562,8 @@ src/
     ├── layout/
     │   ├── NavigationProgressContext.tsx  React context: navigate(), isPending, lastNavMs
     │   ├── NavigationProgressBar.tsx      Fixed top-of-page animated progress bar
-    │   └── LoadTimeBadge.tsx              "⚡ Xms" badge shown after each navigation
+    │   ├── LoadTimeBadge.tsx              "⚡ Xms" badge shown after each navigation
+    │   └── Footer.tsx                     Site footer with Logo + tagline + nav links
     ├── OfferGrid.tsx         Responsive grid + empty state (Server Component)
     └── search/
         └── HeroSearch.tsx        Hero search bar — suggestions navigate in-app (not bank site)
@@ -574,10 +589,21 @@ src/
   - `validUntil` only → "Until 31 Mar 2026"
   - Neither → field hidden
 
+**Brand & favicon:**
+- `Logo.tsx` — single inline SVG component with two variants: `horizontal` (wordmark + slogan, used in header/footer/sidebar) and `stacked` (icon + wordmark stacked, used on the login page). Uses `currentColor` so it automatically adapts to light and dark themes without separate assets.
+- `icon.svg` — browser favicon: dark rounded-rect background with a card-fan graphic and "CM" monogram. Placed at `src/app/icon.svg` and explicitly linked via `layout.tsx` `icons` metadata for broadest browser support.
+
+**Admin dashboard (Google OAuth protected):**
+- `/login` — Google OAuth sign-in page; only the configured `ADMIN_EMAIL` is allowed through
+- `/admin` — overview: CI test suite results (Lint, Type Check, Unit Tests, Build, E2E each shown as pass/fail icon), crawler offer counts per bank
+- `/admin/ci` — CI runs: per-check pass/fail detail, overall summary cards, last-20-run history as coloured ✓/✗ boxes
+- `/admin/crawler` — per-bank status table + line chart of daily scraped offers (one coloured line per bank, powered by Recharts)
+- `/admin/feedback` — all user feedback submissions; "Create GitHub Issue" action per row
+
 **Feedback system:**
 - `FeedbackWidget` renders above the footer on every page — a "Send feedback" button opens a dialog for type (suggestion/bug/other), message (10–1000 chars), and optional email
 - Submissions saved to MongoDB `feedbacks` collection via `POST /api/feedback`
-- Admin view at `/admin/feedback?token=<ADMIN_TOKEN>` — table of all submissions with a "Create GitHub Issue" action per row that calls `POST /api/feedback/<id>/to-issue`
+- Admin view at `/admin/feedback` (Google OAuth) — table of all submissions with a "Create GitHub Issue" action per row that calls `POST /api/feedback/<id>/to-issue`
 
 ---
 
@@ -648,13 +674,13 @@ Response 201:
   { "success": true, "id": "<feedback-id>" }
 ```
 
-### `GET /api/feedback?token=<ADMIN_TOKEN>`
+### `GET /api/feedback`
 
-Returns all feedback submissions, newest first. Requires the `ADMIN_TOKEN` env var.
+Returns all feedback submissions, newest first. Requires an active Google OAuth session (`ADMIN_EMAIL`). Used by the admin dashboard at `/admin/feedback`.
 
-### `POST /api/feedback/<id>/to-issue?token=<ADMIN_TOKEN>`
+### `POST /api/feedback/<id>/to-issue`
 
-Creates a GitHub issue from a feedback submission using `GITHUB_FEEDBACK_TOKEN`. Marks the submission as `converted` and stores the issue URL. Returns 409 if already converted.
+Creates a GitHub issue from a feedback submission using `GITHUB_FEEDBACK_TOKEN`. Requires Google OAuth. Marks the submission as `converted` and stores the issue URL. Returns 409 if already converted.
 
 ### `POST /api/revalidate`
 
@@ -731,18 +757,45 @@ npm run dev
 |----------|----------|-------------|
 | `MONGODB_URI` | Yes | MongoDB Atlas connection string |
 | `VERCEL_REVALIDATION_SECRET` | No | Only needed to test cache revalidation locally |
-| `ADMIN_TOKEN` | No | Secret protecting `/admin/feedback` and admin API endpoints |
+| `VERCEL_APP_URL` | No | Production URL — used by the crawler to call `/api/revalidate` (e.g. `https://www.card-max.com`) |
+| `BRANDFETCH_API_KEY` | No | Brandfetch API key — secondary fallback for merchant logo images |
+| `UPSTASH_REDIS_REST_URL` | No | Upstash Redis REST URL — omit in local dev to skip rate limiting (fail-open) |
+| `UPSTASH_REDIS_REST_TOKEN` | No | Upstash Redis REST token |
+| `AUTH_SECRET` | No | Random secret for encrypting Auth.js session JWTs (`openssl rand -base64 32`) |
+| `AUTH_GOOGLE_ID` | No | Google OAuth client ID — required to access `/admin` locally |
+| `AUTH_GOOGLE_SECRET` | No | Google OAuth client secret |
+| `ADMIN_EMAIL` | No | The single Google account allowed through the admin gate |
 | `GITHUB_FEEDBACK_TOKEN` | No | GitHub PAT with `issues:write` — converts feedback into GitHub issues |
+| `GITHUB_REPO_OWNER` | No | GitHub repo owner (default: `chamirusenarath96`) |
+| `GITHUB_REPO_NAME` | No | GitHub repo name (default: `card-max`) |
+| `NEXT_PUBLIC_ADSENSE_ENABLED` | No | Set to `"true"` to activate AdSense ad units (keep `false` in dev) |
+| `NEXT_PUBLIC_ADSENSE_PUBLISHER_ID` | No | AdSense publisher ID (format: `ca-pub-XXXXXXXXXXXXXXXX`) |
+| `NEXT_PUBLIC_ADSENSE_SLOT_GRID` | No | AdSense slot ID for the in-grid ad unit |
+| `NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR` | No | AdSense slot ID for the sidebar ad unit |
+| `NEXT_PUBLIC_ADSENSE_SLOT_DRAWER` | No | AdSense slot ID for the filter-drawer ad unit |
 
 #### Vercel (set in Vercel dashboard → Settings → Environment Variables)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `MONGODB_URI` | Yes | MongoDB Atlas connection string — used by serverless functions at runtime |
-| `ADMIN_TOKEN` | Yes | Protects `/admin/feedback?token=` and `POST /api/feedback/[id]/to-issue` |
+| `VERCEL_REVALIDATION_SECRET` | Yes | Protects `POST /api/revalidate` — must match the GitHub Actions secret |
+| `VERCEL_APP_URL` | Yes | Canonical production URL (`https://www.card-max.com`) — used by the crawler cron |
+| `BRANDFETCH_API_KEY` | Yes | Brandfetch API key for secondary merchant logo resolution |
+| `UPSTASH_REDIS_REST_URL` | Yes | Upstash Redis REST URL for API rate limiting |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | Upstash Redis REST token |
+| `AUTH_SECRET` | Yes | Random secret for Auth.js JWT encryption |
+| `AUTH_GOOGLE_ID` | Yes | Google OAuth client ID |
+| `AUTH_GOOGLE_SECRET` | Yes | Google OAuth client secret |
+| `ADMIN_EMAIL` | Yes | Google email allowed through the `/admin` gate |
 | `GITHUB_FEEDBACK_TOKEN` | Yes | GitHub PAT (`issues:write`) — creates GitHub issues from user feedback |
 | `GITHUB_REPO_OWNER` | No | GitHub repo owner (default: `chamirusenarath96`) |
 | `GITHUB_REPO_NAME` | No | GitHub repo name (default: `card-max`) |
+| `NEXT_PUBLIC_ADSENSE_ENABLED` | No | `"true"` to activate AdSense in production |
+| `NEXT_PUBLIC_ADSENSE_PUBLISHER_ID` | No | AdSense publisher ID |
+| `NEXT_PUBLIC_ADSENSE_SLOT_GRID` | No | AdSense slot ID for in-grid unit |
+| `NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR` | No | AdSense slot ID for sidebar unit |
+| `NEXT_PUBLIC_ADSENSE_SLOT_DRAWER` | No | AdSense slot ID for filter-drawer unit |
 
 #### Vercel system variables (auto-populated, do not set manually)
 
@@ -854,6 +907,12 @@ E2E tests are in `e2e/`. They launch a real Chromium browser (+ Mobile Chrome) a
 | `e2e/interaction-timing.spec.ts` | UI interaction budgets — bank filter (open drawer → select chip → Apply Filters) ≤500ms, category filter ≤500ms, clear-all ≤500ms, pagination ≤500ms, filter drawer open/close ≤500ms each; all `/api/offers` calls mocked to isolate from DB variance; timing results written to `test-results/interaction-timing.json` for the CI dashboard |
 | `e2e/atlas-warmup-cron.spec.ts` | `/api/health` and `/api/ping` respond 200; warmup cron workflow defined in ci config |
 | `e2e/adsense.spec.ts` | AdSense slot renders when enabled; does not inject when `ADSENSE_ENABLED=false` |
+| `e2e/lighthouse.spec.ts` | Core Web Vitals budgets — LCP, FCP via `PerformanceObserver`; search dropdown and filter apply times |
+| `e2e/categories.spec.ts` | Dynamic category filters — `/api/categories` endpoint returns live categories; `FilterDrawer` and `SearchDrawer` show only categories with actual offers |
+| `e2e/multi-select-filters.spec.ts` | Multi-select bank, category, and offer-type filters — multiple values encoded as repeated URL params; `$in` queries; active-filter count badge |
+| `e2e/accessibility.spec.ts` | WCAG AA compliance — colour contrast, ARIA roles, landmark regions, keyboard navigation; Lighthouse Accessibility score ≥ 95 |
+| `e2e/bundle-optimisation.spec.ts` | JS bundle size — `FilterDrawer` and `SearchDrawer` loaded via `next/dynamic`; unused-JS < 60 KiB; legacy-JS audit passes |
+| `e2e/cold-start-performance.spec.ts` | Cold-start performance — Suspense streaming shell renders before DB query; ISR `revalidate=60` verified; cold Performance score ≥ 85, TBT < 500 ms |
 
 ### Test suite architecture
 
@@ -1300,6 +1359,9 @@ sequenceDiagram
 - [x] **Date-range filter** — dual-month calendar range picker in the filter drawer
 - [x] **Card view variants** — compact / default / expanded layouts switchable from the grid toolbar
 - [x] **Remove Pollination AI image gen** — replaced with Clearbit logo → merchant name + category icon fallback
+- [x] **CardMax brand & logo system** — inline SVG `Logo` component with `horizontal` (header/footer/sidebar) and `stacked` (login page) variants; `icon.svg` favicon (card-fan graphic + "CM" monogram) with explicit `icons` metadata in `layout.tsx` for broadest browser support; `currentColor` ensures automatic light/dark mode adaptation with no separate assets
+- [x] **Admin dashboard with Google OAuth** — protected `/admin` section with 4 pages: overview (CI suite pass/fail + crawler stats), CI runs (per-check icons + last-20-run history boxes), Crawler (per-bank status table + Recharts line chart of daily offer counts), Feedback (all submissions + GitHub Issue creation); `AdminSidebar` with desktop sidebar + mobile tab-bar + user avatar; only `ADMIN_EMAIL` is allowed through
+- [x] **Custom domain** — live at **https://www.card-max.com** (Vercel custom domain)
 
 #### 🔧 Crawler & data
 
