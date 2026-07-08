@@ -40,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={cn("h-full antialiased", geist.variable, geistMono.variable)}>
       <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         {/* Preconnect to external image CDNs used by offer card logos — reduces DNS lookup latency for LCP images */}
         <link rel="preconnect" href="https://logo.clearbit.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="//logo.clearbit.com" />
