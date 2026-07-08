@@ -2,7 +2,7 @@
 
 > Sri Lankan credit card offers aggregator — scrapes all current deals from Commercial Bank, Sampath Bank, HNB, Nations Trust Bank, American Express (NTB), People's Bank, and Bank of Ceylon into one searchable, filterable feed.
 
-**Live:** https://card-max.com &nbsp;|&nbsp; **Stack:** Next.js 16 · MongoDB Atlas · GitHub Actions · Vercel
+**Live:** https://www.card-max.com &nbsp;|&nbsp; **Stack:** Next.js 16 · MongoDB Atlas · GitHub Actions · Vercel
 
 ---
 

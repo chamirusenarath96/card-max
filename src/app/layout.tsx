@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   title: "CardMax — Sri Lanka Credit Card Offers",
   description:
     "Browse credit card deals from all major Sri Lankan banks — updated daily.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
