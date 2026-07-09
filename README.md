@@ -1344,7 +1344,7 @@ sequenceDiagram
 | All offers link to same listing page | Sampath | ✅ Fixed (spec 036) | `buildDetailUrl(id)` constructs per-offer URL from the promotion `id` field |
 | HNB API occasionally returns empty | HNB | 🟡 Intermittent | Retry + alert threshold |
 | No individual offer detail URLs | HNB | 🟡 Minor | Use `id` field to construct detail URL |
-| Applicable dates not extracted — only outer validity period captured | AmEx (NTB) | 🔴 Bug | Extract full conditions text into `description` field; e.g. Domino's offer shows validity till Dec 2026 but is only valid on specific days of the week |
+| Applicable dates not extracted — only outer validity period captured | AmEx (NTB) | ✅ Fixed (spec 041) | `parseOfferCards()` now extracts the full conditions block into `description`; e.g. Domino's offer shows validity till Dec 2026 and `description` states it's only valid on specific days of the week |
 
 ### Roadmap
 
@@ -1406,7 +1406,7 @@ sequenceDiagram
 
 #### 🐛 Bug fixes
 
-- [ ] **AmEx (NTB) scraper — extract applicable dates into `description` field** — The current `amex.ts` scraper captures the outer offer validity period (`validFrom` / `validUntil`) from text matching "Valid till / Valid from … to …", but many AmEx offers are only redeemable on specific days within that window (e.g. "Every Tuesday", "1st to 7th of each month", "Weekends only"). These conditions are present in the offer card text on `americanexpress.lk` but are discarded because `parseOfferCards()` only extracts the first "Valid…" sentence. Reported example: Domino's offer shows `validUntil` = end of promotion period but the discount is only applicable on a particular day each week — a user reading the card has no way to know this. Fix: (1) widen the text extraction in `parseOfferCards()` to capture the full conditions block (`.alloffer-text` or the paragraph following the validity line); (2) populate the `description` field (already in `OfferInputSchema`) with the cleaned conditions text; (3) surface `description` in the offer card expanded view and the "View Offer Details" tooltip. No schema migration needed — `description` is already optional in the Zod schema and the Mongoose model.
+- [x] **AmEx (NTB) scraper — extract applicable dates into `description` field** — The current `amex.ts` scraper captures the outer offer validity period (`validFrom` / `validUntil`) from text matching "Valid till / Valid from … to …", but many AmEx offers are only redeemable on specific days within that window (e.g. "Every Tuesday", "1st to 7th of each month", "Weekends only"). These conditions are present in the offer card text on `americanexpress.lk` but are discarded because `parseOfferCards()` only extracts the first "Valid…" sentence. Reported example: Domino's offer shows `validUntil` = end of promotion period but the discount is only applicable on a particular day each week — a user reading the card has no way to know this. Fix: (1) widen the text extraction in `parseOfferCards()` to capture the full conditions block (`.alloffer-text` or the paragraph following the validity line); (2) populate the `description` field (already in `OfferInputSchema`) with the cleaned conditions text; (3) surface `description` in the offer card expanded view and the "View Offer Details" tooltip. No schema migration needed — `description` is already optional in the Zod schema and the Mongoose model.
 
 ---
 
