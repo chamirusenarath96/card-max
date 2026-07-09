@@ -77,6 +77,9 @@ export async function scrape(): Promise<OfferInput[]> {
             merchant: card.merchant.substring(0, 200),
             // AmEx category pages use generic stock photos (not merchant logos).
             // OfferImage.tsx falls back to Clearbit for proper brand logos.
+            description: card.conditionsText
+              ? card.conditionsText.substring(0, 2000) // OfferSchema.description max — defensive truncation
+              : undefined,
             ...discount,
             category,
             validFrom,
@@ -121,6 +124,7 @@ type OfferCard = {
   merchant: string;
   discountText: string;
   validityText: string;
+  conditionsText: string;
   detailUrl: string;
 };
 
@@ -151,10 +155,41 @@ function parseOfferCards(html: string): OfferCard[] {
     const linkMatch = block.match(/href="(https?:\/\/www\.americanexpress\.lk\/en\/offers\/[^"#?]+)"/i);
     const detailUrl = linkMatch ? linkMatch[1]! : "";
 
-    cards.push({ merchant, discountText, validityText, detailUrl });
+    // Conditions text (redemption restrictions) can run longer than the 500-char
+    // lookahead used for discount/validity/link — widen the window so an
+    // unusually long conditions paragraph is still captured in full before
+    // truncation happens in scrape().
+    const conditionsBlockEnd = Math.min(html.length, m.index + 4000);
+    const conditionsBlock = html.substring(blockStart, conditionsBlockEnd);
+    const conditionsText = extractConditionsText(conditionsBlock, merchant, validityText);
+
+    cards.push({ merchant, discountText, validityText, conditionsText, detailUrl });
   }
 
   return cards;
+}
+
+/**
+ * Extracts the .alloffer-text card's full text (redemption conditions — e.g. a
+ * day-of-week or date-range restriction) beyond the merchant heading and the
+ * validity sentence already captured by validityText.
+ *
+ * Returns "" when the card has no restriction text beyond the validity sentence
+ * itself, so scrape() can leave `description` undefined for the common case
+ * instead of duplicating the validity clause with no added information.
+ */
+function extractConditionsText(block: string, merchant: string, validityText: string): string {
+  const conditionsMatch = block.match(/alloffer-text">([\s\S]*?)<\/div>\s*<\/a>/i);
+  if (!conditionsMatch) return "";
+
+  let text = cleanText(conditionsMatch[1]!);
+  if (text.startsWith(merchant)) {
+    text = text.substring(merchant.length).trim();
+  }
+  if (!text) return "";
+
+  const withoutValidity = validityText ? text.replace(validityText, "").trim() : text;
+  return withoutValidity ? text : "";
 }
 
 // ── Data extraction helpers ──────────────────────────────────────────────────

@@ -4,8 +4,8 @@
 - [x] Spec drafted
 - [ ] Spec reviewed
 - [x] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Fix a data-accuracy bug in the AmEx (NTB) scraper: offers that are only redeemable
