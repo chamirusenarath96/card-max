@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Nested git worktrees (created by Claude Code's EnterWorktree tool) have
+    // their own .next/node_modules trees; "**" patterns above don't match at
+    // arbitrary depth, so scan them explicitly.
+    "**/.next/**",
+    "**/node_modules/**",
+    ".claude/worktrees/**",
   ]),
   // Allow CJS require() in plain Node.js scripts
   {

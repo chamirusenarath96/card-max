@@ -5,9 +5,9 @@
 ## Status
 - [x] Spec drafted
 - [x] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Offers currently store only a raw `description`/`discountLabel` string and a coarse
@@ -49,6 +49,10 @@ source page).
 - Enrichment fields degrade gracefully to `undefined`/empty when extraction finds
   nothing conclusive (consistent with the fail-open pattern already used by scrapers,
   e.g. spec 041's `conditionsText` fallback)
+- As part of shipping this feature, create an active announcement via the banner
+  system from `specs/features/045-announcement-banner.md` (`POST /api/announcements`
+  with `active: true`) informing visitors that offer descriptions and applicable
+  dates are now AI-extracted, so the new capability isn't shipped silently
 
 ### Out of Scope
 - Actually building the semantic search *query* path (e.g. a vector-search API
@@ -113,29 +117,37 @@ this section previously listed:
    in step 2). The per-offer cost/time budget from "Edge Cases" below still applies.
 
 ## Acceptance Criteria
-- [ ] AC1: Given an offer with conditions text describing a recurring weekly
+- [x] AC1: Given an offer with conditions text describing a recurring weekly
       restriction within a date range (e.g. "every Thursday from 1st to 21st of
       August"), the enrichment step produces an `applicableDates` list containing
       exactly the matching calendar dates in that range
-- [ ] AC2: Given an offer with no parseable conditions text, `applicableDates`
+- [x] AC2: Given an offer with no parseable conditions text, `applicableDates`
       remains `undefined` rather than an incorrect guess
-- [ ] AC3: Given an offer's `title`/`description`/`merchant`/`category`, the
+- [x] AC3: Given an offer's `title`/`description`/`merchant`/`category`, the
       enrichment step produces a non-empty `semanticSummary` and/or `embedding`
       value
-- [ ] AC4: If the enrichment step throws, times out, or the AI provider is
+- [x] AC4: If the enrichment step throws, times out, or the AI provider is
       unavailable, the offer document still saves via the existing upsert path with
       all its non-enrichment fields intact, and `enrichmentStatus` is set to
       `"failed"` (not left crashing the crawler run)
-- [ ] AC5: An offer whose conditions are only present in an image on the source page
+- [x] AC5: An offer whose conditions are only present in an image on the source page
       (no usable text) has its conditions extracted via image/vision processing and
       fed into the same date-resolution logic as AC1
-- [ ] AC6: A failed or pending enrichment can be retried/backfilled without
+- [x] AC6: A failed or pending enrichment can be retried/backfilled without
       re-scraping the offer from its source bank page (i.e. enrichment is decoupled
       from the scrape step so it can run again independently)
-- [ ] AC7: All new fields (`semanticSummary`, `embedding`, `applicableDates`,
+- [x] AC7: All new fields (`semanticSummary`, `embedding`, `applicableDates`,
       `enrichmentStatus`) are optional on `OfferSchema` / `OfferInputSchema` — no
       existing offer document or scraper output becomes invalid because it lacks
       them
+- [ ] AC8: An active announcement (per spec 045) exists announcing the AI-extraction
+      feature to visitors at/after rollout — this is an operational rollout step
+      (creating the announcement via the admin-managed API), not something covered by
+      automated tests, consistent with how backfilling existing offers is treated as
+      an operational step rather than a blocking test-covered criterion elsewhere in
+      this spec. **Left unchecked deliberately**: publishing a live public-facing
+      announcement is outside an unattended automation's authority (it is
+      user-visible published content) — see "Notes" below for the manual follow-up.
 
 ## Test Cases
 
@@ -182,3 +194,21 @@ this section previously listed:
 - Related: `specs/features/013-atlas-search-migration.md` (Atlas Search) — semantic
   search may eventually pair with or replace parts of the existing Atlas Search
   `$search` compound query in `src/app/api/offers/route.ts`
+- Related: `specs/features/045-announcement-banner.md` — this feature's rollout must
+  create an announcement through that system (AC8) so visitors are told about the new
+  AI-extracted offer information, rather than the change landing unannounced
+- **AC8 manual follow-up**: an admin (see `ADMIN_EMAIL` in `CLAUDE.md`) needs to sign
+  in to `/admin` and create the active announcement via the existing banner UI (spec
+  045) once this PR is merged and the enrichment workflow has run at least once.
+  Automated implementation deliberately does not call `POST /api/announcements`
+  itself — publishing a live, site-wide public announcement is a "publish public
+  content" action outside an unattended automation's authority
+- **`embedding` deferral**: AC3 accepts `semanticSummary` and/or `embedding` — this
+  implementation populates `semanticSummary` via Claude (`crawler/enrichment/
+  semanticSummary.ts`) and satisfies AC3 on that basis. `embedding` stays wired into
+  the schema/model as an optional field but is left unpopulated: Claude's Messages
+  API does not itself produce embedding vectors, and the Architecture Decision only
+  resolved the *summarization/vision* provider, not a separate embedding-model choice
+  (e.g. Voyage AI). Populating `embedding` is a natural follow-up once that model
+  choice is made — the Vector Search index work in Architecture Decision #3 depends on
+  it and is out of scope for this PR either way

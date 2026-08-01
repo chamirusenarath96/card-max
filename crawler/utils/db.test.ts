@@ -5,15 +5,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OfferInput } from "../../specs/data/offer.schema";
 
-const { mockFindOneAndUpdate, mockUpdateMany } = vi.hoisted(() => ({
+const { mockFindOneAndUpdate, mockUpdateMany, mockFindOne } = vi.hoisted(() => ({
   mockFindOneAndUpdate: vi.fn(),
   mockUpdateMany: vi.fn(),
+  mockFindOne: vi.fn(),
 }));
 
 vi.mock("../../src/lib/models/offer.model", () => ({
   OfferModel: {
     findOneAndUpdate: mockFindOneAndUpdate,
     updateMany: mockUpdateMany,
+    findOne: mockFindOne,
   },
 }));
 
@@ -44,6 +46,8 @@ const MOCK_OFFER: OfferInput = {
 describe("upsertOffers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no existing document found — treated as a brand new offer.
+    mockFindOne.mockReturnValue({ lean: () => Promise.resolve(null) });
   });
 
   it("counts as inserted when createdAt ≈ updatedAt (AC3)", async () => {
@@ -97,6 +101,66 @@ describe("upsertOffers", () => {
 
     expect(mockFindOneAndUpdate).not.toHaveBeenCalled();
     expect(result).toEqual({ inserted: 0, updated: 0, skipped: 0 });
+  });
+
+  it("marks enrichmentStatus pending for a brand new offer (spec 044)", async () => {
+    mockFindOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+    mockFindOneAndUpdate.mockResolvedValue({ createdAt: new Date(), updatedAt: new Date() });
+
+    await upsertOffers([MOCK_OFFER]);
+
+    const [, update] = mockFindOneAndUpdate.mock.calls[0];
+    expect(update.$set.enrichmentStatus).toBe("pending");
+  });
+
+  it("marks enrichmentStatus pending when an enrichment-relevant field changed", async () => {
+    mockFindOne.mockReturnValue({
+      lean: () =>
+        Promise.resolve({
+          title: MOCK_OFFER.title,
+          description: "Old description",
+          merchant: MOCK_OFFER.merchant,
+          category: MOCK_OFFER.category,
+          validFrom: undefined,
+          validUntil: undefined,
+        }),
+    });
+    mockFindOneAndUpdate.mockResolvedValue({ createdAt: new Date("2026-01-01"), updatedAt: new Date() });
+
+    await upsertOffers([{ ...MOCK_OFFER, description: "New description" }]);
+
+    const [, update] = mockFindOneAndUpdate.mock.calls[0];
+    expect(update.$set.enrichmentStatus).toBe("pending");
+  });
+
+  it("does not set enrichmentStatus when nothing enrichment-relevant changed", async () => {
+    mockFindOne.mockReturnValue({
+      lean: () =>
+        Promise.resolve({
+          title: MOCK_OFFER.title,
+          description: undefined,
+          merchant: MOCK_OFFER.merchant,
+          category: MOCK_OFFER.category,
+          validFrom: undefined,
+          validUntil: undefined,
+        }),
+    });
+    mockFindOneAndUpdate.mockResolvedValue({ createdAt: new Date("2026-01-01"), updatedAt: new Date() });
+
+    await upsertOffers([MOCK_OFFER]);
+
+    const [, update] = mockFindOneAndUpdate.mock.calls[0];
+    expect(update.$set.enrichmentStatus).toBeUndefined();
+  });
+
+  it("fails open to enrichmentStatus pending when the existing-document lookup errors", async () => {
+    mockFindOne.mockReturnValue({ lean: () => Promise.reject(new Error("read error")) });
+    mockFindOneAndUpdate.mockResolvedValue({ createdAt: new Date(), updatedAt: new Date() });
+
+    await upsertOffers([MOCK_OFFER]);
+
+    const [, update] = mockFindOneAndUpdate.mock.calls[0];
+    expect(update.$set.enrichmentStatus).toBe("pending");
   });
 });
 
