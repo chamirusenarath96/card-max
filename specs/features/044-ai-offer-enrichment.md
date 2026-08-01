@@ -3,8 +3,8 @@
 **GitHub Issue**: #79
 
 ## Status
-- [ ] Spec drafted
-- [ ] Spec reviewed
+- [x] Spec drafted
+- [x] Spec reviewed
 - [ ] Implementation started
 - [ ] Tests written
 - [ ] Done
@@ -24,8 +24,11 @@ source page).
 ## Scope
 
 ### In Scope
-- An enrichment step (crawler-time or a separate async job — see "Architecture
-  Decision Needed" below) that, per offer:
+- An enrichment step, implemented as a **separate GitHub Actions workflow** that
+  invokes a Claude-based enrichment routine after the daily crawl completes (see
+  "Architecture Decision" below), applied only to **newly-scraped offers** from that
+  crawl run (i.e. offers the crawler just inserted/updated with
+  `enrichmentStatus: "pending"`), not a backfill of the whole collection. Per offer:
   1. Produces a semantic-search artifact (an embedding vector and/or a cleaned
      summary text) derived from the offer's `title`, `description`, `merchant`, and
      `category`
@@ -34,10 +37,11 @@ source page).
      applicable dates within the outer `[validFrom, validUntil]` window — e.g.
      "every Thursday from 1st to 21st of August" resolves to the actual Thursday
      calendar dates in that range, not just the outer range
-  3. When textual conditions are insufficient and the source offer page has images
-     containing terms/dates/conditions, extracts that information via a
-     vision-capable model or OCR and feeds it into the same date-resolution and
-     summary pipeline as step 1–2
+  3. Whenever the source offer page has at least one image, extracts any
+     terms/dates/conditions from it via Claude's vision capability and feeds that
+     into the same date-resolution and summary pipeline as step 1–2 (the image
+     path always runs when an image is present — it is not gated on text being
+     insufficient first)
 - Enrichment failure or slowness must **never block** the crawler's core scrape/
   upsert path — an offer must save with its existing (non-enriched) fields even if
   enrichment fails, times out, or is skipped; enrichment is retryable/backfillable
@@ -80,29 +84,33 @@ No new or changed endpoints in this spec (querying the semantic field is out of
 scope — see above). No changes to `GET /api/offers` request/response contracts other
 than the new optional fields appearing in the `Offer` response shape once populated.
 
-## Architecture Decision Needed
-Per the issue's own framing, this is the largest and most architecturally open item
-here. Before implementation starts, a human reviewer must resolve, and record the
-decision either in an amended version of this spec or in a `/speckit-plan` output:
+## Architecture Decision
+Resolved directly by the human reviewer (2026-08-01), superseding the open questions
+this section previously listed:
 
-1. **Where does enrichment run?** A step inside each scraper's existing
-   scrape/upsert flow in `crawler/scrapers/*.ts` + `crawler/run.ts`, vs. a separate
-   batch/async job (e.g. a second GitHub Actions workflow) that processes
-   `enrichmentStatus: "pending"` offers after the main crawl completes
-2. **AI provider/model** for text summarization, date-condition parsing, and (if
-   needed) image/vision extraction — cost and rate-limit considerations for ~700
-   offers refreshed daily must be weighed
-3. **Vector storage** — whether `embedding` is stored inline on the offer document
-   (as proposed above) or in a separate collection/index, and whether this pairs
-   with the existing Atlas Search index (spec 013) or introduces a distinct vector
-   index
-4. **Image extraction trigger** — how the pipeline decides an offer's images are
-   worth processing (e.g. only when conditions text is empty/ambiguous) to avoid
-   unnecessary cost on every offer
-
-This spec's acceptance criteria below are written to be testable regardless of which
-option is chosen for (1)-(4); the chosen option becomes an implementation-time
-technical-approach addendum.
+1. **Where does enrichment run?** A **separate GitHub Actions workflow**, not a step
+   inside `crawler/scrapers/*.ts` / `crawler/run.ts`. It runs after the daily crawl
+   workflow completes and invokes a Claude-based enrichment routine. It only
+   processes offers the crawl just scraped/updated in that run (selected via
+   `enrichmentStatus: "pending"` set by the crawler on new/changed offers) — it does
+   **not** sweep the full ~700-offer collection on every run. This keeps enrichment
+   fully decoupled from the scrape/upsert path (needed for AC4/AC6) and bounds
+   per-run cost to that day's newly-scraped offers.
+2. **AI provider/model**: Claude (Anthropic), for both text summarization /
+   date-condition parsing and image/vision extraction — one provider for both parts
+   of the pipeline. Exact model choice (e.g. cost/latency-tier selection) is an
+   implementation-time detail, not a spec-level constraint.
+3. **Vector storage**: `embedding` is stored in a **separate index**, not inline in
+   the main offers collection query path, and it **integrates with the existing
+   Atlas Search index** (spec 013) rather than introducing an unrelated search
+   system — i.e. add Atlas **Vector Search** alongside the existing Atlas `$search`
+   setup so both can be queried against the same underlying offers data. Querying it
+   remains out of scope for this spec (see "Out of Scope").
+4. **Image extraction trigger**: vision extraction runs **whenever the offer has at
+   least one associated image** on the source page. It is not gated behind "text
+   conditions were insufficient" — presence of an image is sufficient on its own to
+   trigger the vision path (in addition to, not instead of, the text-based parsing
+   in step 2). The per-offer cost/time budget from "Edge Cases" below still applies.
 
 ## Acceptance Criteria
 - [ ] AC1: Given an offer with conditions text describing a recurring weekly
@@ -149,9 +157,10 @@ technical-approach addendum.
 - The outer `[validFrom, validUntil]` window is missing entirely (both undefined) —
   date resolution has no window to resolve within; `applicableDates` stays
   `undefined`
-- AI provider rate limits are hit mid-crawl across ~700 offers — the pipeline must
-  degrade to leaving remaining offers as `enrichmentStatus: "pending"` for a later
-  retry pass, not fail the entire crawler run
+- AI provider rate limits are hit mid-run of the enrichment workflow — the pipeline
+  must degrade to leaving remaining offers as `enrichmentStatus: "pending"` for a
+  later retry pass, not fail the entire enrichment workflow run (and must never fail
+  the separate crawler run, since the two are decoupled)
 - An offer's source images are extremely large or numerous — the image-extraction
   step must have a bounded cost/time budget per offer and skip to text-only
   processing (or leave the offer `"pending"`) rather than stalling the pipeline
@@ -161,13 +170,12 @@ technical-approach addendum.
   language-understanding task, not a per-scraper regex extension)
 
 ## Notes
-- This is explicitly the largest/most open item among the untriaged issues in this
-  batch — the issue author suggested it likely warrants its own `/speckit-plan` once
-  the spec is approved, given the architecture decisions involved (AI provider
-  choice, vector storage, image handling, cost). A human reviewer should treat the
-  "Architecture Decision Needed" section above as required reading before approving
-  this spec, and may want to route it through `/speckit-plan` rather than straight
-  to `/speckit-implement` given its scope
+- This was originally the largest/most open item among the untriaged issues in this
+  batch — the issue author flagged that it would need explicit architecture
+  decisions (AI provider choice, vector storage, image handling trigger, where
+  enrichment runs) before implementation. Those decisions are now resolved directly
+  above in "Architecture Decision"; this spec is approved to go straight to
+  implementation without a separate `/speckit-plan` pass
 - Related: `specs/features/041-amex-conditions-extraction.md` (captures raw
   conditions text for AmEx but does not parse it into dates — this feature is the
   natural follow-up, generalized across all banks)
