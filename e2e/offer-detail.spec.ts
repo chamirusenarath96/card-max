@@ -82,26 +82,12 @@ test.describe("Offer Detail Page (046)", () => {
     await expect(page.getByTestId("offer-not-found-back-link")).toHaveAttribute("href", "/");
   });
 
-  // AC11: existing search flows (quick search, see-all) still work unchanged
+  // AC11: existing search flows (quick search, see-all) still work unchanged.
+  // Note: SearchDrawer's quick-search-chip / jump-to-category flows are not
+  // exercised here — SearchDrawer isn't mounted anywhere in the app yet (see
+  // the note in e2e/search.spec.ts); that component's behavior is covered by
+  // src/components/search/SearchDrawer.test.tsx instead.
   test.describe("Existing search flows still work (AC11)", () => {
-    test("quick-search chip in the search drawer still navigates via freetext search", async ({ page }) => {
-      await page.route("**/api/offers**", (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } }),
-        }),
-      );
-
-      await page.goto("/");
-      await page.waitForLoadState("domcontentloaded");
-
-      await page.getByTestId("search-drawer-trigger").click();
-      await page.getByTestId("quick-search-cashback").click();
-
-      await expect(page).toHaveURL(/\?q=cashback/, { timeout: 10000 });
-    });
-
     test("'See all results' in the hero dropdown still navigates via freetext search", async ({ page }) => {
       await page.route("**/api/offers**", (route) =>
         route.fulfill({
