@@ -3,11 +3,11 @@
 **GitHub Issue**: #77
 
 ## Status
-- [ ] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec drafted
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Give the maintainer real visitor/page-view data for the deployed site by wiring up
@@ -55,14 +55,14 @@ no difference in the page.
   builds render the no-op script safely)
 
 ## Acceptance Criteria
-- [ ] AC1: `@vercel/analytics` is listed in `package.json` dependencies
-- [ ] AC2: `<Analytics />` is rendered exactly once, in `src/app/layout.tsx`, so it is
+- [x] AC1: `@vercel/analytics` is listed in `package.json` dependencies
+- [x] AC2: `<Analytics />` is rendered exactly once, in `src/app/layout.tsx`, so it is
       present on every route
-- [ ] AC3: `npm run build` succeeds with the new import (no missing-module or
+- [x] AC3: `npm run build` succeeds with the new import (no missing-module or
       type errors)
-- [ ] AC4: Rendering the root layout in a component test does not throw and does not
+- [x] AC4: Rendering the root layout in a component test does not throw and does not
       add any visible DOM output from the analytics component
-- [ ] AC5: Bundle size impact is negligible — no new client bundle chunk over ~5KB
+- [x] AC5: Bundle size impact is negligible — no new client bundle chunk over ~5KB
       gzipped is introduced solely by this change (informational check during PR
       review, not a hard CI gate)
 
