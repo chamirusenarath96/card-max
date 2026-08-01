@@ -3,11 +3,11 @@
 **GitHub Issue**: #80
 
 ## Status
-- [ ] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec drafted
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Give the maintainer a way to communicate site-wide updates, known issues, and new

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, MessageSquare, LogOut, BarChart2, Bug } from "lucide-react";
+import { LayoutDashboard, MessageSquare, LogOut, BarChart2, Bug, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session } from "next-auth";
 import { Logo } from "@/components/brand/Logo";
@@ -17,6 +17,7 @@ const NAV = [
   { href: "/admin/ci", label: "CI Runs", icon: BarChart2, exact: false },
   { href: "/admin/crawler", label: "Crawler", icon: Bug, exact: false },
   { href: "/admin/feedback", label: "Feedback", icon: MessageSquare, exact: false },
+  { href: "/admin/announcements", label: "Announcements", icon: Megaphone, exact: false },
 ];
 
 export function AdminSidebar({ user }: Props) {
