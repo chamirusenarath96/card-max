@@ -65,6 +65,12 @@ const OfferSchema = new Schema<Offer>(
     isExpired: { type: Boolean, default: false },
     sourceUrl: { type: String, required: true },
     scrapedAt: { type: Date, required: true, default: Date.now },
+
+    // AI-assisted enrichment (spec 044) — all optional, degrade to undefined
+    semanticSummary: { type: String },
+    embedding: { type: [Number] },
+    applicableDates: { type: [String] },
+    enrichmentStatus: { type: String, enum: ["pending", "done", "failed"] },
   },
   {
     timestamps: true, // adds createdAt + updatedAt
@@ -105,6 +111,9 @@ OfferSchema.index({ isExpired: 1, validUntil: 1, _id: 1 });
 
 // Upsert matching (bank + merchant + title = unique offer identity)
 OfferSchema.index({ bank: 1, merchant: 1, title: 1 }, { unique: false });
+
+// Enrichment backfill/retry queries (spec 044): find pending/failed offers
+OfferSchema.index({ enrichmentStatus: 1 });
 
 export const OfferModel =
   (models.Offer as mongoose.Model<Offer>) ?? model<Offer>("Offer", OfferSchema);

@@ -23,6 +23,36 @@ export interface UpsertResult {
   skipped: number;
 }
 
+// Fields the enrichment pipeline (spec 044) actually derives from — only a
+// change to one of these should re-queue the offer for enrichment. Comparing
+// against them (rather than blindly re-enriching on every daily re-upsert)
+// is what keeps enrichment scoped to "that crawl run's new/changed offers"
+// instead of a full sweep of the collection.
+const ENRICHMENT_RELEVANT_FIELDS = [
+  "title",
+  "description",
+  "merchant",
+  "category",
+  "validFrom",
+  "validUntil",
+] as const;
+
+type EnrichmentRelevantField = (typeof ENRICHMENT_RELEVANT_FIELDS)[number];
+type ExistingOfferSnapshot = Partial<Record<EnrichmentRelevantField, unknown>> | null;
+
+function normalizeForCompare(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function needsReEnrichment(existing: ExistingOfferSnapshot, incoming: OfferInput): boolean {
+  if (!existing) return true; // brand new offer
+  return ENRICHMENT_RELEVANT_FIELDS.some(
+    (field) => normalizeForCompare(existing[field]) !== normalizeForCompare(incoming[field])
+  );
+}
+
 /**
  * Upsert a batch of offers for a given bank.
  * Matches on: bank + merchant + title (case-insensitive)
@@ -41,10 +71,28 @@ export async function upsertOffers(offers: OfferInput[]): Promise<UpsertResult> 
         title: { $regex: new RegExp(`^${escapeRegex(offer.title)}$`, "i") },
       };
 
+      // Fail open: if this lookup itself errors, treat the offer as changed
+      // so it still gets queued for enrichment rather than silently skipped.
+      const existing: ExistingOfferSnapshot = await OfferModel.findOne(filter, {
+        title: 1,
+        description: 1,
+        merchant: 1,
+        category: 1,
+        validFrom: 1,
+        validUntil: 1,
+      })
+        .lean()
+        .catch(() => null);
+
+      const setFields: Record<string, unknown> = { ...offer, isExpired: false };
+      if (needsReEnrichment(existing, offer)) {
+        setFields.enrichmentStatus = "pending";
+      }
+
       const result = await OfferModel.findOneAndUpdate(
         filter,
         {
-          $set: { ...offer, isExpired: false },
+          $set: setFields,
           $setOnInsert: { createdAt: new Date() },
         },
         { upsert: true, new: true, lean: true }

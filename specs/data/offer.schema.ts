@@ -96,6 +96,22 @@ export const OfferSchema = z.object({
   sourceUrl: z.string().url(),
   scrapedAt: z.coerce.date(),
 
+  /**
+   * AI-assisted enrichment (spec 044) — all optional so non-enriched offers
+   * and scraper output remain valid without them.
+   *
+   * semanticSummary  – cleaned text used as the embedding/search input
+   * embedding        – vector representation (dimension depends on chosen model)
+   * applicableDates  – resolved ISO date strings within [validFrom, validUntil]
+   *                     on which the offer is actually redeemable
+   * enrichmentStatus – tracks which offers still need (re-)processing without
+   *                     blocking the main crawler upsert path
+   */
+  semanticSummary: z.string().optional(),
+  embedding: z.array(z.number()).optional(),
+  applicableDates: z.array(z.string()).optional(),
+  enrichmentStatus: z.enum(["pending", "done", "failed"]).optional(),
+
   // Meta
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
