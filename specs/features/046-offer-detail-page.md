@@ -3,11 +3,11 @@
 **GitHub Issue**: #81
 
 ## Status
-- [ ] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec drafted
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Give users a dedicated page for a single offer, reached from search results, showing
@@ -114,27 +114,38 @@ GET /api/offers/[id]/similar      — new
   details right), consistent with spec 005's original layout intent
 
 ## Acceptance Criteria
-- [ ] AC1: `/offers/[id]` renders merchant name, discount label, validity, category,
+- [x] AC1: `/offers/[id]` renders merchant name, discount label, validity, category,
       and bank for a valid id
-- [ ] AC2: `/offers/[id]` shows a 404 (`not-found.tsx`) for an invalid or unknown id
-- [ ] AC3: "View Original Offer" links to `offer.sourceUrl`, opens in a new tab, with
+- [x] AC2: `/offers/[id]` shows a 404 (`not-found.tsx`) for an invalid or unknown id
+- [x] AC3: "View Original Offer" links to `offer.sourceUrl`, opens in a new tab, with
       `rel="noopener noreferrer"`
-- [ ] AC4: "← All Offers" link navigates back to `/`
-- [ ] AC5: Clicking a `SearchDrawer` result row navigates to `/offers/<id>` (not a
+- [x] AC4: "← All Offers" link navigates back to `/`
+- [x] AC5: Clicking a `SearchDrawer` result row navigates to `/offers/<id>` (not a
       freetext search)
-- [ ] AC6: The existing offer-card CTAs (`OfferCardDefault`/`Compact`/`Expanded`)
-      remain unchanged, still linking directly to `sourceUrl` (spec 024 behavior
-      preserved)
-- [ ] AC7: `GET /api/offers/[id]/similar` returns offers sharing the source offer's
+- [x] AC6: The existing offer-card CTAs (`OfferCardDefault`/`Compact`/`Expanded`)
+      remain unchanged — **note**: spec 024's external `sourceUrl` CTA was already
+      removed by a later commit (`caf5c85fd`, "was opening broken/unreliable bank
+      pages") before this spec was written; cards currently render no CTA link at
+      all, and this spec does not reintroduce one. AC6 is satisfied as "cards
+      unchanged by this spec" rather than "cards still link to sourceUrl" — see the
+      regression test in `OfferCard.test.tsx`
+- [x] AC7: `GET /api/offers/[id]/similar` returns offers sharing the source offer's
       `category` whose validity windows overlap the source offer's window
-- [ ] AC8: `GET /api/offers/[id]/similar` excludes the source offer itself from its
+- [x] AC8: `GET /api/offers/[id]/similar` excludes the source offer itself from its
       own similar-offers list
-- [ ] AC9: `GET /api/offers/[id]/similar` returns 404 when the source id doesn't
+- [x] AC9: `GET /api/offers/[id]/similar` returns 404 when the source id doesn't
       exist
-- [ ] AC10: The detail page's "Similar Offers" section is hidden entirely when the
+- [x] AC10: The detail page's "Similar Offers" section is hidden entirely when the
       similar-offers response is empty
-- [ ] AC11: All other existing search-drawer behavior (`freshSearch`, quick
+- [x] AC11: All other existing search-drawer behavior (`freshSearch`, quick
       searches, jump-to-category, "See all N results") continues to work unchanged
+      — **note**: `SearchDrawer`'s trigger was already removed from the page header
+      before this spec was written (`dede5d3b4`, "remove search button from top
+      navigation bar"); it isn't reachable from any live page today. Its
+      quick-search/jump-to-category behavior is verified at the component level
+      (`SearchDrawer.test.tsx`, pre-existing) rather than e2e — matching the
+      existing precedent in `e2e/search.spec.ts`. Only the still-live HeroSearch
+      "See all N results" flow is covered by an e2e test here
 
 ## Test Cases
 
@@ -154,7 +165,7 @@ GET /api/offers/[id]/similar      — new
 | Similar Offers section hidden when API returns empty array | component | AC10 |
 | user searches, clicks a result, lands on detail page with similar offers visible | e2e | AC1, AC5, AC7 |
 | user navigates to an invalid offer id and sees the not-found page | e2e | AC2 |
-| existing "See all N results" and quick-search flows still work | e2e | AC11 |
+| existing "See all N results" flow (HeroSearch) still works | e2e | AC11 |
 
 ## Edge Cases
 - `_id` is not a valid ObjectId on either endpoint → 400 (detail) / 400 (similar);

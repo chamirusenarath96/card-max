@@ -124,4 +124,17 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-type-badge")).toHaveTextContent("INSTALLMENT");
     expect(screen.getByTestId("offer-type-badge")).not.toHaveTextContent("OFF");
   });
+
+  // Regression (spec 046 AC6): offer-card CTAs remain unchanged by the new
+  // /offers/[id] detail page. Note: spec 024's external "View Offer Details"
+  // link was already removed in a later commit (opened broken bank pages) —
+  // cards render no sourceUrl link today, and spec 046 does not reintroduce one.
+  it("does not render an external sourceUrl link on any card variant (spec 046 AC6)", () => {
+    const { rerender } = render(<OfferCard offer={BASE_OFFER} size="default" />);
+    expect(screen.queryByTestId("offer-view-link")).not.toBeInTheDocument();
+    rerender(<OfferCard offer={BASE_OFFER} size="compact" />);
+    expect(screen.queryByTestId("offer-view-link")).not.toBeInTheDocument();
+    rerender(<OfferCard offer={BASE_OFFER} size="expanded" />);
+    expect(screen.queryByTestId("offer-view-link")).not.toBeInTheDocument();
+  });
 });
