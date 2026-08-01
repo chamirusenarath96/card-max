@@ -10,7 +10,6 @@ import type { Bank } from "../../../specs/data/offer.schema";
 import { AdUnit } from "@/components/ads/AdUnit";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
@@ -19,10 +18,27 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useCategories } from "@/hooks/useCategories";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNavigationProgress } from "@/components/layout/NavigationProgressContext";
+
+/** Stable section ids, in rendering order — Date Range must stay last. */
+const FILTER_SECTIONS = [
+  "sort",
+  "bank",
+  "category",
+  "offerType",
+  "includeExpired",
+  "dateRange",
+] as const;
 
 const BANKS = Object.entries(BANK_METADATA) as [Bank, (typeof BANK_METADATA)[Bank]][];
 
@@ -77,8 +93,15 @@ export function FilterDrawer({
   const { navigate } = useNavigationProgress();
   const { data: categories, isLoading: categoriesLoading } = useCategories();
 
+  // Below the `sm` breakpoint (640px) the drawer becomes a full-page takeover
+  // and sections default to collapsed; at `sm` and above it keeps today's panel.
+  const isDesktop = useMediaQuery("(min-width: 640px)");
+
   // ── Controlled drawer open state ──────────────────────────────────────────
   const [open, setOpen] = useState(false);
+
+  // ── Accordion section expand/collapse state ───────────────────────────────
+  const [openSections, setOpenSections] = useState<string[]>([...FILTER_SECTIONS]);
 
   // ── Pending filter state — updated locally, applied on "Apply Filters" ───
   const [pendingBanks,      setPendingBanks]      = useState<string[]>([]);
@@ -104,7 +127,11 @@ export function FilterDrawer({
   }
 
   function handleOpenChange(isOpen: boolean) {
-    if (isOpen) syncPendingFromUrl();
+    if (isOpen) {
+      syncPendingFromUrl();
+      // Sections default open on desktop, collapsed on mobile — reset each open.
+      setOpenSections(isDesktop ? [...FILTER_SECTIONS] : []);
+    }
     setOpen(isOpen);
   }
 
@@ -210,7 +237,12 @@ export function FilterDrawer({
         side="right"
         data-testid="filter-drawer"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        className={cn(
+          "flex flex-col gap-0 overflow-hidden p-0",
+          isDesktop
+            ? "w-full sm:max-w-md"
+            : "!inset-0 !top-0 !left-0 !h-dvh !w-full !max-w-none !border-none",
+        )}
       >
         {/* ── Drawer header ─────────────────────────────────────────────── */}
         <SheetHeader className="flex flex-row items-center justify-between border-b px-6 py-4">
@@ -252,211 +284,248 @@ export function FilterDrawer({
             </div>
           )}
 
-          {/* Sort */}
-          <section className="px-6 py-5">
-            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Sort by
-            </Label>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Sort options">
-              {[
-                { value: "latest", label: "Latest" },
-                { value: "expiringSoon", label: "Expiring Soon" },
-              ].map(({ value, label }) => (
-                <Button
-                  key={value}
-                  type="button"
-                  data-testid={`sort-${value}`}
-                  variant={pendingSort === value ? "default" : "outline"}
-                  className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                  onClick={() => setPendingSort(value)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </section>
-
-          {/* Bank */}
-          <section className="px-6 py-5">
-            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Bank
-            </Label>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by bank">
-              <Button
-                type="button"
-                data-testid="bank-filter-all"
-                variant={pendingBanks.length === 0 ? "default" : "outline"}
-                className="h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold"
-                onClick={() => setPendingBanks([])}
+          <Accordion
+            type="multiple"
+            value={openSections}
+            onValueChange={setOpenSections}
+            className="px-6"
+          >
+            {/* Sort */}
+            <AccordionItem value="sort">
+              <AccordionTrigger
+                data-testid="filter-section-toggle-sort"
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                All Banks
-              </Button>
-              {BANKS.map(([bank, meta]) => {
-                const isSelected = pendingBanks.includes(bank);
-                return (
-                  <Button
-                    key={bank}
-                    type="button"
-                    data-testid={`bank-filter-${bank}`}
-                    variant={isSelected ? "default" : "outline"}
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold",
-                      isSelected
-                        ? "border-transparent text-primary-foreground hover:opacity-95"
-                        : "bg-background text-foreground hover:bg-accent",
-                    )}
-                    style={isSelected ? { backgroundColor: meta.color } : undefined}
-                    onClick={() => setPendingBanks(toggle(pendingBanks, bank))}
-                  >
-                    {meta.displayName}
-                  </Button>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Date Range */}
-          <section className="px-6 py-5">
-            <div className="mb-3 flex items-center justify-between">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Date Range
-              </Label>
-              {(fromDate || toDate_) && (
-                <button
-                  type="button"
-                  onClick={() => setPendingDateRange(undefined)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
-                  aria-label="Clear date range"
-                >
-                  <X className="size-3" />
-                  Clear
-                </button>
-              )}
-            </div>
-            {(fromDate || toDate_) && (
-              <p className="mb-3 text-sm font-medium text-foreground">
-                {fromDate && toDate_
-                  ? `${format(fromDate, "dd MMM")} – ${format(toDate_, "dd MMM yyyy")}`
-                  : fromDate
-                    ? `From ${format(fromDate, "dd MMM yyyy")}`
-                    : `Until ${format(toDate_!, "dd MMM yyyy")}`}
-              </p>
-            )}
-            <div className="overflow-x-auto">
-              <Calendar
-                mode="range"
-                numberOfMonths={2}
-                selected={pendingDateRange}
-                onSelect={setPendingDateRange}
-                captionLayout="dropdown"
-              />
-            </div>
-          </section>
-
-          {/* Category */}
-          <section className="px-6 py-5" data-testid="category-section">
-            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Category
-            </Label>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Filter by category"
-            >
-              <Button
-                type="button"
-                data-testid="category-chip-all"
-                variant={pendingCategories.length === 0 ? "default" : "outline"}
-                className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                onClick={() => setPendingCategories([])}
-              >
-                All
-              </Button>
-
-              {categoriesLoading &&
-                Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton
-                    key={i}
-                    data-testid="category-skeleton"
-                    className="h-10 w-24 rounded-md"
-                  />
-                ))}
-
-              {!categoriesLoading &&
-                categories.map((cat) => {
-                  const isSelected = pendingCategories.includes(cat.category);
-                  return (
+                Sort by
+              </AccordionTrigger>
+              <AccordionContent data-testid="filter-section-sort">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Sort options">
+                  {[
+                    { value: "latest", label: "Latest" },
+                    { value: "expiringSoon", label: "Expiring Soon" },
+                  ].map(({ value, label }) => (
                     <Button
-                      key={cat.category}
+                      key={value}
                       type="button"
-                      data-testid={`category-chip-${cat.category}`}
-                      variant={isSelected ? "default" : "outline"}
-                      aria-pressed={isSelected}
+                      data-testid={`sort-${value}`}
+                      variant={pendingSort === value ? "default" : "outline"}
                       className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                      onClick={() => setPendingCategories(toggle(pendingCategories, cat.category))}
+                      onClick={() => setPendingSort(value)}
                     >
-                      {cat.label}
+                      {label}
                     </Button>
-                  );
-                })}
-            </div>
-          </section>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-          {/* Offer Type */}
-          <section className="px-6 py-5">
-            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Offer Type
-            </Label>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Filter by offer type"
-            >
-              <Button
-                type="button"
-                data-testid="offer-type-all"
-                variant={pendingOfferTypes.length === 0 ? "default" : "outline"}
-                className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                onClick={() => setPendingOfferTypes([])}
+            {/* Bank */}
+            <AccordionItem value="bank">
+              <AccordionTrigger
+                data-testid="filter-section-toggle-bank"
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                All Types
-              </Button>
-              {OFFER_TYPES.map((type) => {
-                const isSelected = pendingOfferTypes.includes(type.value);
-                return (
+                Bank
+              </AccordionTrigger>
+              <AccordionContent data-testid="filter-section-bank">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by bank">
                   <Button
-                    key={type.value}
                     type="button"
-                    data-testid={`offer-type-${type.value}`}
-                    variant={isSelected ? "default" : "outline"}
-                    aria-pressed={isSelected}
-                    className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-                    onClick={() => setPendingOfferTypes(toggle(pendingOfferTypes, type.value))}
+                    data-testid="bank-filter-all"
+                    variant={pendingBanks.length === 0 ? "default" : "outline"}
+                    className="h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold"
+                    onClick={() => setPendingBanks([])}
                   >
-                    {type.label}
+                    All Banks
                   </Button>
-                );
-              })}
-            </div>
-          </section>
+                  {BANKS.map(([bank, meta]) => {
+                    const isSelected = pendingBanks.includes(bank);
+                    return (
+                      <Button
+                        key={bank}
+                        type="button"
+                        data-testid={`bank-filter-${bank}`}
+                        variant={isSelected ? "default" : "outline"}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "h-auto min-h-10 rounded-full px-5 py-2 text-sm font-semibold",
+                          isSelected
+                            ? "border-transparent text-primary-foreground hover:opacity-95"
+                            : "bg-background text-foreground hover:bg-accent",
+                        )}
+                        style={isSelected ? { backgroundColor: meta.color } : undefined}
+                        onClick={() => setPendingBanks(toggle(pendingBanks, bank))}
+                      >
+                        {meta.displayName}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-          {/* Include Expired */}
-          <section className="px-6 py-5">
-            <Label className="mb-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Expired Offers
-            </Label>
-            <Button
-              type="button"
-              data-testid="include-expired-toggle"
-              variant={pendingIncludeExpired ? "default" : "outline"}
-              aria-pressed={pendingIncludeExpired}
-              className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
-              onClick={() => setPendingIncludeExpired((prev) => !prev)}
-            >
-              {pendingIncludeExpired ? "Showing expired offers" : "Include expired offers"}
-            </Button>
-          </section>
+            {/* Category */}
+            <AccordionItem value="category" data-testid="category-section">
+              <AccordionTrigger
+                data-testid="filter-section-toggle-category"
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Category
+              </AccordionTrigger>
+              <AccordionContent data-testid="filter-section-category">
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Filter by category"
+                >
+                  <Button
+                    type="button"
+                    data-testid="category-chip-all"
+                    variant={pendingCategories.length === 0 ? "default" : "outline"}
+                    className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                    onClick={() => setPendingCategories([])}
+                  >
+                    All
+                  </Button>
+
+                  {categoriesLoading &&
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton
+                        key={i}
+                        data-testid="category-skeleton"
+                        className="h-10 w-24 rounded-md"
+                      />
+                    ))}
+
+                  {!categoriesLoading &&
+                    categories.map((cat) => {
+                      const isSelected = pendingCategories.includes(cat.category);
+                      return (
+                        <Button
+                          key={cat.category}
+                          type="button"
+                          data-testid={`category-chip-${cat.category}`}
+                          variant={isSelected ? "default" : "outline"}
+                          aria-pressed={isSelected}
+                          className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                          onClick={() =>
+                            setPendingCategories(toggle(pendingCategories, cat.category))
+                          }
+                        >
+                          {cat.label}
+                        </Button>
+                      );
+                    })}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Offer Type */}
+            <AccordionItem value="offerType">
+              <AccordionTrigger
+                data-testid="filter-section-toggle-offerType"
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Offer Type
+              </AccordionTrigger>
+              <AccordionContent data-testid="filter-section-offerType">
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Filter by offer type"
+                >
+                  <Button
+                    type="button"
+                    data-testid="offer-type-all"
+                    variant={pendingOfferTypes.length === 0 ? "default" : "outline"}
+                    className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                    onClick={() => setPendingOfferTypes([])}
+                  >
+                    All Types
+                  </Button>
+                  {OFFER_TYPES.map((type) => {
+                    const isSelected = pendingOfferTypes.includes(type.value);
+                    return (
+                      <Button
+                        key={type.value}
+                        type="button"
+                        data-testid={`offer-type-${type.value}`}
+                        variant={isSelected ? "default" : "outline"}
+                        aria-pressed={isSelected}
+                        className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                        onClick={() => setPendingOfferTypes(toggle(pendingOfferTypes, type.value))}
+                      >
+                        {type.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Include Expired */}
+            <AccordionItem value="includeExpired">
+              <AccordionTrigger
+                data-testid="filter-section-toggle-includeExpired"
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Expired Offers
+              </AccordionTrigger>
+              <AccordionContent data-testid="filter-section-includeExpired">
+                <Button
+                  type="button"
+                  data-testid="include-expired-toggle"
+                  variant={pendingIncludeExpired ? "default" : "outline"}
+                  aria-pressed={pendingIncludeExpired}
+                  className="h-auto min-h-10 rounded-md px-4 py-2 text-sm font-medium"
+                  onClick={() => setPendingIncludeExpired((prev) => !prev)}
+                >
+                  {pendingIncludeExpired ? "Showing expired offers" : "Include expired offers"}
+                </Button>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Date Range — always last */}
+            <AccordionItem value="dateRange">
+              <AccordionTrigger
+                data-testid="filter-section-toggle-dateRange"
+                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                Date Range
+              </AccordionTrigger>
+              <AccordionContent data-testid="filter-section-dateRange">
+                {(fromDate || toDate_) && (
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-medium text-foreground">
+                      {fromDate && toDate_
+                        ? `${format(fromDate, "dd MMM")} – ${format(toDate_, "dd MMM yyyy")}`
+                        : fromDate
+                          ? `From ${format(fromDate, "dd MMM yyyy")}`
+                          : `Until ${format(toDate_!, "dd MMM yyyy")}`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDateRange(undefined)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                      aria-label="Clear date range"
+                    >
+                      <X className="size-3" />
+                      Clear
+                    </button>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <Calendar
+                    mode="range"
+                    numberOfMonths={2}
+                    selected={pendingDateRange}
+                    onSelect={setPendingDateRange}
+                    captionLayout="dropdown"
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
 
         {/* ── Sticky footer: Apply Filters ──────────────────────────────────── */}
