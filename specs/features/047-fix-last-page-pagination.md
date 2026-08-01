@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Navigating to the last page of a multi-page offer result set renders zero offer
@@ -54,19 +54,19 @@ is to the *values* returned/consumed, not the contract shape.
 - `PaginationControls` (spec 035) continues to disable "Next" on the last page
 
 ## Acceptance Criteria
-- [ ] AC1: `GET /api/offers?page={totalPages}&limit={limit}` returns the correct
+- [x] AC1: `GET /api/offers?page={totalPages}&limit={limit}` returns the correct
       remaining offers (`total - (totalPages - 1) * limit` documents) via
       `{ $skip, $limit }`/Mongoose `.skip().limit()` — not an empty `data[]` array
-- [ ] AC2: The offer listing page (`src/app/page.tsx` + `OfferGrid`) renders those
+- [x] AC2: The offer listing page (`src/app/page.tsx` + `OfferGrid`) renders those
       returned offers on the last page — no client-side truncation or off-by-one
       causes them to be dropped after the API returns them correctly
-- [ ] AC3: `pagination.totalPages` is computed as `Math.ceil(total / limit)` consistently
+- [x] AC3: `pagination.totalPages` is computed as `Math.ceil(total / limit)` consistently
       wherever it is derived (API response and any client-side recomputation), so the
       last page the UI thinks exists matches the last page the API can actually serve
-- [ ] AC4: Navigating directly to `?page={totalPages}` (not just clicking "Next"
+- [x] AC4: Navigating directly to `?page={totalPages}` (not just clicking "Next"
       repeatedly) also renders the remaining offers, ruling out any client-only
       state bug that only reproduces via sequential navigation
-- [ ] AC5: Existing pagination behaviour for all non-last, in-range pages is unchanged
+- [x] AC5: Existing pagination behaviour for all non-last, in-range pages is unchanged
       (no regression introduced by the fix)
 
 ## Test Cases
@@ -101,3 +101,16 @@ is to the *values* returned/consumed, not the contract shape.
 - Add the regression tests to the existing `route.test.ts` and `PaginationControls.test.tsx`
   / `e2e/offers.spec.ts` rather than creating new test files, since this is a fix to
   existing, already-tested behaviour (spec 035).
+
+### Root cause (found during implementation)
+The default (isExpired-only) filter path in `GET /api/offers` used
+`OfferModel.estimatedDocumentCount()` as an O(1) optimisation. Unlike
+`countDocuments(filter)`, `estimatedDocumentCount()` ignores any filter argument
+and always counts every document in the collection — so `total` (and therefore
+`totalPages`) included expired offers even though the query itself excludes them.
+On a collection with a meaningful number of expired offers, this inflated
+`totalPages` past the last page the filtered query could actually serve, so
+`page === totalPages` fell past the end of the matching documents and rendered
+an empty `data[]`. Fix: only use `estimatedDocumentCount()` when `filter` is
+truly empty (`includeExpired=true` with no other dimension filters); every other
+case — including the common isExpired-only default — now uses `countDocuments(filter)`.

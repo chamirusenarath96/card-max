@@ -106,3 +106,72 @@ test.describe("Offer Listing (Feature 001)", () => {
     expect(capturedUrl).not.toContain("includeExpired=true");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 047 regression: last pagination page must render offers, not an empty grid.
+// total=45, limit=20 → 3 pages (20, 20, 5). Mock responds per the requested
+// `page` param so navigation actually exercises page-specific payloads.
+// ---------------------------------------------------------------------------
+test.describe("Pagination — last page regression (Feature 047)", () => {
+  function makeOffer(id: string) {
+    return { ...MOCK_OFFER, _id: id, title: `Offer ${id}`, merchant: `Merchant ${id}` };
+  }
+
+  const PAGE_SIZES: Record<string, number> = { "1": 20, "2": 20, "3": 5 };
+
+  async function mockPaginatedOffers(page: import("@playwright/test").Page) {
+    await page.route("**/api/offers**", (route) => {
+      const url = new URL(route.request().url());
+      const requestedPage = url.searchParams.get("page") ?? "1";
+      const count = PAGE_SIZES[requestedPage] ?? 0;
+      const data = Array.from({ length: count }, (_, i) => makeOffer(`${requestedPage}-${i}`));
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data,
+          pagination: { page: Number(requestedPage), limit: 20, total: 45, totalPages: 3 },
+        }),
+      });
+    });
+  }
+
+  test("clicking Next through to the last page shows offer cards, not an empty state", async ({ page }) => {
+    await mockPaginatedOffers(page);
+    await page.goto("/");
+    await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
+
+    await page.getByTestId("pagination-next").click();
+    await expect(page).toHaveURL(/page=2/);
+    await expect(page.getByTestId("offer-grid")).toBeVisible();
+    await expect(page.getByTestId("empty-state")).not.toBeVisible();
+
+    await page.getByTestId("pagination-next").click();
+    await expect(page).toHaveURL(/page=3/);
+    await expect(page.getByTestId("offer-grid")).toBeVisible();
+    await expect(page.getByTestId("empty-state")).not.toBeVisible();
+    await expect(page.getByTestId("offer-card")).toHaveCount(5);
+  });
+
+  test("navigating directly to ?page={totalPages} via URL shows offer cards", async ({ page }) => {
+    await mockPaginatedOffers(page);
+    await page.goto("/?page=3");
+    await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("empty-state")).not.toBeVisible();
+    await expect(page.getByTestId("offer-card")).toHaveCount(5);
+  });
+
+  test("navigating through all pages never shows an unexpected empty page", async ({ page }) => {
+    await mockPaginatedOffers(page);
+    await page.goto("/");
+    for (const expected of ["1", "2", "3"]) {
+      if (expected !== "1") {
+        await page.getByTestId("pagination-next").click();
+        await expect(page).toHaveURL(new RegExp(`page=${expected}`));
+      }
+      await expect(page.getByTestId("offer-grid")).toBeVisible();
+      await expect(page.getByTestId("empty-state")).not.toBeVisible();
+      await expect(page.getByTestId("offer-card")).toHaveCount(PAGE_SIZES[expected]!);
+    }
+  });
+});
