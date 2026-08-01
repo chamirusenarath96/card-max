@@ -3,6 +3,7 @@
  * Spec: specs/features/001-offer-listing.md
  */
 import { test, expect } from "@playwright/test";
+import { expandFilterSection } from "./helpers";
 
 // ---------------------------------------------------------------------------
 // Mock API response — keeps E2E tests independent of MongoDB availability.
@@ -58,6 +59,7 @@ test.describe("Offer Listing (Feature 001)", () => {
     // bank-filter-* lives inside the FilterDrawer Sheet — open it first
     await page.getByTestId("filter-drawer-trigger").click();
     await page.waitForSelector('[data-testid="filter-drawer"]');
+    await expandFilterSection(page, "bank");
     await page.getByTestId("bank-filter-commercial_bank").click();
     // Multi-select: chip click queues the filter; Apply Filters commits it.
     await page.getByTestId("apply-filters").click();

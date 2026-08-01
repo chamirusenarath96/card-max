@@ -1,7 +1,20 @@
 import { render, screen, fireEvent, waitFor } from "@/test-utils";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FilterDrawer } from "./FilterDrawer";
 import type { UseCategoriesResult } from "@/hooks/useCategories";
+
+/** Stub matchMedia so `isDesktop` resolves to a known value for the "(min-width: 640px)" query. */
+function mockMatchMedia(matches: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
 
 const mockNavigate = vi.fn();
 
@@ -42,6 +55,13 @@ describe("FilterDrawer", () => {
       isLoading: false,
       error: false,
     });
+    // Default to a desktop viewport so sections start expanded, matching
+    // pre-redesign behaviour that most existing tests rely on.
+    mockMatchMedia(true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders the filter drawer trigger button", () => {
@@ -254,5 +274,94 @@ describe("FilterDrawer", () => {
   it("trigger button does not have glow animation when filters are active", () => {
     render(<FilterDrawer activeBanks={["hnb"]} />);
     expect(screen.getByTestId("filter-drawer-trigger")).not.toHaveClass("animate-filter-glow");
+  });
+
+  // ── Collapsible sections (spec 043) ───────────────────────────────────────
+
+  it("AC1 — clicking a section header toggles its collapsed/expanded state", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const toggle = await screen.findByTestId("filter-section-toggle-sort");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("AC3 — Date Range section renders after Include Expired in DOM order", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    await screen.findByTestId("filter-drawer");
+
+    // Sheet content is portaled to document.body, so query from there.
+    const toggleIds = Array.from(
+      document.body.querySelectorAll('[data-testid^="filter-section-toggle-"]'),
+    ).map((el) => el.getAttribute("data-testid"));
+
+    expect(toggleIds[toggleIds.length - 1]).toBe("filter-section-toggle-dateRange");
+    expect(toggleIds[toggleIds.length - 2]).toBe("filter-section-toggle-includeExpired");
+  });
+
+  it("AC2 — sections render collapsed by default on a mobile viewport", async () => {
+    mockMatchMedia(false); // below the sm breakpoint
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const sortToggle = await screen.findByTestId("filter-section-toggle-sort");
+    const bankToggle = await screen.findByTestId("filter-section-toggle-bank");
+
+    expect(sortToggle).toHaveAttribute("aria-expanded", "false");
+    expect(bankToggle).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("sections render expanded by default on a desktop viewport", async () => {
+    mockMatchMedia(true);
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const sortToggle = await screen.findByTestId("filter-section-toggle-sort");
+
+    expect(sortToggle).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("AC7 — filter-drawer retains bank-filter-*, category-chip-*, apply-filters testids", async () => {
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+
+    expect(await screen.findByTestId("bank-filter-commercial_bank")).toBeInTheDocument();
+    expect(await screen.findByTestId("category-chip-dining")).toBeInTheDocument();
+    expect(screen.getByTestId("apply-filters")).toBeInTheDocument();
+    expect(screen.getByTestId("include-expired-toggle")).toBeInTheDocument();
+    expect(screen.getByTestId("offer-type-percentage")).toBeInTheDocument();
+  });
+
+  it("AC5 — desktop viewport keeps the sm:max-w-md side panel sizing class", async () => {
+    mockMatchMedia(true);
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const drawer = await screen.findByTestId("filter-drawer");
+    expect(drawer).toHaveClass("sm:max-w-md");
+  });
+
+  it("AC4 — mobile viewport applies full-viewport sizing classes", async () => {
+    mockMatchMedia(false);
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+    const drawer = await screen.findByTestId("filter-drawer");
+    expect(drawer.className).toContain("h-dvh");
+    expect(drawer.className).toContain("w-full");
+  });
+
+  it("expanding a collapsed section, selecting a filter, and applying it still navigates correctly", async () => {
+    mockMatchMedia(false); // sections start collapsed
+    render(<FilterDrawer />);
+    fireEvent.click(screen.getByTestId("filter-drawer-trigger"));
+
+    const bankToggle = await screen.findByTestId("filter-section-toggle-bank");
+    fireEvent.click(bankToggle); // expand Bank section
+    fireEvent.click(await screen.findByTestId("bank-filter-commercial_bank"));
+    fireEvent.click(screen.getByTestId("apply-filters"));
+
+    expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining("bank=commercial_bank"));
   });
 });

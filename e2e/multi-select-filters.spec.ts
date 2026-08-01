@@ -6,6 +6,7 @@
  * Resilient SSR pattern: accept both loaded and not-found states.
  */
 import { test, expect } from "@playwright/test";
+import { expandFilterSection } from "./helpers";
 
 const MOCK_OFFER_HNB = {
   _id: "mock-offer-hnb",
@@ -86,6 +87,7 @@ test.describe("Multi-Select Filters (Feature 037)", () => {
     // Open filter drawer
     await page.getByTestId("filter-drawer-trigger").click();
     await expect(page.getByTestId("filter-drawer")).toBeVisible();
+    await expandFilterSection(page, "bank");
 
     // Select two bank chips
     await page.getByTestId("bank-filter-hnb").click();
@@ -138,6 +140,7 @@ test.describe("Multi-Select Filters (Feature 037)", () => {
     // Open filter drawer
     await page.getByTestId("filter-drawer-trigger").click();
     await expect(page.getByTestId("filter-drawer")).toBeVisible();
+    await expandFilterSection(page, "bank");
 
     // Click "All Banks" to clear
     await page.getByTestId("bank-filter-all").click();
