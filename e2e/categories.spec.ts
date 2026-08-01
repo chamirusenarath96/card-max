@@ -10,6 +10,7 @@
  * on the main page so cannot be tested via E2E.
  */
 import { test, expect } from "@playwright/test";
+import { expandFilterSection } from "./helpers";
 
 const MOCK_CATEGORIES = [
   { category: "dining", label: "Dining", count: 42 },
@@ -48,6 +49,7 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
   }) => {
     // Open filter drawer
     await page.getByTestId("filter-drawer-trigger").click();
+    await expandFilterSection(page, "category");
     // Wait for the dynamic dining chip to appear
     await expect(page.getByTestId("category-chip-dining")).toBeVisible({
       timeout: 5000,
@@ -65,6 +67,7 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
   }) => {
     // Open filter drawer
     await page.getByTestId("filter-drawer-trigger").click();
+    await expandFilterSection(page, "category");
     // Select Groceries
     await expect(page.getByTestId("category-chip-groceries")).toBeVisible({
       timeout: 5000,
@@ -78,6 +81,7 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
 
   test("AC8 — 'All' chip always present in FilterDrawer", async ({ page }) => {
     await page.getByTestId("filter-drawer-trigger").click();
+    await expandFilterSection(page, "category");
     await expect(page.getByTestId("category-chip-all")).toBeVisible({
       timeout: 5000,
     });
@@ -89,6 +93,7 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
     await page.waitForLoadState("domcontentloaded");
 
     await page.getByTestId("filter-drawer-trigger").click();
+    await expandFilterSection(page, "category");
     await expect(page.getByTestId("category-chip-all")).toBeVisible({
       timeout: 5000,
     });

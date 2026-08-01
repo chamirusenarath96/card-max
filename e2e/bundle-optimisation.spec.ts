@@ -6,6 +6,7 @@
  * API calls are intercepted with mocked responses wherever needed.
  */
 import { test, expect } from "@playwright/test";
+import { expandFilterSection } from "./helpers";
 
 const MOCK_OFFER = {
   _id: "mock-offer-bundle-1",
@@ -71,6 +72,7 @@ test.describe("Bundle Optimisation (Feature 033)", () => {
     await expect(drawer).toBeVisible({ timeout: 5000 });
 
     // Interact with bank filter
+    await expandFilterSection(page, "bank");
     await page.getByTestId("bank-filter-commercial_bank").click();
     await page.getByTestId("apply-filters").click();
 

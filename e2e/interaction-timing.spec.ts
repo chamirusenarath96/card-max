@@ -23,6 +23,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { type Page, test, expect } from "@playwright/test";
+import { expandFilterSection } from "./helpers";
 
 // ── Timing accumulator (written to JSON in afterAll) ──────────────────────
 
@@ -182,6 +183,7 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     // Open the filter drawer before timing starts so we isolate the filter-click + Apply
     await page.getByTestId("filter-drawer-trigger").click();
     await page.waitForSelector('[data-testid="filter-drawer"]');
+    await expandFilterSection(page, "bank");
 
     // AC3: API round-trip captured via waitForResponse inside measureInteraction
     const { renderMs } = await measureInteraction(
@@ -208,6 +210,7 @@ test.describe("Interaction performance budgets (spec 029)", () => {
     // Open the filter drawer before timing starts
     await page.getByTestId("filter-drawer-trigger").click();
     await page.waitForSelector('[data-testid="filter-drawer"]');
+    await expandFilterSection(page, "category");
     // category-chip-dining is dynamic (from /api/categories) — wait for it to render
     await page.waitForSelector('[data-testid="category-chip-dining"]', { timeout: 5000 });
 
