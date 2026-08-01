@@ -488,8 +488,7 @@ describe("GET /api/offers", () => {
   // ── Pagination ────────────────────────────────────────────────────────────
 
   it("calculates totalPages from total and limit", async () => {
-    // Default listing (no extra filters) → estimatedDocumentCount path
-    mockEstimatedCount.mockResolvedValue(45);
+    mockCount.mockResolvedValue(45);
     const res = await GET(makeRequest({ limit: "20" }));
     const { pagination } = await res.json();
     expect(pagination.totalPages).toBe(3);
@@ -498,6 +497,57 @@ describe("GET /api/offers", () => {
   it("applies correct skip for page 2", async () => {
     await GET(makeRequest({ page: "2", limit: "20" }));
     expect(mockSkip).toHaveBeenCalledWith(20);
+  });
+
+  // Regression: 047 — last page rendered no offers because the isExpired-only
+  // filter path used estimatedDocumentCount(), which ignores the filter and
+  // counts the whole collection, inflating totalPages past the point the
+  // filtered query can actually serve.
+
+  it("last page with total not evenly divisible by limit returns the remaining offers, not an empty array", async () => {
+    mockCount.mockResolvedValue(45); // 3 pages of 20: 20, 20, 5
+    mockLean.mockResolvedValue([makeOffer(), makeOffer(), makeOffer(), makeOffer(), makeOffer()]);
+    const res = await GET(makeRequest({ page: "3", limit: "20" }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data).toHaveLength(5);
+    expect(body.pagination).toMatchObject({ page: 3, totalPages: 3, total: 45 });
+    expect(mockSkip).toHaveBeenCalledWith(40);
+  });
+
+  it("last page with total evenly divisible by limit returns a full page", async () => {
+    mockCount.mockResolvedValue(40); // 2 full pages of 20
+    mockLean.mockResolvedValue(Array.from({ length: 20 }, () => makeOffer()));
+    const res = await GET(makeRequest({ page: "2", limit: "20" }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data).toHaveLength(20);
+    expect(body.pagination).toMatchObject({ page: 2, totalPages: 2, total: 40 });
+  });
+
+  it("totalPages is Math.ceil(total / limit) for both even and uneven totals", async () => {
+    mockCount.mockResolvedValue(41);
+    const uneven = await GET(makeRequest({ limit: "20" }));
+    expect((await uneven.json()).pagination.totalPages).toBe(3);
+
+    mockCount.mockResolvedValue(40);
+    const even = await GET(makeRequest({ limit: "20" }));
+    expect((await even.json()).pagination.totalPages).toBe(2);
+  });
+
+  it("regression: default isExpired-only filter uses an accurate count so the last page is never past the real data", async () => {
+    // Simulate a collection where the whole-collection count (what
+    // estimatedDocumentCount() would return) is far larger than the number of
+    // non-expired offers actually matching the filter.
+    mockEstimatedCount.mockResolvedValue(999);
+    mockCount.mockResolvedValue(41);
+    mockLean.mockResolvedValue([makeOffer()]); // last page: 41 % 20 = 1 remaining
+    const res = await GET(makeRequest({ page: "3", limit: "20" }));
+    const body = await res.json();
+    expect(mockEstimatedCount).not.toHaveBeenCalled();
+    expect(mockCount).toHaveBeenCalledWith(expect.objectContaining({ isExpired: false }));
+    expect(body.data).toHaveLength(1);
+    expect(body.pagination.totalPages).toBe(3);
   });
 
   // ── Validation errors ─────────────────────────────────────────────────────
@@ -521,17 +571,30 @@ describe("GET /api/offers", () => {
   });
 
   // ── estimatedDocumentCount optimisation ──────────────────────────────────
+  // estimatedDocumentCount() ignores any filter and counts the whole collection,
+  // so it's only accurate when `filter` is truly empty ({}). Any non-empty
+  // filter — including the common isExpired-only default — must use
+  // countDocuments(filter) for an accurate total (see 047 regression tests above).
 
-  it("uses estimatedDocumentCount for simple isExpired-only filter", async () => {
+  it("uses countDocuments (not estimated) for the default isExpired-only filter", async () => {
     await GET(makeRequest()); // no filters → filter = { isExpired: false }
-    expect(mockEstimatedCount).toHaveBeenCalled();
-    expect(mockCount).not.toHaveBeenCalled();
+    expect(mockCount).toHaveBeenCalled();
+    expect(mockEstimatedCount).not.toHaveBeenCalled();
   });
 
   it("uses countDocuments (not estimated) when additional filters are present", async () => {
     await GET(makeRequest({ bank: "hnb" })); // extra filter → needs exact count
     expect(mockCount).toHaveBeenCalled();
     expect(mockEstimatedCount).not.toHaveBeenCalled();
+  });
+
+  it("uses estimatedDocumentCount only when the filter is truly empty (includeExpired=true, no other filters)", async () => {
+    mockEstimatedCount.mockResolvedValue(45);
+    const res = await GET(makeRequest({ includeExpired: "true" })); // filter = {}
+    const body = await res.json();
+    expect(mockEstimatedCount).toHaveBeenCalled();
+    expect(mockCount).not.toHaveBeenCalled();
+    expect(body.pagination.total).toBe(45);
   });
 
   // ── Cache-Control header ──────────────────────────────────────────────────

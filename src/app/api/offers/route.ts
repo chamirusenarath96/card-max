@@ -265,12 +265,14 @@ export async function GET(request: NextRequest) {
         total = fallbackTotal;
       }
     } else {
-      // For the simplest query (only isExpired filter, no other dimensions) use
-      // estimatedDocumentCount() which reads collection metadata in O(1) instead
-      // of scanning every matching document.  Any additional filter must fall back
-      // to countDocuments() for an accurate count.
-      const isSimpleFilter =
-        Object.keys(filter).length === 1 && filter.isExpired === false;
+      // estimatedDocumentCount() reads collection metadata in O(1) but — unlike
+      // countDocuments() — it ignores whatever filter is passed to it and always
+      // counts every document in the collection. It's only accurate when `filter`
+      // is truly empty (includeExpired=true with no other dimension filters); the
+      // common isExpired-only case must use countDocuments(filter), otherwise total
+      // (and therefore totalPages) is inflated by expired offers, causing the last
+      // page to fall past the end of the actually-matching documents and render empty.
+      const isSimpleFilter = Object.keys(filter).length === 0;
 
       const [findRaw, findTotal] = await Promise.all([
         OfferModel.find(filter)

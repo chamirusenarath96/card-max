@@ -125,6 +125,22 @@ describe("OfferGrid", () => {
     expect(screen.getByTestId("offer-grid")).toBeInTheDocument();
   });
 
+  // 047 regression: last page of a multi-page result set (a partial page, not
+  // a full one) must render every offer the API returned — no client-side
+  // truncation or off-by-one causes them to be dropped after a correct API response.
+  it("renders all offers on a partial last page (047 regression)", () => {
+    const lastPageOffers: Offer[] = Array.from({ length: 5 }, (_, i) => ({
+      ...MOCK_OFFER,
+      _id: `last-page-${i}`,
+      merchant: `Merchant ${i}`,
+      title: `Offer ${i}`,
+    }));
+    const pagination = { page: 3, limit: 20, total: 45, totalPages: 3 };
+    render(<OfferGrid offers={lastPageOffers} pagination={pagination} />);
+    expect(screen.getAllByTestId("offer-card")).toHaveLength(5);
+    expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
+  });
+
   // T4 (spec 034): OfferGrid accepts pre-fetched offers and renders without async fetching.
   // The Suspense-compatible pattern: async data is resolved by the parent server component
   // (OfferGridContent in page.tsx); OfferGrid itself is a pure render-from-props component.

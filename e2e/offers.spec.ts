@@ -106,3 +106,112 @@ test.describe("Offer Listing (Feature 001)", () => {
     expect(capturedUrl).not.toContain("includeExpired=true");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 047 regression: last pagination page must render offers, not an empty grid.
+//
+// The offer fetch in src/app/page.tsx runs server-side (Next.js server
+// component fetching an absolute URL), not through the browser's network
+// stack — so `page.route()` interception (used above for the client-visible
+// SSR-or-empty-state pattern) cannot intercept it. These tests instead read
+// the *actual* pagination shape from the live `GET /api/offers` response
+// (this E2E job runs against a real database, see .github/workflows/ci.yml)
+// and drive the UI against that real last page, skipping gracefully if the
+// live data set doesn't currently span more than one page.
+// ---------------------------------------------------------------------------
+test.describe("Pagination — last page regression (Feature 047)", () => {
+  type LivePagination = { page: number; limit: number; total: number; totalPages: number };
+
+  /** Returns null (rather than throwing) when there's no live DB to query — resilient SSR pattern. */
+  async function fetchLivePagination(request: import("@playwright/test").APIRequestContext): Promise<LivePagination | null> {
+    const res = await request.get("/api/offers?limit=20");
+    if (!res.ok()) return null;
+    const body = (await res.json()) as { pagination?: LivePagination };
+    return body.pagination ?? null;
+  }
+
+  test("navigating directly to ?page={totalPages} via URL shows offer cards, not an empty state", async ({
+    page,
+    request,
+  }) => {
+    const pagination = await fetchLivePagination(request);
+    test.skip(!pagination || pagination.totalPages <= 1, "no live DB, or live data set doesn't span more than one page");
+    if (!pagination) return;
+
+    await page.goto(`/?page=${pagination.totalPages}`);
+    await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("empty-state")).not.toBeVisible();
+
+    const expectedOnLastPage = pagination.total - (pagination.totalPages - 1) * pagination.limit;
+    await expect(page.getByTestId("offer-card")).toHaveCount(expectedOnLastPage);
+  });
+
+  // Each iteration is a full hard navigation (PaginationNext renders a plain
+  // <a>, not next/link — see PaginationControls.tsx) that round-trips to the
+  // live DB. Walking every page of a growing production data set (577 offers
+  // = 29 pages today, and climbing daily via the crawler) blew well past
+  // Playwright's default 30s per-test timeout, failing the test outright
+  // regardless of whether pagination itself was correct. Bound the walk to a
+  // constant number of pages near the actual last-page boundary — where the
+  // 047 bug manifested — so runtime stays constant as the live data set grows.
+  const MAX_BOUNDARY_HOPS = 3;
+
+  test("clicking Next through to the last page shows offer cards, not an empty state", async ({ page, request }) => {
+    test.setTimeout(60_000);
+    const pagination = await fetchLivePagination(request);
+    test.skip(!pagination || pagination.totalPages <= 1, "no live DB, or live data set doesn't span more than one page");
+    if (!pagination) return;
+
+    const { totalPages } = pagination;
+    const startPage = Math.max(1, totalPages - MAX_BOUNDARY_HOPS);
+
+    await page.goto(startPage === 1 ? "/" : `/?page=${startPage}`);
+    await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
+
+    for (let p = startPage + 1; p <= totalPages; p++) {
+      await page.getByTestId("pagination-next").click();
+      await expect(page).toHaveURL(new RegExp(`page=${p}(&|$)`));
+      await expect(page.getByTestId("offer-grid")).toBeVisible();
+      await expect(page.getByTestId("empty-state")).not.toBeVisible();
+    }
+
+    const expectedOnLastPage = pagination.total - (totalPages - 1) * pagination.limit;
+    await expect(page.getByTestId("offer-card")).toHaveCount(expectedOnLastPage);
+  });
+
+  test("navigating through all pages never shows an unexpected empty page", async ({ page, request }) => {
+    test.setTimeout(60_000);
+    const pagination = await fetchLivePagination(request);
+    test.skip(!pagination || pagination.totalPages <= 1, "no live DB, or live data set doesn't span more than one page");
+    if (!pagination) return;
+
+    const { totalPages } = pagination;
+
+    // Sample the leading pages (via repeated Next clicks from page 1) …
+    const leadingPages = Math.min(totalPages, MAX_BOUNDARY_HOPS);
+    await page.goto("/");
+    for (let p = 1; p <= leadingPages; p++) {
+      if (p > 1) {
+        await page.getByTestId("pagination-next").click();
+        await expect(page).toHaveURL(new RegExp(`page=${p}(&|$)`));
+      }
+      await expect(page.getByTestId("offer-grid")).toBeVisible();
+      await expect(page.getByTestId("empty-state")).not.toBeVisible();
+    }
+
+    // … and the trailing pages up to the true last page, where 047 broke.
+    const trailingStart = Math.max(leadingPages + 1, totalPages - MAX_BOUNDARY_HOPS);
+    if (trailingStart <= totalPages) {
+      await page.goto(`/?page=${trailingStart}`);
+      await expect(page.getByTestId("offer-grid")).toBeVisible();
+      await expect(page.getByTestId("empty-state")).not.toBeVisible();
+
+      for (let p = trailingStart + 1; p <= totalPages; p++) {
+        await page.getByTestId("pagination-next").click();
+        await expect(page).toHaveURL(new RegExp(`page=${p}(&|$)`));
+        await expect(page.getByTestId("offer-grid")).toBeVisible();
+        await expect(page.getByTestId("empty-state")).not.toBeVisible();
+      }
+    }
+  });
+});
