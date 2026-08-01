@@ -139,6 +139,13 @@ GET /api/offers/[id]/similar      — new
       similar-offers response is empty
 - [x] AC11: All other existing search-drawer behavior (`freshSearch`, quick
       searches, jump-to-category, "See all N results") continues to work unchanged
+      — **note**: `SearchDrawer`'s trigger was already removed from the page header
+      before this spec was written (`dede5d3b4`, "remove search button from top
+      navigation bar"); it isn't reachable from any live page today. Its
+      quick-search/jump-to-category behavior is verified at the component level
+      (`SearchDrawer.test.tsx`, pre-existing) rather than e2e — matching the
+      existing precedent in `e2e/search.spec.ts`. Only the still-live HeroSearch
+      "See all N results" flow is covered by an e2e test here
 
 ## Test Cases
 
@@ -158,7 +165,7 @@ GET /api/offers/[id]/similar      — new
 | Similar Offers section hidden when API returns empty array | component | AC10 |
 | user searches, clicks a result, lands on detail page with similar offers visible | e2e | AC1, AC5, AC7 |
 | user navigates to an invalid offer id and sees the not-found page | e2e | AC2 |
-| existing "See all N results" and quick-search flows still work | e2e | AC11 |
+| existing "See all N results" flow (HeroSearch) still works | e2e | AC11 |
 
 ## Edge Cases
 - `_id` is not a valid ObjectId on either endpoint → 400 (detail) / 400 (similar);
