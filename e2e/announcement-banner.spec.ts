@@ -3,7 +3,10 @@
  * Spec: specs/features/045-announcement-banner.md
  *
  * The /api/announcements/active endpoint is mocked so no live DB is required.
- * localStorage is cleared before each test so dismissals don't bleed between runs.
+ * Each Playwright test runs in its own fresh browser context, so localStorage
+ * starts empty without needing an explicit clear — an addInitScript-based clear
+ * would re-run on every navigation, including page.reload(), and wipe out a
+ * dismissal set just before the reload.
  */
 import { test, expect } from "@playwright/test";
 
@@ -12,12 +15,6 @@ const MOCK_ANNOUNCEMENT = {
   message: "New feature: filter presets are here!",
   active: true,
 };
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.removeItem("card-max:dismissed-announcement");
-  });
-});
 
 test.describe("Announcement Banner (Feature 045)", () => {
   test("user sees the banner, dismisses it, and it stays hidden after reload (AC3, AC4)", async ({
