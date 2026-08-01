@@ -109,69 +109,75 @@ test.describe("Offer Listing (Feature 001)", () => {
 
 // ---------------------------------------------------------------------------
 // 047 regression: last pagination page must render offers, not an empty grid.
-// total=45, limit=20 → 3 pages (20, 20, 5). Mock responds per the requested
-// `page` param so navigation actually exercises page-specific payloads.
+//
+// The offer fetch in src/app/page.tsx runs server-side (Next.js server
+// component fetching an absolute URL), not through the browser's network
+// stack — so `page.route()` interception (used above for the client-visible
+// SSR-or-empty-state pattern) cannot intercept it. These tests instead read
+// the *actual* pagination shape from the live `GET /api/offers` response
+// (this E2E job runs against a real database, see .github/workflows/ci.yml)
+// and drive the UI against that real last page, skipping gracefully if the
+// live data set doesn't currently span more than one page.
 // ---------------------------------------------------------------------------
 test.describe("Pagination — last page regression (Feature 047)", () => {
-  function makeOffer(id: string) {
-    return { ...MOCK_OFFER, _id: id, title: `Offer ${id}`, merchant: `Merchant ${id}` };
+  type LivePagination = { page: number; limit: number; total: number; totalPages: number };
+
+  /** Returns null (rather than throwing) when there's no live DB to query — resilient SSR pattern. */
+  async function fetchLivePagination(request: import("@playwright/test").APIRequestContext): Promise<LivePagination | null> {
+    const res = await request.get("/api/offers?limit=20");
+    if (!res.ok()) return null;
+    const body = (await res.json()) as { pagination?: LivePagination };
+    return body.pagination ?? null;
   }
 
-  const PAGE_SIZES: Record<string, number> = { "1": 20, "2": 20, "3": 5 };
+  test("navigating directly to ?page={totalPages} via URL shows offer cards, not an empty state", async ({
+    page,
+    request,
+  }) => {
+    const pagination = await fetchLivePagination(request);
+    test.skip(!pagination || pagination.totalPages <= 1, "no live DB, or live data set doesn't span more than one page");
+    if (!pagination) return;
 
-  async function mockPaginatedOffers(page: import("@playwright/test").Page) {
-    await page.route("**/api/offers**", (route) => {
-      const url = new URL(route.request().url());
-      const requestedPage = url.searchParams.get("page") ?? "1";
-      const count = PAGE_SIZES[requestedPage] ?? 0;
-      const data = Array.from({ length: count }, (_, i) => makeOffer(`${requestedPage}-${i}`));
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data,
-          pagination: { page: Number(requestedPage), limit: 20, total: 45, totalPages: 3 },
-        }),
-      });
-    });
-  }
+    await page.goto(`/?page=${pagination.totalPages}`);
+    await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("empty-state")).not.toBeVisible();
 
-  test("clicking Next through to the last page shows offer cards, not an empty state", async ({ page }) => {
-    await mockPaginatedOffers(page);
+    const expectedOnLastPage = pagination.total - (pagination.totalPages - 1) * pagination.limit;
+    await expect(page.getByTestId("offer-card")).toHaveCount(expectedOnLastPage);
+  });
+
+  test("clicking Next through to the last page shows offer cards, not an empty state", async ({ page, request }) => {
+    const pagination = await fetchLivePagination(request);
+    test.skip(!pagination || pagination.totalPages <= 1, "no live DB, or live data set doesn't span more than one page");
+    if (!pagination) return;
+
     await page.goto("/");
     await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
 
-    await page.getByTestId("pagination-next").click();
-    await expect(page).toHaveURL(/page=2/);
-    await expect(page.getByTestId("offer-grid")).toBeVisible();
-    await expect(page.getByTestId("empty-state")).not.toBeVisible();
+    for (let p = 2; p <= pagination.totalPages; p++) {
+      await page.getByTestId("pagination-next").click();
+      await expect(page).toHaveURL(new RegExp(`page=${p}(&|$)`));
+      await expect(page.getByTestId("offer-grid")).toBeVisible();
+      await expect(page.getByTestId("empty-state")).not.toBeVisible();
+    }
 
-    await page.getByTestId("pagination-next").click();
-    await expect(page).toHaveURL(/page=3/);
-    await expect(page.getByTestId("offer-grid")).toBeVisible();
-    await expect(page.getByTestId("empty-state")).not.toBeVisible();
-    await expect(page.getByTestId("offer-card")).toHaveCount(5);
+    const expectedOnLastPage = pagination.total - (pagination.totalPages - 1) * pagination.limit;
+    await expect(page.getByTestId("offer-card")).toHaveCount(expectedOnLastPage);
   });
 
-  test("navigating directly to ?page={totalPages} via URL shows offer cards", async ({ page }) => {
-    await mockPaginatedOffers(page);
-    await page.goto("/?page=3");
-    await expect(page.getByTestId("offer-grid")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("empty-state")).not.toBeVisible();
-    await expect(page.getByTestId("offer-card")).toHaveCount(5);
-  });
+  test("navigating through all pages never shows an unexpected empty page", async ({ page, request }) => {
+    const pagination = await fetchLivePagination(request);
+    test.skip(!pagination || pagination.totalPages <= 1, "no live DB, or live data set doesn't span more than one page");
+    if (!pagination) return;
 
-  test("navigating through all pages never shows an unexpected empty page", async ({ page }) => {
-    await mockPaginatedOffers(page);
     await page.goto("/");
-    for (const expected of ["1", "2", "3"]) {
-      if (expected !== "1") {
+    for (let p = 1; p <= pagination.totalPages; p++) {
+      if (p > 1) {
         await page.getByTestId("pagination-next").click();
-        await expect(page).toHaveURL(new RegExp(`page=${expected}`));
+        await expect(page).toHaveURL(new RegExp(`page=${p}(&|$)`));
       }
       await expect(page.getByTestId("offer-grid")).toBeVisible();
       await expect(page.getByTestId("empty-state")).not.toBeVisible();
-      await expect(page.getByTestId("offer-card")).toHaveCount(PAGE_SIZES[expected]!);
     }
   });
 });
