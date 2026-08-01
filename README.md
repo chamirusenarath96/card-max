@@ -42,6 +42,9 @@
     - [How this project uses each layer](#how-this-project-uses-each-layer)
     - [How revalidation works after a crawler run](#how-revalidation-works-after-a-crawler-run)
 12. [Known Limitations & Roadmap](#known-limitations--roadmap)
+13. [Spec-Driven Development & Automation](#spec-driven-development--automation)
+    - [GitHub Spec Kit](#github-spec-kit)
+    - [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)
 
 ---
 
@@ -1422,3 +1425,53 @@ All feature specs live in `specs/`:
 | `specs/features/002-crawler.md` | Crawler pipeline + per-bank scraper interface |
 | `specs/features/003-search.md` | Keyword search |
 | `specs/features/004-performance.md` | Performance targets + optimization plan |
+
+---
+
+## Spec-Driven Development & Automation
+
+### GitHub Spec Kit
+
+Alongside the plain `specs/features/NNN-slug.md` convention above, this repo has
+[GitHub Spec Kit](https://github.com/github/spec-kit) installed — the same tooling used
+in this org's other projects. It lives in `.specify/` (scripts, templates, project
+constitution) and `.claude/skills/speckit-*` (10 Claude Code skills: `specify`,
+`clarify`, `plan`, `tasks`, `checklist`, `analyze`, `implement`, `converge`,
+`constitution`, `taskstoissues`). Use it for larger or more ambiguous features that
+benefit from an explicit spec → clarify → plan → tasks → implement pipeline
+(`specs/<NNN>-<slug>/spec.md` + `plan.md` + `tasks.md`); keep using a single
+`specs/features/NNN-slug.md` file for small, well-understood changes. Both conventions
+coexist — spec-kit never touches `specs/features/`. The project constitution at
+`.specify/memory/constitution.md` condenses the same rules as `CLAUDE.md` (spec-first,
+test-every-change, Zod as source of truth, no raw MongoDB) for spec-kit's own workflow
+to enforce.
+
+### Issue → Spec → Implementation lifecycle
+
+Two scheduled agents keep the backlog moving autonomously, driven entirely by GitHub
+Issue labels:
+
+```
+(untriaged issue) ──spec-writer──▶ spec-drafted ──human, manual──▶ approved ──implementer──▶ in-progress ──implementer──▶ closed
+```
+
+1. A feature or bug starts as a plain GitHub issue — just a short description, no label.
+2. **`card-max-spec-writer`** (every 12h) finds untriaged open issues, drafts a full spec
+   for each under `specs/features/`, commits it straight to `master` (spec-only commits
+   are allowed directly per the Git Conventions below), then comments on the issue with
+   a link to the spec and labels it `spec-drafted`.
+3. **A human reviews the drafted spec and manually relabels the issue `approved`** — this
+   is the only manual gate in the whole pipeline; nothing is implemented without it.
+4. **`card-max-implementer`** (hourly) only ever acts on issues labeled `approved`. It
+   flips the label to `in-progress`, implements the spec on a `feat/NNN-slug` branch,
+   writes the required tests, runs all four local verification gates, opens a PR, polls
+   CI to completion, squash-merges once everything passes, and closes the issue. It also
+   recovers stale `in-progress` issues left over from a run that died mid-way (resumes
+   the existing PR, or reverts the label to `approved` if no branch/PR exists).
+
+The 41 specs that predate this workflow have no linked issue; they're tracked instead by
+an unchecked `- [ ]` item in the [Roadmap](#known-limitations--roadmap) above, which both
+agents fall back to when no `approved`-labeled issue is available.
+
+Full agent prompts and label definitions (`spec-drafted`, `approved`, `in-progress`) live
+in the "Scheduled Automation" section of `CLAUDE.md`.

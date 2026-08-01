@@ -12,6 +12,35 @@
 - API contracts are defined in `specs/api/openapi.yaml`
 - Feature specs follow the template in `specs/features/_template.md`
 
+### GitHub Spec Kit (`/speckit-*` skills)
+
+This repo also has [GitHub Spec Kit](https://github.com/github/spec-kit) installed
+(`.specify/` + `.claude/skills/speckit-*`), the same tooling used in `autoshop-takumi`.
+Use it for larger or more ambiguous features that benefit from an explicit
+spec → clarify → plan → tasks → implement pipeline; keep using a plain
+`specs/features/NNN-slug.md` file (per the template above) for small, well-understood
+changes. Both conventions coexist under `/specs/` — spec-kit creates its own
+`specs/<NNN>-<slug>/` directories and never touches `specs/features/`.
+
+| Skill | Use when |
+|-------|----------|
+| `/speckit-constitution` | Amending `.specify/memory/constitution.md` (project principles/governance) |
+| `/speckit-specify` | Starting a new feature from a natural-language description → `specs/<NNN>-<slug>/spec.md` |
+| `/speckit-clarify` | Resolving ambiguity in a spec before planning (max 5 targeted questions) |
+| `/speckit-plan` | Generating `plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md` |
+| `/speckit-tasks` | Generating a dependency-ordered `tasks.md` from spec + plan |
+| `/speckit-checklist` | Generating a requirements-quality checklist (not a test plan) for a feature |
+| `/speckit-analyze` | Read-only cross-check of spec/plan/tasks for gaps, ambiguity, constitution violations |
+| `/speckit-implement` | Executing `tasks.md` end-to-end |
+| `/speckit-converge` | After `/speckit-implement`, appending any remaining unbuilt work as new tasks |
+| `/speckit-taskstoissues` | Converting `tasks.md` into GitHub issues |
+
+The project constitution lives at `.specify/memory/constitution.md` — it summarizes
+the same rules as this file (spec-first, test-every-change, Zod as source of truth,
+no raw MongoDB, etc.) for spec-kit's own workflow to enforce. When the two disagree,
+this file (`CLAUDE.md`) is authoritative — treat the mismatch as a sign the
+constitution needs amending via `/speckit-constitution`.
+
 ## Architecture
 ```
 Next.js 16 (App Router) on Vercel
@@ -331,12 +360,24 @@ All four jobs must show `conclusion: success` before a feature is considered shi
 
 ## Scheduled Automation
 
-Two scheduled agents maintain the project autonomously:
+Two scheduled agents maintain the project autonomously, driven by a **GitHub Issue lifecycle**:
+
+```
+(untriaged issue) ──spec-writer──▶ spec-drafted ──human, manual──▶ approved ──implementer──▶ in-progress ──implementer──▶ closed
+```
+
+- Every feature/bug starts as a plain GitHub issue (short description, no label).
+- `card-max-spec-writer` drafts a spec for it, links the spec back to the issue with a `**GitHub Issue**: #N` line in the spec file, comments on the issue with the spec path, and labels it `spec-drafted`.
+- **A human reviews the spec and manually swaps the label to `approved`** — this is the only manual gate in the pipeline; nothing is implemented without it.
+- `card-max-implementer` only ever picks up issues labeled `approved`, flips them to `in-progress` while it works, and closes the issue once the PR is merged. It also has a recovery check for stale `in-progress` issues left over from a run that failed mid-way.
+- The 41 specs written before this workflow existed (no `**GitHub Issue**` line) fall back to the legacy signal: an unchecked `- [ ]` item in `README.md`'s "Known Limitations & Roadmap" section.
 
 | Task ID | Schedule | Purpose |
 |---------|----------|---------|
-| `card-max-spec-writer` | Every 12 hours | Reads README roadmap → writes missing specs → commits to master |
-| `card-max-implementer` | Every hour | Picks lowest unimplemented spec → implements → tests → verifies CI → marks README done |
+| `card-max-spec-writer` | Every 12 hours | Finds untriaged open issues → drafts a spec for each → commits spec-only changes to master → comments + labels the issue `spec-drafted`. Never touches `approved`/`in-progress` labels or closes issues. |
+| `card-max-implementer` | Every hour | Picks the oldest issue labeled `approved` → implements → tests → verifies CI → merges the PR → closes the issue |
+
+Labels used: `spec-drafted`, `approved`, `in-progress` — created automatically by `card-max-spec-writer` on first run if they don't already exist on the repo.
 
 Both tasks read this file (`CLAUDE.md`) and the `.claude/commands/` directory for implementation guidance. Do not duplicate rules here that are already in those command files.
 
