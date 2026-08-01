@@ -3,11 +3,11 @@
 **GitHub Issue**: #81
 
 ## Status
-- [ ] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec drafted
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Give users a dedicated page for a single offer, reached from search results, showing
@@ -114,26 +114,30 @@ GET /api/offers/[id]/similar      — new
   details right), consistent with spec 005's original layout intent
 
 ## Acceptance Criteria
-- [ ] AC1: `/offers/[id]` renders merchant name, discount label, validity, category,
+- [x] AC1: `/offers/[id]` renders merchant name, discount label, validity, category,
       and bank for a valid id
-- [ ] AC2: `/offers/[id]` shows a 404 (`not-found.tsx`) for an invalid or unknown id
-- [ ] AC3: "View Original Offer" links to `offer.sourceUrl`, opens in a new tab, with
+- [x] AC2: `/offers/[id]` shows a 404 (`not-found.tsx`) for an invalid or unknown id
+- [x] AC3: "View Original Offer" links to `offer.sourceUrl`, opens in a new tab, with
       `rel="noopener noreferrer"`
-- [ ] AC4: "← All Offers" link navigates back to `/`
-- [ ] AC5: Clicking a `SearchDrawer` result row navigates to `/offers/<id>` (not a
+- [x] AC4: "← All Offers" link navigates back to `/`
+- [x] AC5: Clicking a `SearchDrawer` result row navigates to `/offers/<id>` (not a
       freetext search)
-- [ ] AC6: The existing offer-card CTAs (`OfferCardDefault`/`Compact`/`Expanded`)
-      remain unchanged, still linking directly to `sourceUrl` (spec 024 behavior
-      preserved)
-- [ ] AC7: `GET /api/offers/[id]/similar` returns offers sharing the source offer's
+- [x] AC6: The existing offer-card CTAs (`OfferCardDefault`/`Compact`/`Expanded`)
+      remain unchanged — **note**: spec 024's external `sourceUrl` CTA was already
+      removed by a later commit (`caf5c85fd`, "was opening broken/unreliable bank
+      pages") before this spec was written; cards currently render no CTA link at
+      all, and this spec does not reintroduce one. AC6 is satisfied as "cards
+      unchanged by this spec" rather than "cards still link to sourceUrl" — see the
+      regression test in `OfferCard.test.tsx`
+- [x] AC7: `GET /api/offers/[id]/similar` returns offers sharing the source offer's
       `category` whose validity windows overlap the source offer's window
-- [ ] AC8: `GET /api/offers/[id]/similar` excludes the source offer itself from its
+- [x] AC8: `GET /api/offers/[id]/similar` excludes the source offer itself from its
       own similar-offers list
-- [ ] AC9: `GET /api/offers/[id]/similar` returns 404 when the source id doesn't
+- [x] AC9: `GET /api/offers/[id]/similar` returns 404 when the source id doesn't
       exist
-- [ ] AC10: The detail page's "Similar Offers" section is hidden entirely when the
+- [x] AC10: The detail page's "Similar Offers" section is hidden entirely when the
       similar-offers response is empty
-- [ ] AC11: All other existing search-drawer behavior (`freshSearch`, quick
+- [x] AC11: All other existing search-drawer behavior (`freshSearch`, quick
       searches, jump-to-category, "See all N results") continues to work unchanged
 
 ## Test Cases

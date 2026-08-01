@@ -255,7 +255,7 @@ describe("HeroSearch", () => {
     expect(screen.getByTestId("search-see-all")).toHaveTextContent("42");
   });
 
-  it("clicking a result navigates in-app with the offer title as the search query", () => {
+  it("clicking a result navigates to the offer's detail page", () => {
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
       total: 2,
@@ -265,9 +265,7 @@ describe("HeroSearch", () => {
     render(<HeroSearch initialQuery="ke" />);
     const items = screen.getAllByTestId("search-result-item");
     fireEvent.click(items[0]);
-    expect(mockNavigate).toHaveBeenCalledWith(
-      expect.stringContaining(new URLSearchParams({ q: MOCK_RESULTS[0].title }).toString()),
-    );
+    expect(mockNavigate).toHaveBeenCalledWith(`/offers/${MOCK_RESULTS[0]!._id}`);
   });
 
   // --- Clear button ---

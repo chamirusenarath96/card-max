@@ -104,9 +104,10 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
     navigate(params as Record<string, string | null>);
   }
 
-  function handleResultClick(title: string) {
-    setQuery(title);
-    freshSearch(title); // result click = new intent, clear existing filters
+  /** Result-row click navigates straight to the offer's detail page. */
+  function handleResultClick(id: string) {
+    router.push(`/offers/${id}`);
+    setOpen(false);
   }
 
   return (
@@ -195,7 +196,7 @@ export function SearchDrawer({ initialQuery = "" }: Props) {
                       key={item._id}
                       type="button"
                       data-testid="drawer-result-item"
-                      onClick={() => handleResultClick(item.title)}
+                      onClick={() => handleResultClick(item._id)}
                       className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent focus:bg-accent focus:outline-none"
                     >
                       <Search

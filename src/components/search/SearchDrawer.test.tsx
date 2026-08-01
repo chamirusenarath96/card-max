@@ -254,7 +254,7 @@ describe("SearchDrawer", () => {
     expect(screen.getByTestId("drawer-see-all")).toHaveTextContent("100");
   });
 
-  it("clicking a drawer result navigates and closes drawer", () => {
+  it("clicking a drawer result navigates to the offer detail page and closes drawer", () => {
     mockUseSearchSuggestions.mockReturnValue({
       results: MOCK_RESULTS,
       total: 2,
@@ -265,7 +265,7 @@ describe("SearchDrawer", () => {
     fireEvent.click(screen.getByTestId("search-drawer-trigger"));
     const items = screen.getAllByTestId("drawer-result-item");
     fireEvent.click(items[0]);
-    expect(mockPush).toHaveBeenCalledWith("/?q=20%25+off+at+Keells");
+    expect(mockPush).toHaveBeenCalledWith(`/offers/${MOCK_RESULTS[0]!._id}`);
     expect(screen.queryByTestId("search-drawer-input")).not.toBeInTheDocument();
   });
 
