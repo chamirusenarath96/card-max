@@ -87,8 +87,8 @@ async function main(): Promise<void> {
     process.exit(1);
     return;
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("[enrichment] ANTHROPIC_API_KEY environment variable is required");
+  if (!process.env.GEMINI_API_KEY) {
+    console.error("[enrichment] GEMINI_API_KEY environment variable is required");
     process.exit(1);
     return;
   }

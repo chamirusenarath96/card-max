@@ -85,7 +85,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — Redis for API rate limiting (omit locally to skip)
 - `VERCEL_REVALIDATION_SECRET` — protects the `/api/revalidate` ISR endpoint
 - `BRANDFETCH_API_KEY` — secondary logo fallback (free tier: 50 calls/month)
-- `ANTHROPIC_API_KEY` — Claude API key for the AI offer-enrichment workflow (`crawler/enrichment/run.ts`)
+- `GEMINI_API_KEY` — Google Gemini API key for the AI offer-enrichment workflow (`crawler/enrichment/run.ts`) — free-tier eligible, see #95
 - `GITHUB_FEEDBACK_TOKEN` — GitHub PAT with `issues:write` scope; used to create issues from feedback
 - `GITHUB_REPO_OWNER` / `GITHUB_REPO_NAME` — defaults to `chamirusenarath96` / `card-max`
 

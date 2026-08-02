@@ -13,12 +13,15 @@ on:
   # Manual trigger from GitHub Actions UI (useful for retrying/backfilling)
   workflow_dispatch:
 
+permissions:
+  issues: write  # required so the "Notify on failure" step can open an issue (#98)
+
 jobs:
   enrich:
     name: Enrich Pending/Failed Offers
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: Production  # grants access to MONGODB_URI and ANTHROPIC_API_KEY secrets
+    environment: Production  # grants access to MONGODB_URI and GEMINI_API_KEY secrets
 
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +39,7 @@ jobs:
         run: npm run enrich
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Notify on failure (open GitHub Issue)
         if: failure()
@@ -55,9 +58,9 @@ jobs:
                 `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                 '',
                 '### Checklist',
-                '- [ ] Check MONGODB_URI / ANTHROPIC_API_KEY secrets are still valid',
+                '- [ ] Check MONGODB_URI / GEMINI_API_KEY secrets are still valid',
                 '- [ ] Check MongoDB Atlas connectivity',
-                '- [ ] Check Anthropic API status',
+                '- [ ] Check Gemini API status',
                 '- [ ] Re-run workflow manually once fixed — pending/failed offers are retried automatically',
               ].join('\n'),
               labels: ['bug', 'enrichment']

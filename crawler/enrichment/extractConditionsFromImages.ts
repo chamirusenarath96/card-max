@@ -1,14 +1,14 @@
 /**
  * Finds candidate offer images on a source page and extracts any visible
- * terms/dates/conditions text from them via Claude's vision capability.
+ * terms/dates/conditions text from them via Gemini's vision capability.
  * Spec: specs/features/044-ai-offer-enrichment.md (AC5, Edge Cases)
  *
  * Bounded per-offer cost/time budget: at most MAX_IMAGES images, each capped
  * at MAX_IMAGE_BYTES — an offer with excessive/oversized images degrades to
  * skipping the extras rather than stalling the pipeline.
  */
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, ENRICHMENT_MODEL } from "./anthropicClient";
+import { createPartFromBase64, createUserContent } from "@google/genai";
+import { getGeminiClient, ENRICHMENT_MODEL } from "./geminiClient";
 
 const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -112,28 +112,16 @@ async function describeImage(image: {
   data: string;
   mediaType: SupportedMediaType;
 }): Promise<string | undefined> {
-  const client = getAnthropicClient();
+  const client = getGeminiClient();
 
-  const response = await client.messages.create({
+  const response = await client.models.generateContent({
     model: ENRICHMENT_MODEL,
-    max_tokens: 300,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: image.mediaType, data: image.data },
-          },
-          { type: "text", text: VISION_PROMPT },
-        ],
-      },
-    ],
+    contents: createUserContent([
+      createPartFromBase64(image.data, image.mediaType),
+      VISION_PROMPT,
+    ]),
+    config: { maxOutputTokens: 300 },
   });
 
-  return response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join(" ")
-    .trim();
+  return response.text?.trim();
 }
