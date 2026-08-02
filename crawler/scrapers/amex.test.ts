@@ -114,6 +114,46 @@ const LONG_CONDITIONS_HTML = `
 </body></html>
 `;
 
+const HOTEL_DETAIL_URL = "https://www.americanexpress.lk/en/offers/lodging-offers/city-hotel";
+
+/** Merchant matching the old "lodging" keyword pattern (spec 048 — now maps to "travel") */
+const HOTEL_HTML = `
+<html><body>
+<div class="alloffer-box">
+  <a href="${HOTEL_DETAIL_URL}" class="alloffer-box-inner">
+    <div class="alloffer-image">
+      <div class="value-limit"><span>20% Off</span></div>
+    </div>
+    <div class="alloffer-text">
+      <div class="alloffer-heading">City Hotel</div>
+      <div class="offer-location"></div>
+      <div>Enjoy a relaxing stay at our resort. Valid till 31st May 2026.</div>
+    </div>
+  </a>
+</div>
+</body></html>
+`;
+
+const FASHION_DETAIL_URL = "https://www.americanexpress.lk/en/offers/clothing-offers/fashion-trends";
+
+/** Merchant matching the old "clothing" keyword pattern (spec 048 — now maps to "shopping") */
+const FASHION_HTML = `
+<html><body>
+<div class="alloffer-box">
+  <a href="${FASHION_DETAIL_URL}" class="alloffer-box-inner">
+    <div class="alloffer-image">
+      <div class="value-limit"><span>15% Off</span></div>
+    </div>
+    <div class="alloffer-text">
+      <div class="alloffer-heading">Fashion Trends</div>
+      <div class="offer-location"></div>
+      <div>15% off on clothing and apparel. Valid till 31st May 2026.</div>
+    </div>
+  </a>
+</div>
+</body></html>
+`;
+
 /** Incapsula block page */
 const BLOCK_HTML = `<html><body>Incapsula incident ID 99999 blocked</body></html>`;
 
@@ -284,5 +324,26 @@ describe("amex scraper (HTTP)", () => {
     expect(offers[0]!.merchant).toBe("Long Text Cafe");
     expect(offers[0]!.description).toBeDefined();
     expect(offers[0]!.description!.length).toBeLessThanOrEqual(2000);
+  });
+
+  // spec 048 — "lodging" and "clothing" were merged into "travel" and "shopping"
+  it("classifies hotel/resort merchants as travel, not the removed lodging category", async () => {
+    vi.mocked(fetchHtmlSessioned).mockResolvedValue(HOTEL_HTML);
+
+    const offers = await scrape();
+
+    expect(offers.length).toBeGreaterThan(0);
+    expect(offers[0]!.merchant).toBe("City Hotel");
+    expect(offers[0]!.category).toBe("travel");
+  });
+
+  it("classifies clothing/apparel merchants as shopping, not the removed clothing category", async () => {
+    vi.mocked(fetchHtmlSessioned).mockResolvedValue(FASHION_HTML);
+
+    const offers = await scrape();
+
+    expect(offers.length).toBeGreaterThan(0);
+    expect(offers[0]!.merchant).toBe("Fashion Trends");
+    expect(offers[0]!.category).toBe("shopping");
   });
 });

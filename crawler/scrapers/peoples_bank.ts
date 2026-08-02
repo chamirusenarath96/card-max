@@ -386,7 +386,7 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
 function detectCategory(merchant: string, text: string): OfferInput["category"] | null {
   const t = `${merchant} ${text}`.toLowerCase();
   if (/dining|restaurant|\bfood\b|pizza|burger|cafe|bistro/.test(t)) return "dining";
-  if (/hotel|resort|accommodation|stay|lodge|leisure/.test(t)) return "lodging";
+  if (/hotel|resort|accommodation|stay|lodge|leisure/.test(t)) return "travel";
   if (/travel|flight|airline|holiday/.test(t)) return "travel";
   if (/fuel|petrol|gas\s+station/.test(t)) return "fuel";
   if (/grocery|supermarket|keells|cargills|food\s+city|glomark|spar/.test(t)) return "groceries";
@@ -394,7 +394,7 @@ function detectCategory(merchant: string, text: string): OfferInput["category"] 
   if (/wellness|spa|beauty|salon/.test(t)) return "wellness";
   if (/hospital|pharmacy|health|medical|clinic/.test(t)) return "healthcare";
   if (/online|e-commerce|digital/.test(t)) return "online";
-  if (/clothing|fashion|apparel|wear/.test(t)) return "clothing";
+  if (/clothing|fashion|apparel|wear/.test(t)) return "shopping";
   if (/home|furniture|appliance|electronic|hardware/.test(t)) return "homecare";
   if (/shopping|retail|boutique|jewel/.test(t)) return "shopping";
   return null;
