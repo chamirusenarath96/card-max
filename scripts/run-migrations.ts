@@ -53,6 +53,17 @@ const MigrationModel =
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Filters a directory listing down to runnable migration scripts, in run order.
+ * Excludes colocated `*.test.ts` files — `migrate-*.ts` also matches those,
+ * and spawning a vitest test file as a migration script crashes at startup.
+ */
+export function discoverMigrationFiles(files: string[]): string[] {
+  return files
+    .filter((f) => f.startsWith("migrate-") && f.endsWith(".ts") && !f.endsWith(".test.ts"))
+    .sort();
+}
+
 async function getAppliedMigrations(): Promise<Set<string>> {
   const docs = await MigrationModel.find({}, "name").lean();
   return new Set(docs.map((d) => d.name));
@@ -78,10 +89,8 @@ async function main(): Promise<void> {
   // 1. Which migrations have already been applied?
   const applied = await getAppliedMigrations();
 
-  // 2. Discover all migrate-*.ts files in this directory
-  const allFiles = readdirSync(__dirname)
-    .filter((f) => f.startsWith("migrate-") && f.endsWith(".ts"))
-    .sort(); // alphabetical order — prefix with a date or sequence number to control order
+  // 2. Discover all migrate-*.ts files in this directory (alphabetical = run order)
+  const allFiles = discoverMigrationFiles(readdirSync(__dirname));
 
   // 3. Only run scripts that haven't been recorded yet
   const pending = allFiles.filter((f) => !applied.has(f.replace(/\.ts$/, "")));
@@ -125,7 +134,12 @@ async function main(): Promise<void> {
   await mongoose.disconnect();
 }
 
-main().catch((err) => {
-  console.error("[migrations] Fatal error:", err);
-  process.exit(1);
-});
+// Only auto-run when executed directly (`tsx scripts/run-migrations.ts`), not
+// when imported — lets scripts/run-migrations.test.ts import discoverMigrationFiles
+// without triggering a real MongoDB connection attempt.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error("[migrations] Fatal error:", err);
+    process.exit(1);
+  });
+}
