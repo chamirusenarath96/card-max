@@ -16,13 +16,17 @@ export const BankSchema = z.enum([
   "bank_of_ceylon",
 ]);
 
+/**
+ * Consolidated category set (spec 048) — `lodging` merged into `travel` and
+ * `clothing` merged into `shopping`; see README's category mapping table for
+ * the full audit and reasoning. `wellness` and `healthcare` remain distinct
+ * (confirmed semantically different by scraper source taxonomies).
+ */
 export const CategorySchema = z.enum([
   "dining",
   "shopping",
   "travel",
-  "lodging",
   "homecare",
-  "clothing",
   "fuel",
   "groceries",
   "entertainment",

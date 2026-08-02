@@ -75,6 +75,42 @@ const NO_PROMOTIONS_HTML = `
 </body></html>
 `;
 
+/** Merchants matching the old "lodging"/"clothing" keyword patterns (spec 048) */
+const CONSOLIDATED_CATEGORY_HTML = `
+<!DOCTYPE html><html><body>
+<section>
+  <article class="offer-card" role="article">
+    <div class="discount-badge">20%</div>
+    <div class="offer-image">
+      <a href="https://www.peoplesbank.lk/promotion/city-hotel-20-off/">
+        <img src="https://www.peoplesbank.lk/roastoth/hotel.jpg" alt="City Hotel" />
+      </a>
+    </div>
+    <div class="card-content">
+      <div class="promo-short fw-medium">City Hotel</div>
+      <div class="meta">
+        <span class="merchant-name">Enjoy a relaxing stay at our resort</span>
+      </div>
+    </div>
+  </article>
+  <article class="offer-card" role="article">
+    <div class="discount-badge">15%</div>
+    <div class="offer-image">
+      <a href="https://www.peoplesbank.lk/promotion/fashion-trends-15-off/">
+        <img src="https://www.peoplesbank.lk/roastoth/fashion.jpg" alt="Fashion Trends" />
+      </a>
+    </div>
+    <div class="card-content">
+      <div class="promo-short fw-medium">Fashion Trends</div>
+      <div class="meta">
+        <span class="merchant-name">15% off on clothing and apparel</span>
+      </div>
+    </div>
+  </article>
+</section>
+</body></html>
+`;
+
 /**
  * Page with staff-directory popup modals (sgpb-main-popup-data-container).
  * The popup divs contain Tamil-script manager names in <h2> elements.
@@ -266,5 +302,26 @@ describe("peoples_bank scraper", () => {
 
     const keells = offers.find((o) => o.merchant === "Keells");
     expect(keells?.category).toBe("groceries");
+  });
+
+  // spec 048 — "lodging" and "clothing" were merged into "travel" and "shopping"
+  it("classifies hotel/resort merchants as travel, not the removed lodging category", async () => {
+    vi.mocked(fetchHtml).mockResolvedValueOnce(CONSOLIDATED_CATEGORY_HTML);
+    vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+    const offers = await scrape();
+
+    const hotel = offers.find((o) => o.merchant === "City Hotel");
+    expect(hotel?.category).toBe("travel");
+  });
+
+  it("classifies clothing/apparel merchants as shopping, not the removed clothing category", async () => {
+    vi.mocked(fetchHtml).mockResolvedValueOnce(CONSOLIDATED_CATEGORY_HTML);
+    vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+    const offers = await scrape();
+
+    const fashion = offers.find((o) => o.merchant === "Fashion Trends");
+    expect(fashion?.category).toBe("shopping");
   });
 });

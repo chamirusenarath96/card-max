@@ -17,6 +17,7 @@
    - [Crawler Pipeline](#crawler-pipeline)
    - [Alternative & Agentic Approaches](#alternative--agentic-approaches)
 4. [Data Model](#data-model)
+   - [Category Consolidation](#category-consolidation-spec-048)
 5. [Frontend Architecture](#frontend-architecture)
 6. [API Reference](#api-reference)
 7. [Getting Started](#getting-started)
@@ -481,10 +482,10 @@ interface Offer {
   discountPercentage?: number; // populated for percentage and cashback
   discountLabel?: string;      // original human-readable string
 
-  // 14 categories — aligned with AmEx NTB taxonomy
-  category: "dining" | "shopping" | "travel" | "lodging" | "homecare"
-          | "clothing" | "fuel" | "groceries" | "entertainment"
-          | "wellness" | "healthcare" | "installments" | "online" | "other";
+  // 12 consolidated categories (spec 048) — see "Category Consolidation" below
+  category: "dining" | "shopping" | "travel" | "homecare" | "fuel"
+          | "groceries" | "entertainment" | "wellness" | "healthcare"
+          | "installments" | "online" | "other";
   merchant: string;
   merchantLogoUrl?: string;   // scraped URL → Clearbit → category icon fallback
 
@@ -508,6 +509,30 @@ interface Offer {
 { bank: 1, merchant: 1, title: 1 }        — upsert dedup key
 { title: "text", description: "text", merchant: "text" }  — full-text search
 ```
+
+### Category Consolidation (spec 048)
+
+The original 14-value `CategorySchema` had overlapping categories that fragmented
+the category filter UI (spec 030). An audit against real per-category offer counts
+(`GET /api/categories`) and each scraper's own category-mapping logic (which bank
+category strings/URL slugs already resolved to which value) found two genuine merges:
+
+| Old category | New category | Reasoning |
+|---|---|---|
+| `lodging` | `travel` | Hotels/resorts are a subset of travel spending (confirmed by issue #83); Sampath's own scraper already maps `hotel`/`hotels`/`leisure`/`travel_and_leisure` straight to `travel`. |
+| `clothing` | `shopping` | Apparel/fashion retail is a subset of general shopping; Sampath maps `fashion` → `shopping` directly, and HNB's classifier already folds `fashion\|clothing\|apparel\|boutique` into `shopping` with no separate branch. |
+
+**Categories audited but *not* merged** (semantically distinct, kept as-is):
+
+| Category pair | Why not merged |
+|---|---|
+| `wellness` vs `healthcare` | Different domains — wellness covers spa/beauty/salon (self-care), healthcare covers hospital/pharmacy/medical. AmEx's and BOC's own site taxonomies list them as separate categories, and Sampath's scraper explicitly maps `health`/`pharmacy`/`medical` → `healthcare` while keeping `wellness` distinct. A prior migration (`migrate-categories-v2.ts`) deliberately kept them separate too. |
+| `installments` | Flagged for a human decision, not merged in this pass — `installments` is a payment-structure attribute rather than a merchant category, which overlaps conceptually with `offerType: "installment"` (see the Offer Type System in `CLAUDE.md`). Conflating the two needs explicit sign-off before any change. |
+
+Existing DB documents were re-classified by `scripts/migrate-consolidate-offer-categories.ts`
+(runs automatically via the CD pipeline's `migrate` job — see [DB Migrations](#db-migrations)).
+A URL bookmarked with the old value (e.g. `?category=lodging`) now matches zero offers
+rather than erroring, consistent with how any unrecognized category value already behaves.
 
 ---
 
@@ -1134,6 +1159,7 @@ The `run-migration` Claude skill (`.claude/commands/run-migration.md`) has the f
 |------|-------------|--------|
 | `migrate-installment-offers.ts` | Re-classifies `offerType="percentage"` + `discountPercentage=0` → `offerType="installment"` (96 records fixed 2026-04-17) | ✅ Applied |
 | `migrate-categories-v2.ts` | Renames `category="health"` → `"healthcare"` to align with the updated 14-value CategorySchema (23 records fixed 2026-04-28) | ✅ Applied |
+| `migrate-consolidate-offer-categories.ts` | Re-classifies `category="lodging"` → `"travel"` and `category="clothing"` → `"shopping"` per the [Category Consolidation](#category-consolidation-spec-048) audit (spec 048, issue #83) | ⏳ Runs on next deploy |
 
 ---
 

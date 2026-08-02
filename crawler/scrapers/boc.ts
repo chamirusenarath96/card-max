@@ -27,7 +27,7 @@ const CATEGORIES: Array<{ slug: string; defaultCategory: OfferInput["category"] 
   { slug: "online", defaultCategory: "online" },
   { slug: "visa-offers", defaultCategory: "shopping" },
   { slug: "mastercard-offers", defaultCategory: "shopping" },
-  { slug: "fashion-lifestyle", defaultCategory: "clothing" },
+  { slug: "fashion-lifestyle", defaultCategory: "shopping" },
 ];
 
 const MONTH_MAP: Record<string, number> = {
@@ -188,7 +188,7 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
 function detectCategory(title: string, offerText: string): OfferInput["category"] | null {
   const text = `${title} ${offerText}`.toLowerCase();
   if (/dining|restaurant|food|pizza|burger|cafe|bistro/.test(text)) return "dining";
-  if (/hotel|resort|lodging|accommodation|stay/.test(text)) return "lodging";
+  if (/hotel|resort|lodging|accommodation|stay/.test(text)) return "travel";
   if (/travel|flight|airline|holiday/.test(text)) return "travel";
   if (/fuel|petrol|gas\s+station/.test(text)) return "fuel";
   if (/grocery|supermarket|keells|cargills|sathosa/.test(text)) return "groceries";
@@ -196,7 +196,7 @@ function detectCategory(title: string, offerText: string): OfferInput["category"
   if (/wellness|spa|beauty|salon/.test(text)) return "wellness";
   if (/hospital|pharmacy|health|medical|clinic/.test(text)) return "healthcare";
   if (/online|e-commerce|digital/.test(text)) return "online";
-  if (/clothing|fashion|apparel|wear/.test(text)) return "clothing";
+  if (/clothing|fashion|apparel|wear/.test(text)) return "shopping";
   if (/home|furniture|appliance|hardware/.test(text)) return "homecare";
   if (/shopping|retail|boutique/.test(text)) return "shopping";
   return null;

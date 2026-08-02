@@ -104,3 +104,50 @@ test.describe("Dynamic Category Filters (Feature 030)", () => {
     await expect(page).not.toHaveURL(/category=/, { timeout: 5000 });
   });
 });
+
+test.describe("Category Consolidation (spec 048)", () => {
+  test.beforeEach(async ({ page }) => {
+    // Post-migration API response: consolidated categories only — "lodging"
+    // and "clothing" no longer exist, their offers now count under "travel"
+    // and "shopping" respectively.
+    await page.route("**/api/categories**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [
+            { category: "travel", label: "Travel", count: 524 },
+            { category: "shopping", label: "Shopping", count: 65 },
+            { category: "wellness", label: "Wellness", count: 16 },
+            { category: "healthcare", label: "Healthcare", count: 32 },
+          ],
+        }),
+      }),
+    );
+    await page.route("**/api/offers**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_OFFERS),
+      }),
+    );
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+  });
+
+  test("AC6 — FilterDrawer shows chips for consolidated categories only, no lodging/clothing chip", async ({
+    page,
+  }) => {
+    await page.getByTestId("filter-drawer-trigger").click();
+    await expandFilterSection(page, "category");
+
+    await expect(page.getByTestId("category-chip-travel")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("category-chip-shopping")).toBeVisible({ timeout: 5000 });
+    // wellness and healthcare stay distinct — both should render as separate chips
+    await expect(page.getByTestId("category-chip-wellness")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("category-chip-healthcare")).toBeVisible({ timeout: 5000 });
+
+    await expect(page.getByTestId("category-chip-lodging")).toHaveCount(0);
+    await expect(page.getByTestId("category-chip-clothing")).toHaveCount(0);
+  });
+});

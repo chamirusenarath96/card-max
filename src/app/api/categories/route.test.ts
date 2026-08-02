@@ -78,9 +78,7 @@ describe("GET /api/categories", () => {
       { _id: "dining", count: 5 },
       { _id: "groceries", count: 4 },
       { _id: "travel", count: 3 },
-      { _id: "lodging", count: 2 },
       { _id: "shopping", count: 1 },
-      { _id: "clothing", count: 1 },
       { _id: "homecare", count: 1 },
       { _id: "online", count: 1 },
       { _id: "wellness", count: 1 },
@@ -100,6 +98,23 @@ describe("GET /api/categories", () => {
     expect(labelMap["homecare"]).toBe("Home Care");
     expect(labelMap["installments"]).toBe("Installments");
     expect(labelMap["entertainment"]).toBe("Entertainment");
+  });
+
+  // spec 048 (AC7) — "lodging" and "clothing" were merged away; once the
+  // migration has run, no document holds those values, so the aggregation
+  // naturally never surfaces them again.
+  it("AC7 — never returns the removed lodging/clothing categories once migrated", async () => {
+    mockAggregate.mockResolvedValue([
+      { _id: "travel", count: 265 + 259 }, // travel + former lodging offers
+      { _id: "shopping", count: 42 + 23 }, // shopping + former clothing offers
+    ]);
+
+    const res = await GET();
+    const body = await res.json() as { data: Array<{ category: string; label: string }> };
+
+    const categories = body.data.map((d) => d.category);
+    expect(categories).not.toContain("lodging");
+    expect(categories).not.toContain("clothing");
   });
 
   it("AC2 — returns 200 with { data: [] } when DB throws", async () => {

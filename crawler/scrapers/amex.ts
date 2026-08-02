@@ -22,9 +22,9 @@ const CATEGORY_URLS: Array<{ url: string; category: OfferInput["category"] }> = 
   { url: `${BASE_URL}/en/offers/dining-offers`, category: "dining" },
   { url: `${BASE_URL}/en/offers/wellness-offers`, category: "wellness" },
   { url: `${BASE_URL}/en/offers/supermarket-offers`, category: "groceries" },
-  { url: `${BASE_URL}/en/offers/lodging-offers`, category: "lodging" },
+  { url: `${BASE_URL}/en/offers/lodging-offers`, category: "travel" },
   { url: `${BASE_URL}/en/offers/homecare-offers`, category: "homecare" },
-  { url: `${BASE_URL}/en/offers/clothing-offers`, category: "clothing" },
+  { url: `${BASE_URL}/en/offers/clothing-offers`, category: "shopping" },
   { url: `${BASE_URL}/en/offers/online-offers`, category: "online" },
   { url: `${BASE_URL}/en/offers/travel-offers`, category: "travel" },
   { url: `${BASE_URL}/en/offers/healthcare`, category: "healthcare" },
@@ -229,7 +229,7 @@ function buildDate(day: string, month: string, year: string): Date | undefined {
 function detectCategory(merchant: string, offerText: string): OfferInput["category"] | undefined {
   const text = `${merchant} ${offerText}`.toLowerCase();
   if (/dining|restaurant|food|pizza|burger|cafe/.test(text)) return "dining";
-  if (/hotel|resort|lodging|accommodation|stay/.test(text)) return "lodging";
+  if (/hotel|resort|lodging|accommodation|stay/.test(text)) return "travel";
   if (/travel|flight|airline|holiday/.test(text)) return "travel";
   if (/fuel|petrol/.test(text)) return "fuel";
   if (/grocery|supermarket|keells|cargills/.test(text)) return "groceries";
@@ -237,7 +237,7 @@ function detectCategory(merchant: string, offerText: string): OfferInput["catego
   if (/wellness|spa|beauty|salon/.test(text)) return "wellness";
   if (/hospital|pharmacy|health|medical|clinic/.test(text)) return "healthcare";
   if (/online|e-commerce|digital/.test(text)) return "online";
-  if (/clothing|fashion|apparel|wear/.test(text)) return "clothing";
+  if (/clothing|fashion|apparel|wear/.test(text)) return "shopping";
   if (/home|furniture|appliance|hardware/.test(text)) return "homecare";
   if (/shopping|retail|boutique/.test(text)) return "shopping";
   return undefined;

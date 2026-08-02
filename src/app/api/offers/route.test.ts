@@ -559,6 +559,17 @@ describe("GET /api/offers", () => {
     expect(body.error).toBe("Invalid query parameters");
   });
 
+  // spec 048 — "lodging" was merged into "travel"; a removed category value
+  // must be rejected the same way any other unrecognized value already is (AC7)
+  it("returns 400 for a removed category value (lodging), same as any unrecognized category", async () => {
+    const removed = await GET(makeRequest({ category: "lodging" }));
+    const unrecognized = await GET(makeRequest({ category: "not_a_real_category" }));
+    expect(removed.status).toBe(400);
+    expect(removed.status).toBe(unrecognized.status);
+    const body = await removed.json();
+    expect(body.error).toBe("Invalid query parameters");
+  });
+
   it("returns 400 for invalid offerType value", async () => {
     const res = await GET(makeRequest({ offerType: "mystery_deal" }));
     expect(res.status).toBe(400);

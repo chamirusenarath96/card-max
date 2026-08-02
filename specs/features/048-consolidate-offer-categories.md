@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 The 14-value `CategorySchema` enum (`specs/data/offer.schema.ts`) contains overlapping
@@ -73,23 +73,23 @@ new consolidated `CategorySchema`.
   offers are now `travel`) — see Edge Cases
 
 ## Acceptance Criteria
-- [ ] AC1: A full old-category → new-category mapping table exists (in the README and
+- [x] AC1: A full old-category → new-category mapping table exists (in the README and
       referenced from this spec), covering every category identified as redundant by
       the audit — not just the `lodging → travel` example given in the issue
-- [ ] AC2: `CategorySchema` in `specs/data/offer.schema.ts` no longer contains any
+- [x] AC2: `CategorySchema` in `specs/data/offer.schema.ts` no longer contains any
       category that the mapping table marks as merged/removed
-- [ ] AC3: A migration script (following `.claude/commands/run-migration.md`'s
+- [x] AC3: A migration script (following `.claude/commands/run-migration.md`'s
       idempotent-filter pattern) updates every existing offer document's `category`
       field from an old value to its mapped new value
-- [ ] AC4: After the migration runs, zero offer documents in the database have a
+- [x] AC4: After the migration runs, zero offer documents in the database have a
       `category` value outside the new consolidated `CategorySchema` enum
-- [ ] AC5: The crawler's category-assignment logic (wherever `category` is set per
+- [x] AC5: The crawler's category-assignment logic (wherever `category` is set per
       scraper/`parseDiscount.ts`) only ever assigns consolidated category values for
       newly-scraped offers
-- [ ] AC6: `CATEGORY_LABELS` (`src/lib/categoryLabels.ts`) contains exactly the
+- [x] AC6: `CATEGORY_LABELS` (`src/lib/categoryLabels.ts`) contains exactly the
       consolidated category set — no stale entries for removed categories, no missing
       entries for retained ones
-- [ ] AC7: `GET /api/categories` and `GET /api/offers?category=X` reject/ignore any
+- [x] AC7: `GET /api/categories` and `GET /api/offers?category=X` reject/ignore any
       old, now-removed category value consistently with how they already handle
       unrecognized enum values (per spec 030's existing "unknown category" behaviour)
 
