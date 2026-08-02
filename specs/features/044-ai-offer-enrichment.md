@@ -25,7 +25,8 @@ source page).
 
 ### In Scope
 - An enrichment step, implemented as a **separate GitHub Actions workflow** that
-  invokes a Claude-based enrichment routine after the daily crawl completes (see
+  invokes an AI-based enrichment routine (Gemini — see Architecture Decision #2) after
+  the daily crawl completes (see
   "Architecture Decision" below), applied only to **newly-scraped offers** from that
   crawl run (i.e. offers the crawler just inserted/updated with
   `enrichmentStatus: "pending"`), not a backfill of the whole collection. Per offer:
@@ -38,7 +39,7 @@ source page).
      "every Thursday from 1st to 21st of August" resolves to the actual Thursday
      calendar dates in that range, not just the outer range
   3. Whenever the source offer page has at least one image, extracts any
-     terms/dates/conditions from it via Claude's vision capability and feeds that
+     terms/dates/conditions from it via Gemini's vision capability and feeds that
      into the same date-resolution and summary pipeline as step 1–2 (the image
      path always runs when an image is present — it is not gated on text being
      insufficient first)
@@ -94,16 +95,24 @@ this section previously listed:
 
 1. **Where does enrichment run?** A **separate GitHub Actions workflow**, not a step
    inside `crawler/scrapers/*.ts` / `crawler/run.ts`. It runs after the daily crawl
-   workflow completes and invokes a Claude-based enrichment routine. It only
+   workflow completes and invokes an AI-based enrichment routine. It only
    processes offers the crawl just scraped/updated in that run (selected via
    `enrichmentStatus: "pending"` set by the crawler on new/changed offers) — it does
    **not** sweep the full ~700-offer collection on every run. This keeps enrichment
    fully decoupled from the scrape/upsert path (needed for AC4/AC6) and bounds
    per-run cost to that day's newly-scraped offers.
-2. **AI provider/model**: Claude (Anthropic), for both text summarization /
-   date-condition parsing and image/vision extraction — one provider for both parts
-   of the pipeline. Exact model choice (e.g. cost/latency-tier selection) is an
-   implementation-time detail, not a spec-level constraint.
+2. **AI provider/model**: **Google Gemini** (`gemini-2.0-flash`, via `@google/genai`),
+   for both text summarization / date-condition parsing and image/vision extraction —
+   one provider for both parts of the pipeline. **Superseded 2026-08-02**: originally
+   Claude (Anthropic); switched to Gemini to use the reviewer's existing free-tier
+   Gemini API access rather than paying for separate Anthropic API billing — see #95
+   (which flagged this exact cost tradeoff before implementation) and #98 (the
+   `ANTHROPIC_API_KEY` secret was never provisioned, so the workflow had never
+   successfully run in production under the original choice). `crawler/enrichment/
+   geminiClient.ts` (renamed from `anthropicClient.ts`) is the sole call site for the
+   provider SDK; `GEMINI_API_KEY` replaces `ANTHROPIC_API_KEY` as the required secret.
+   Exact model choice (e.g. cost/latency-tier selection) remains an implementation-time
+   detail, not a spec-level constraint.
 3. **Vector storage**: `embedding` is stored in a **separate index**, not inline in
    the main offers collection query path, and it **integrates with the existing
    Atlas Search index** (spec 013) rather than introducing an unrelated search
@@ -115,6 +124,10 @@ this section previously listed:
    conditions were insufficient" — presence of an image is sufficient on its own to
    trigger the vision path (in addition to, not instead of, the text-based parsing
    in step 2). The per-offer cost/time budget from "Edge Cases" below still applies.
+   Gemini's vision input (inline base64 image parts) supports the same image formats
+   this pipeline already downloads (jpeg/png/gif/webp) — no change to
+   `extractConditionsFromImages.ts`'s download/size-budget logic was needed for the
+   provider switch, only the API call itself.
 
 ## Acceptance Criteria
 - [x] AC1: Given an offer with conditions text describing a recurring weekly
@@ -204,11 +217,14 @@ this section previously listed:
   itself — publishing a live, site-wide public announcement is a "publish public
   content" action outside an unattended automation's authority
 - **`embedding` deferral**: AC3 accepts `semanticSummary` and/or `embedding` — this
-  implementation populates `semanticSummary` via Claude (`crawler/enrichment/
+  implementation populates `semanticSummary` via Gemini (`crawler/enrichment/
   semanticSummary.ts`) and satisfies AC3 on that basis. `embedding` stays wired into
-  the schema/model as an optional field but is left unpopulated: Claude's Messages
-  API does not itself produce embedding vectors, and the Architecture Decision only
-  resolved the *summarization/vision* provider, not a separate embedding-model choice
-  (e.g. Voyage AI). Populating `embedding` is a natural follow-up once that model
-  choice is made — the Vector Search index work in Architecture Decision #3 depends on
+  the schema/model as an optional field but is left unpopulated: this pipeline only
+  calls Gemini's `generateContent` (text/vision), not an embeddings endpoint, and the
+  Architecture Decision only resolved the *summarization/vision* provider, not a
+  separate embedding-model choice. Gemini does offer its own embedding models (e.g.
+  `text-embedding-004`), which may be a simpler follow-up now than introducing a
+  second provider — but that choice is still open and out of scope here. Populating
+  `embedding` is a natural follow-up once that model choice is made — the Vector
+  Search index work in Architecture Decision #3 depends on
   it and is out of scope for this PR either way

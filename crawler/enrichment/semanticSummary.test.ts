@@ -6,9 +6,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
 
-vi.mock("./anthropicClient", () => ({
-  getAnthropicClient: () => ({ messages: { create: mockCreate } }),
-  ENRICHMENT_MODEL: "claude-haiku-4-5-20251001",
+vi.mock("./geminiClient", () => ({
+  getGeminiClient: () => ({ models: { generateContent: mockCreate } }),
+  ENRICHMENT_MODEL: "gemini-2.0-flash",
 }));
 
 import { generateSemanticSummary } from "./semanticSummary";
@@ -20,7 +20,7 @@ describe("generateSemanticSummary", () => {
 
   it("returns a non-empty summary for a well-formed offer (AC3)", async () => {
     mockCreate.mockResolvedValue({
-      content: [{ type: "text", text: "20% off dining at Pizza Hut, a great weekday deal." }],
+      text: "20% off dining at Pizza Hut, a great weekday deal.",
     });
 
     const result = await generateSemanticSummary({
@@ -34,25 +34,8 @@ describe("generateSemanticSummary", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  it("concatenates multiple text blocks", async () => {
-    mockCreate.mockResolvedValue({
-      content: [
-        { type: "text", text: "First part." },
-        { type: "text", text: "Second part." },
-      ],
-    });
-
-    const result = await generateSemanticSummary({
-      title: "Offer",
-      merchant: "Merchant",
-      category: "other",
-    });
-
-    expect(result).toBe("First part. Second part.");
-  });
-
   it("returns undefined when the response has no text content", async () => {
-    mockCreate.mockResolvedValue({ content: [] });
+    mockCreate.mockResolvedValue({ text: undefined });
 
     const result = await generateSemanticSummary({
       title: "Offer",

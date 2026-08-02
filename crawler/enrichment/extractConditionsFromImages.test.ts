@@ -9,9 +9,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
 
-vi.mock("./anthropicClient", () => ({
-  getAnthropicClient: () => ({ messages: { create: mockCreate } }),
-  ENRICHMENT_MODEL: "claude-haiku-4-5-20251001",
+vi.mock("./geminiClient", () => ({
+  getGeminiClient: () => ({ models: { generateContent: mockCreate } }),
+  ENRICHMENT_MODEL: "gemini-2.0-flash",
 }));
 
 import { findImageUrls, extractTextFromImages } from "./extractConditionsFromImages";
@@ -77,9 +77,7 @@ describe("extractTextFromImages", () => {
         arrayBuffer: async () => new ArrayBuffer(1000),
       })
     );
-    mockCreate.mockResolvedValue({
-      content: [{ type: "text", text: "Valid every Thursday in August." }],
-    });
+    mockCreate.mockResolvedValue({ text: "Valid every Thursday in August." });
 
     const result = await extractTextFromImages(["https://bank.lk/promo.jpg"]);
 
@@ -96,7 +94,7 @@ describe("extractTextFromImages", () => {
         arrayBuffer: async () => new ArrayBuffer(100),
       })
     );
-    mockCreate.mockResolvedValue({ content: [{ type: "text", text: "NONE" }] });
+    mockCreate.mockResolvedValue({ text: "NONE" });
 
     const result = await extractTextFromImages(["https://bank.lk/promo.png"]);
 
@@ -148,7 +146,7 @@ describe("extractTextFromImages", () => {
         arrayBuffer: async () => new ArrayBuffer(100),
       });
     vi.stubGlobal("fetch", fetchMock);
-    mockCreate.mockResolvedValue({ content: [{ type: "text", text: "Weekends only." }] });
+    mockCreate.mockResolvedValue({ text: "Weekends only." });
 
     const result = await extractTextFromImages(["https://bank.lk/broken.jpg", "https://bank.lk/ok.jpg"]);
 

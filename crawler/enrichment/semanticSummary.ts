@@ -1,9 +1,8 @@
 /**
- * Generates a cleaned, search-oriented summary of an offer via Claude.
+ * Generates a cleaned, search-oriented summary of an offer via Gemini.
  * Spec: specs/features/044-ai-offer-enrichment.md (AC3)
  */
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicClient, ENRICHMENT_MODEL } from "./anthropicClient";
+import { getGeminiClient, ENRICHMENT_MODEL } from "./geminiClient";
 
 export interface SemanticSummaryInput {
   title: string;
@@ -15,15 +14,15 @@ export interface SemanticSummaryInput {
 export async function generateSemanticSummary(
   input: SemanticSummaryInput
 ): Promise<string | undefined> {
-  const client = getAnthropicClient();
+  const client = getGeminiClient();
 
-  const response = await client.messages.create({
+  const response = await client.models.generateContent({
     model: ENRICHMENT_MODEL,
-    max_tokens: 200,
-    messages: [{ role: "user", content: buildPrompt(input) }],
+    contents: buildPrompt(input),
+    config: { maxOutputTokens: 200 },
   });
 
-  const text = extractText(response);
+  const text = response.text?.trim();
   return text || undefined;
 }
 
@@ -40,12 +39,4 @@ function buildPrompt({ title, description, merchant, category }: SemanticSummary
   ]
     .filter(Boolean)
     .join("\n");
-}
-
-function extractText(response: Anthropic.Message): string {
-  return response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join(" ")
-    .trim();
 }

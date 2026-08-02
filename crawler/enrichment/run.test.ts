@@ -22,11 +22,11 @@ describe("enrichment run pipeline", () => {
     vi.resetModules();
     vi.restoreAllMocks();
     delete process.env.MONGODB_URI;
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GEMINI_API_KEY;
   });
 
   it("exits 1 without connecting when MONGODB_URI is missing", async () => {
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const connectMock = vi.fn();
@@ -47,7 +47,7 @@ describe("enrichment run pipeline", () => {
     expect(connectMock).not.toHaveBeenCalled();
   });
 
-  it("exits 1 without connecting when ANTHROPIC_API_KEY is missing", async () => {
+  it("exits 1 without connecting when GEMINI_API_KEY is missing", async () => {
     process.env.MONGODB_URI = "mongodb://localhost:27017/test";
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -71,7 +71,7 @@ describe("enrichment run pipeline", () => {
 
   it("enriches pending/failed offers, patches them, and exits 0 even with per-offer failures (AC4)", async () => {
     process.env.MONGODB_URI = "mongodb://localhost:27017/test";
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
 
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -121,7 +121,7 @@ describe("enrichment run pipeline", () => {
 
   it("halts early after consecutive failures instead of failing the whole run (Edge Cases: rate limits)", async () => {
     process.env.MONGODB_URI = "mongodb://localhost:27017/test";
-    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.GEMINI_API_KEY = "test-key";
 
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
