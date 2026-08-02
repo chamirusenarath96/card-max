@@ -24,8 +24,9 @@
 8. [Testing](#testing)
    - [Test suite architecture](#test-suite-architecture)
 9. [CI / Continuous Integration](#ci--continuous-integration)
-   - [When CI runs](#when-ci-runs)
-   - [CI Flow](#ci-flow)
+   - [GitHub Actions Workflows](#github-actions-workflows)
+   - [When the pipeline runs](#when-the-pipeline-runs)
+   - [Pipeline flow](#pipeline-flow)
    - [Test layers](#test-layers)
    - [Secrets & environments](#secrets--environments)
 10. [DB Migrations](#db-migrations)
@@ -38,12 +39,14 @@
     - [What "preview" means in Vercel's model](#what-preview-means-in-vercels-model)
     - [Rollback](#rollback)
     - [Secrets required](#secrets-required)
-11. [Caching Architecture](#caching-architecture)
+    - [Daily crawler cron](#daily-crawler-cron)
+    - [Offer enrichment (triggered, not scheduled)](#offer-enrichment-triggered-not-scheduled)
+12. [Caching Architecture](#caching-architecture)
     - [The four caches](#the-four-caches)
     - [How this project uses each layer](#how-this-project-uses-each-layer)
     - [How revalidation works after a crawler run](#how-revalidation-works-after-a-crawler-run)
-12. [Known Limitations & Roadmap](#known-limitations--roadmap)
-13. [Spec-Driven Development & Automation](#spec-driven-development--automation)
+13. [Known Limitations & Roadmap](#known-limitations--roadmap)
+14. [Spec-Driven Development & Automation](#spec-driven-development--automation)
     - [GitHub Spec Kit](#github-spec-kit)
     - [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)
 
@@ -55,27 +58,31 @@
 graph TD
     subgraph GHA["GitHub Actions"]
         CRON["Daily Cron — 2AM Colombo\nnpm run crawler"]
+        ENRICH["Offer Enrichment — workflow_run\ntriggers after Daily Crawler completes\nnpm run enrich"]
         CI_PR["CI Pipeline on PR\nlint · tsc · Vitest · build"]
         CD["CD Pipeline on push to master\nCI → E2E → Migrate → Deploy → Bust ISR"]
     end
 
     subgraph CR["Crawler — Node.js / tsx"]
-        BANKS["combank · sampath · hnb · ntb\namex · peoples_bank · boc"]
+        BANKS["combank · sampath · hnb · ntb\namex · peoples_bank · bank_of_ceylon"]
         PARSE["parseDiscount.ts\nclassify: percentage · cashback · bogo · ..."]
-        DBU["db.ts — upsert + expire stale offers"]
+        DBU["db.ts — upsert + expire stale offers\nnew/changed offers marked enrichmentStatus: pending"]
     end
+
+    GEMINI[("Google Gemini API\ngemini-2.0-flash — generateContent (text + vision)")]
 
     DB[("MongoDB Atlas M0\noffers collection\n~700 docs · 4 indexes")]
 
     subgraph VR["Next.js 16 App Router — Vercel"]
         EDGE["Vercel CDN Edge\nISR-cached HTML · 1hr TTL"]
-        SRV["Server Components\npage.tsx · GET /api/offers"]
+        SRV["Server Components\npage.tsx · offers/[id]/page.tsx\nGET /api/offers · /api/offers/:id/similar"]
         subgraph CLI["Client Components"]
             NPC["NavigationProgressContext\nuseTransition · isPending · lastNavMs"]
             NPB["NavigationProgressBar\nfixed top bar · loading indicator"]
-            FD["FilterDrawer\nmulti-select pending state · Apply Filters"]
+            FD["FilterDrawer\ncollapsible sections · multi-select · Apply Filters"]
             LTB["LoadTimeBadge · ⚡ Xms"]
             HS["HeroSearch · typewriter placeholder"]
+            AB["AnnouncementBanner\ndismissible, admin-managed"]
         end
     end
 
@@ -84,12 +91,22 @@ graph TD
     CRON -->|"scrapes 7 banks"| BANKS
     BANKS --> PARSE --> DBU -->|"upsert"| DB
     DBU -->|"POST /api/revalidate"| EDGE
+    CRON -.->|"workflow_run: completed"| ENRICH
+    ENRICH -->|"finds enrichmentStatus:\npending / failed"| DB
+    ENRICH -->|"semanticSummary + applicableDates\n(text + vision extraction)"| GEMINI
+    ENRICH -->|"update: enrichmentStatus done/failed"| DB
     DB -->|"query"| SRV --> EDGE -->|"cached HTML"| BROWSER
     CD --> VR
     BROWSER -->|"filter / paginate\nnavigate() via useTransition"| NPC
-    NPC --> NPB & FD & LTB & HS
+    NPC --> NPB & FD & LTB & HS & AB
     NPC -->|"router.push → RSC re-render"| SRV
 ```
+
+> **Note:** the Offer Enrichment workflow updates MongoDB directly but does **not** call
+> `/api/revalidate` itself — enriched fields (`semanticSummary`, `applicableDates`) become
+> visible on the next natural ISR revalidation rather than busting the cache immediately,
+> since enrichment is best-effort and decoupled from the user-facing scrape/cache-bust path
+> (see [Architecture Decision in spec 044](specs/features/044-ai-offer-enrichment.md)).
 
 ---
 
@@ -308,9 +325,12 @@ URLs, extracts offer blocks with regex, and handles both `<img>` tags and CSS
 `background-image` inline styles for merchant images (the site uses both).
 
 **Image resolution chain (display time):** When no scraped `merchantLogoUrl` is stored,
-`OfferImage.tsx` falls back to `logo.clearbit.com/{domain}` using the `MERCHANT_DOMAINS`
-map in `crawler/utils/logo.ts` (40+ curated Sri Lankan merchant domains). If Clearbit
-also fails, a gradient icon with the category symbol and merchant name is shown.
+`OfferImage.tsx` falls back to Google's favicon service (`google.com/s2/favicons?domain=...`)
+using the `MERCHANT_DOMAINS` map in `crawler/utils/logo.ts` (40+ curated Sri Lankan merchant
+domains; the function is still named `buildClearbitUrl` for historical reasons — it no
+longer calls Clearbit, see #97). If that also fails, a gradient icon with the category
+symbol and merchant name is shown. Bank-hosted `merchantLogoUrl` images render with
+`referrerPolicy="no-referrer"` so bank hotlink-protection doesn't block them (#97).
 
 ### Crawler Pipeline
 
@@ -471,7 +491,8 @@ All types, validation, and MongoDB model are derived from it.
 ```typescript
 interface Offer {
   _id: string;
-  bank: "commercial_bank" | "sampath_bank" | "hnb" | "nations_trust_bank" | "amex_ntb";
+  bank: "commercial_bank" | "sampath_bank" | "hnb" | "nations_trust_bank"
+      | "amex_ntb" | "peoples_bank" | "bank_of_ceylon";
   bankDisplayName: string;
   title: string;
   description?: string;
@@ -487,7 +508,7 @@ interface Offer {
           | "groceries" | "entertainment" | "wellness" | "healthcare"
           | "installments" | "online" | "other";
   merchant: string;
-  merchantLogoUrl?: string;   // scraped URL → Clearbit → category icon fallback
+  merchantLogoUrl?: string;   // scraped URL → Google favicons → category icon fallback
 
   validFrom?: Date;
   validUntil?: Date;
@@ -495,6 +516,14 @@ interface Offer {
 
   sourceUrl: string;
   scrapedAt: Date;
+
+  // AI-assisted enrichment (spec 044) — all optional; populated asynchronously
+  // by the Offer Enrichment workflow (Gemini), never blocks the crawler upsert
+  semanticSummary?: string;     // cleaned text used as the search input
+  embedding?: number[];         // reserved for future vector search — not yet populated
+  applicableDates?: string[];   // resolved ISO dates within [validFrom, validUntil]
+  enrichmentStatus?: "pending" | "done" | "failed";
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -542,15 +571,22 @@ rather than erroring, consistent with how any unrecognized category value alread
 src/
 ├── app/
 │   ├── page.tsx              Server Component — fetches API, renders grid + LoadTimeBadge + FeedbackWidget
-│   ├── layout.tsx            Root layout — wraps tree in NavigationProgressProvider; explicit favicon metadata
+│   ├── layout.tsx            Root layout — wraps tree in NavigationProgressProvider; renders AnnouncementBanner; explicit favicon metadata
 │   ├── icon.svg              Favicon — card-fan graphic with "CM" monogram; picked up by Next.js automatically
 │   ├── globals.css           Tailwind base styles + custom keyframe animations
+│   ├── offers/
+│   │   └── [id]/
+│   │       ├── page.tsx      GET /offers/:id — offer detail page + Similar Offers section (spec 046)
+│   │       ├── loading.tsx   Loading skeleton
+│   │       └── not-found.tsx 404 page for invalid/unknown offer ids
 │   ├── login/
 │   │   └── page.tsx          Google OAuth sign-in page — shows CardMax stacked logo + "Sign in with Google"
 │   ├── admin/
 │   │   ├── layout.tsx        Admin layout — server-side auth gate; redirects unauthenticated to /login
 │   │   ├── page.tsx          Admin overview — CI test suite pass/fail (Lint/TypeCheck/Unit/Build/E2E) + crawler stats
 │   │   ├── AdminSidebar.tsx  Sidebar nav (desktop) + mobile top-bar + bottom tab-bar; shows user avatar
+│   │   ├── announcements/
+│   │   │   └── page.tsx      Create/list/activate/deactivate site announcements (spec 045)
 │   │   ├── ci/
 │   │   │   └── page.tsx      CI Runs — per-check icons, pass/fail count cards, last-20 run history boxes
 │   │   ├── crawler/
@@ -563,15 +599,29 @@ src/
 │       ├── offers/
 │       │   ├── route.ts      GET /api/offers — list + filter + paginate
 │       │   └── [id]/
-│       │       └── route.ts  GET /api/offers/:id — single offer
+│       │       ├── route.ts  GET /api/offers/:id — single offer
+│       │       └── similar/
+│       │           └── route.ts  GET /api/offers/:id/similar — same category, overlapping validity window
+│       ├── announcements/
+│       │   ├── route.ts      GET (admin, list) · POST (admin, create)
+│       │   ├── active/
+│       │   │   └── route.ts  GET /api/announcements/active — public, current active announcement or null
+│       │   └── [id]/
+│       │       └── route.ts  PATCH (admin) — activate/deactivate/update; deactivates any other active row
+│       ├── categories/
+│       │   └── route.ts      GET /api/categories — aggregated category counts, sorted descending
 │       ├── feedback/
 │       │   ├── route.ts      POST /api/feedback (public) · GET /api/feedback (admin)
 │       │   └── [id]/
 │       │       └── to-issue/
 │       │           └── route.ts  POST — create GitHub issue from feedback (admin)
+│       ├── revalidate/
+│       │   └── route.ts      POST /api/revalidate — busts ISR cache, called by the crawler workflow
 │       └── health/
 │           └── route.ts      GET /api/health — DB connectivity check
 └── components/
+    ├── announcements/
+    │   └── AnnouncementBanner.tsx  Dismissible top-of-page banner — fetches active announcement, `localStorage`-persisted dismissal (spec 045)
     ├── brand/
     │   └── Logo.tsx          Inline SVG logo — `horizontal` (560×100) and `stacked` (400×320) variants;
     │                         uses currentColor so it adapts to light/dark mode automatically
@@ -581,12 +631,14 @@ src/
     │   ├── OfferCardCompact.tsx  Compact card variant — same fields, smaller typography
     │   ├── OfferCardExpanded.tsx Expanded card variant — full description + side-by-side layout
     │   ├── offer-card-shared.ts  Shared helpers: getBadgeLabel, getExpiryInfo, formatValidityPeriod
-    │   └── OfferImage.tsx        3-stage image fallback (scraped → Clearbit → icon)
+    │   └── OfferImage.tsx        3-stage image fallback (scraped → Google favicons → icon), `referrerPolicy="no-referrer"` to avoid bank hotlink-protection failures
+    ├── offers/
+    │   └── OfferDetailView.tsx   Offer detail page layout — merchant, discount, validity, "View Original Offer" CTA, Similar Offers grid (spec 046)
     ├── feedback/
     │   └── FeedbackWidget.tsx    "Send feedback" section above footer — dialog with type/message/email
     ├── filters/
     │   ├── FilterBar.tsx         Filters trigger button + FilterDrawer (Client Component)
-    │   └── FilterDrawer.tsx      Multi-select drawer with pending state + Apply button
+    │   └── FilterDrawer.tsx      Collapsible-section drawer (spec 043) — mobile full-page, desktop panel; multi-select pending state + Apply button
     ├── layout/
     │   ├── NavigationProgressContext.tsx  React context: navigate(), isPending, lastNavMs
     │   ├── NavigationProgressBar.tsx      Fixed top-of-page animated progress bar
@@ -594,7 +646,8 @@ src/
     │   └── Footer.tsx                     Site footer with Logo + tagline + nav links
     ├── OfferGrid.tsx         Responsive grid + empty state (Server Component)
     └── search/
-        └── HeroSearch.tsx        Hero search bar — suggestions navigate in-app (not bank site)
+        ├── HeroSearch.tsx        Hero search bar — suggestions navigate in-app (not bank site)
+        └── SearchDrawer.tsx      Search results drawer — result-row clicks navigate to /offers/:id (spec 046)
 ```
 
 **Rendering model:**
@@ -627,6 +680,7 @@ src/
 - `/admin/ci` — CI runs: per-check pass/fail detail, overall summary cards, last-20-run history as coloured ✓/✗ boxes
 - `/admin/crawler` — per-bank status table + line chart of daily scraped offers (one coloured line per bank, powered by Recharts)
 - `/admin/feedback` — all user feedback submissions; "Create GitHub Issue" action per row
+- `/admin/announcements` — create/list/activate/deactivate the site-wide announcement banner (spec 045); activating one deactivates any other currently-active row
 
 **Feedback system:**
 - `FeedbackWidget` renders above the footer on every page — a "Send feedback" button opens a dialog for type (suggestion/bug/other), message (10–1000 chars), and optional email
@@ -644,10 +698,11 @@ The full OpenAPI 3.1 specification lives at [`specs/api/openapi.yaml`](specs/api
 ```
 Query params (all optional, all combinable):
   bank           commercial_bank | sampath_bank | hnb | nations_trust_bank | amex_ntb |
-                 peoples_bank | boc
-  category       dining | shopping | travel | lodging | homecare | clothing |
-                 fuel | groceries | entertainment | wellness | healthcare |
-                 installments | online | other
+                 peoples_bank | bank_of_ceylon
+  category       dining | shopping | travel | homecare | fuel | groceries |
+                 entertainment | wellness | healthcare | installments | online | other
+                 (consolidated set, spec 048 — `lodging` merged into `travel`,
+                 `clothing` merged into `shopping`; see "Category Consolidation" above)
   offerType      percentage | cashback | bogo | installment |
                  fixed_amount | points | free_item | other
   minDiscount    0–100  (only meaningful for percentage / cashback types)
@@ -673,6 +728,21 @@ Response:
 ### `GET /api/offers/:id`
 
 Returns a single offer by its MongoDB `_id` (24-character hex string).
+
+### `GET /api/offers/:id/similar`
+
+Returns offers similar to the given one — same `category`, whose `[validFrom, validUntil]` window overlaps the source offer's window, excluding the source offer itself and expired offers. Falls back to category-only matching if the source offer has no validity dates. Powers the "Similar Offers" section on the offer detail page (spec 046).
+
+```
+Query params:
+  limit   optional, default 6, max 20
+
+Response 200:
+  { "data": Offer[] }
+
+Response 400: { "error": "Invalid id" }
+Response 404: { "error": "Offer not found" }
+```
 
 ### `GET /api/categories`
 
@@ -749,6 +819,34 @@ Crawler finishes → POST /api/revalidate
 > layer to accidentally serve stale empty results. See the [Caching Architecture](#caching-architecture)
 > section for the full picture.
 
+### `GET /api/announcements/active`
+
+Public. Returns the current active announcement, or `null` if none is active. Used by `AnnouncementBanner` (spec 045).
+
+```json
+{ "data": { "_id": "...", "message": "...", "linkUrl": "...", "linkLabel": "...", "active": true, "createdAt": "..." } }
+```
+
+### `GET /api/announcements`
+
+Admin only (Google OAuth). Lists all announcements, newest first. Used by `/admin/announcements`.
+
+### `POST /api/announcements`
+
+Admin only. Creates a new announcement.
+
+```
+Body (JSON):
+  message    string, 1–280 chars   (required)
+  linkUrl    string, valid URL     (optional)
+  linkLabel  string, ≤40 chars     (optional)
+  active     boolean               (optional, default false)
+```
+
+### `PATCH /api/announcements/:id`
+
+Admin only. Updates an announcement (typically `active`). Activating one (`active: true`) deactivates any other currently-active announcement server-side, so "only one active at a time" holds regardless of client behavior.
+
 ---
 
 ## Getting Started
@@ -793,6 +891,7 @@ npm run dev
 | `AUTH_GOOGLE_ID` | No | Google OAuth client ID — required to access `/admin` locally |
 | `AUTH_GOOGLE_SECRET` | No | Google OAuth client secret |
 | `ADMIN_EMAIL` | No | The single Google account allowed through the admin gate |
+| `GEMINI_API_KEY` | No | Google Gemini API key — only needed to run `npm run enrich` locally; free-tier eligible |
 | `GITHUB_FEEDBACK_TOKEN` | No | GitHub PAT with `issues:write` — converts feedback into GitHub issues |
 | `GITHUB_REPO_OWNER` | No | GitHub repo owner (default: `chamirusenarath96`) |
 | `GITHUB_REPO_NAME` | No | GitHub repo name (default: `card-max`) |
@@ -987,16 +1086,20 @@ flowchart TD
 
 Everything — CI checks, deployment, and cache invalidation — is defined in `.github/workflows/ci.yml`. Shared setup steps (checkout, Node 22, `npm ci`) are extracted into a reusable composite action at `.github/actions/setup/action.yml` so updating the Node version or install flags only requires a change in one place.
 
-### Current Workflow Summary
+### GitHub Actions Workflows
 
-| Workflow file | Trigger | Uses composite action |
-|---|---|---|
-| `ci.yml` | push/PR to master | ✅ all 5 jobs |
-| `crawler.yml` | daily 20:30 UTC + manual | ❌ inline setup |
-| `dashboard.yml` | push to master / after CI | ❌ inline setup |
-| `atlas-warmup.yml` | every 4 min + manual | N/A (no npm ci) |
-| `warmup.yml` | every 5 min + manual | N/A (no npm ci) |
-| `scraper-smoke.yml` | manual only | ❌ inline setup |
+All workflows live in `.github/workflows/`. This table is the authoritative list — kept in sync with the actual files, not the roadmap's aspirational plans.
+
+| Workflow file | Name | Trigger | Purpose | Uses composite action |
+|---|---|---|---|---|
+| `ci.yml` | CI / Deploy | push/PR to master/main | 5 jobs: security audit, lint/type-check/test/build, E2E, DB migrations, Vercel deploy + cache bust | ✅ all 5 jobs |
+| `crawler.yml` | Daily Crawler | daily 20:30 UTC (2:00 AM Colombo) + manual | Scrapes all 7 banks, upserts offers, marks new/changed offers `enrichmentStatus: "pending"`, busts ISR cache | ❌ inline setup |
+| `enrich.yml` | Offer Enrichment | `workflow_run` after Daily Crawler completes + manual | AI-enriches `pending`/`failed` offers via Gemini (`npm run enrich`) — semantic summary + resolved applicable dates; never sweeps the full collection (spec 044) | ❌ inline setup |
+| `atlas-warmup.yml` | Atlas Warmup | every 4 min + manual | Pings `/api/health` to keep the MongoDB Atlas M0 connection warm | N/A (no npm ci) |
+| `warmup.yml` | Atlas Connection Warmup | every 5 min + manual | Pings `/api/ping` — a second, near-duplicate warmup workflow (flagged in the Roadmap for future dedup) | N/A (no npm ci) |
+| `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ❌ inline setup |
+
+**Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist. This requires the workflow to declare `permissions: issues: write` — see #98, where `enrich.yml` was found missing this and silently failing to report its own failures.
 
 **Composite action** — `.github/actions/setup/action.yml` encapsulates `actions/checkout@v4`, `actions/setup-node@v4` (Node 22, npm cache), and `npm ci`. Each job in `ci.yml` references it with a single `uses: ./.github/actions/setup` step instead of three repeated steps. Updating the Node version or install flags requires a change in exactly one place.
 
@@ -1085,7 +1188,8 @@ All secrets live under the **Production** GitHub environment (`Settings → Envi
 
 | Secret | Used by |
 |--------|---------|
-| `MONGODB_URI` | E2E job (live DB), Crawler cron |
+| `MONGODB_URI` | E2E job (live DB), Crawler cron, Offer Enrichment workflow |
+| `GEMINI_API_KEY` | Offer Enrichment workflow (`enrich.yml`) — Google Gemini API key, free-tier eligible |
 | `VERCEL_APP_URL` | Crawler cron (ISR revalidation) |
 | `VERCEL_REVALIDATION_SECRET` | Crawler cron (ISR revalidation) |
 | `VERCEL_TOKEN` | Deploy workflow |
@@ -1277,6 +1381,16 @@ so the running serverless functions have database access at runtime.
 On failure it automatically creates a GitHub Issue with the error log.
 After a successful scrape it calls `POST /api/revalidate` to bust the ISR cache.
 
+### Offer enrichment (triggered, not scheduled)
+
+`.github/workflows/enrich.yml` does **not** run on its own cron — it triggers via
+`workflow_run` immediately after `crawler.yml` completes (regardless of the crawler's
+own success/failure), then processes only the offers the crawl just marked
+`enrichmentStatus: "pending"` (plus any left `"failed"` from a prior run). It can also
+be triggered manually (`workflow_dispatch`) to retry/backfill. See
+[spec 044](specs/features/044-ai-offer-enrichment.md) for why enrichment is a separate,
+decoupled workflow rather than a step inside the crawler itself.
+
 ---
 
 ## Caching Architecture
@@ -1429,7 +1543,7 @@ sequenceDiagram
 - [x] **IP-based rate limiting** — add `src/middleware.ts` using Vercel's Edge Runtime; bucket requests per IP with a sliding-window counter stored in Vercel KV (Redis-compatible); limits: 60 req/min for `/api/offers`, 20 req/min for `/api/search`; return `429` with `Retry-After` header on breach
 - [x] **Security CI step** — add `.github/workflows/security.yml` running `npm audit --audit-level=high` + [Trivy](https://github.com/aquasecurity/trivy) filesystem scan on every PR; block merges on HIGH/CRITICAL vulnerabilities; schedule a weekly full scan; report findings as PR annotations using `aquasecurity/trivy-action`
 - [x] **CI test results dashboard** — build a GitHub Pages site (free hosting) that aggregates and visualises test results across all four suites: Vitest unit/component, Playwright E2E, Lighthouse CI performance, and GitHub Actions workflow status. Use existing libraries — [Allure Report](https://allurereport.org/) for Vitest + Playwright (generates a self-contained HTML report from JUnit/JSON output), with a top-level index page combining Allure, the LHCI HTML report, and a GitHub Actions badge summary. A dedicated `.github/workflows/dashboard.yml` job publishes to the `gh-pages` branch on every push to master using `peaceiris/actions-gh-pages`. No custom backend — all data comes from CI artefacts and the GitHub API badge format.
-- [x] **Remove duplicate GitHub Actions workflows** — audit `.github/workflows/` and consolidate redundant jobs. The Atlas warmup cron runs as a standalone workflow but equivalent warm-up logic fires again inside the deploy job; deduplicate so the warmup runs only once post-deploy. Extend the audit to any other duplicated steps (e.g. repeated `npm ci`, Node setup) across workflows that could share a reusable workflow (`workflow_call`) or composite action to reduce maintenance surface and CI minutes.
+- [ ] **Remove duplicate GitHub Actions workflows** — audit `.github/workflows/` and consolidate redundant jobs. **Re-opened**: this was previously checked off, but `atlas-warmup.yml` (pings `/api/health` every 4 min via the `VERCEL_APP_URL` *variable*) and `warmup.yml` (pings `/api/ping` every 5 min via the `VERCEL_APP_URL` *secret*) still both exist as separate, overlapping cron workflows — see the [GitHub Actions Workflows table](#github-actions-workflows). Consolidate into one, and extend the audit to any other duplicated steps (e.g. repeated `npm ci`, Node setup) across workflows that could share a reusable workflow (`workflow_call`) or the existing composite action to reduce maintenance surface and CI minutes.
 - [x] **Visual UI regression testing** — extend the Playwright E2E suite with automated visual verification so broken layouts, missing components, and rendering regressions are caught before reaching production. Approach: (1) Add Playwright screenshot assertions (`expect(page).toHaveScreenshot()`) for critical views — the offer grid, filter drawer, hero search, and empty/error states — using Playwright's built-in snapshot diffing with a small pixel-diff threshold. (2) Add structural sanity checks that confirm key `data-testid` elements are visible on every page load (offer cards, filter bar, pagination) without relying on specific data, making tests resilient to DB content changes. (3) Run these checks in the existing `e2e` CI job against the production build so any agent-introduced regression (broken layout, removed component, mis-wired prop) is caught automatically before merge.
 - [x] **Cron job summary in CI dashboard** — extend the CI test results dashboard (above) to include a dedicated panel showing the most recent runs of all scheduled workflows (daily crawler, spec-writer, implementer, Atlas warmup). For each run display: workflow name, trigger time, pass/fail status, and a link to the full log. Source data from the GitHub Actions REST API (`/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs?per_page=5`) using a GitHub Actions token available in the dashboard build job; render as a status table alongside the Allure and Lighthouse panels. This gives a single-glance health view of both CI and the autonomous agents that maintain the project.
 
