@@ -8,7 +8,7 @@ const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
 
 vi.mock("./geminiClient", () => ({
   getGeminiClient: () => ({ models: { generateContent: mockCreate } }),
-  ENRICHMENT_MODEL: "gemini-2.0-flash",
+  ENRICHMENT_MODEL: "gemini-2.5-flash",
 }));
 
 import { generateSemanticSummary } from "./semanticSummary";
