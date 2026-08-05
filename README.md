@@ -627,9 +627,9 @@ src/
     │                         uses currentColor so it adapts to light/dark mode automatically
     ├── cards/
     │   ├── OfferCard.tsx         Offer card dispatcher (compact/default/expanded)
-    │   ├── OfferCardDefault.tsx  Default card — merchant, title, discount, validity period
-    │   ├── OfferCardCompact.tsx  Compact card variant — same fields, smaller typography
-    │   ├── OfferCardExpanded.tsx Expanded card variant — full description + side-by-side layout
+    │   ├── OfferCardDefault.tsx  Default card — merchant, title, discount, validity period; links to /offers/:id (spec 049)
+    │   ├── OfferCardCompact.tsx  Compact card variant — same fields, smaller typography; links to /offers/:id (spec 049)
+    │   ├── OfferCardExpanded.tsx Expanded card variant — full description + side-by-side layout; links to /offers/:id (spec 049)
     │   ├── offer-card-shared.ts  Shared helpers: getBadgeLabel, getExpiryInfo, formatValidityPeriod
     │   └── OfferImage.tsx        3-stage image fallback (scraped → Google favicons → icon), `referrerPolicy="no-referrer"` to avoid bank hotlink-protection failures
     ├── offers/
@@ -1099,7 +1099,7 @@ All workflows live in `.github/workflows/`. This table is the authoritative list
 | `warmup.yml` | Atlas Connection Warmup | every 5 min + manual | Pings `/api/ping` — a second, near-duplicate warmup workflow (flagged in the Roadmap for future dedup) | N/A (no npm ci) |
 | `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ❌ inline setup |
 
-**Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist. This requires the workflow to declare `permissions: issues: write` — see #98, where `enrich.yml` was found missing this and silently failing to report its own failures.
+**Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist, now created with `['bug', 'urgent', <category>]` so a broken pipeline jumps the spec-writing queue automatically (see [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)). This requires the workflow to declare `permissions: issues: write` — both `enrich.yml` (#98) and `crawler.yml` (#105) were found missing this and silently failing to report their own failures; both are now fixed.
 
 **Composite action** — `.github/actions/setup/action.yml` encapsulates `actions/checkout@v4`, `actions/setup-node@v4` (Node 22, npm cache), and `npm ci`. Each job in `ci.yml` references it with a single `uses: ./.github/actions/setup` step instead of three repeated steps. Updating the Node version or install flags requires a change in exactly one place.
 
@@ -1263,7 +1263,8 @@ The `run-migration` Claude skill (`.claude/commands/run-migration.md`) has the f
 |------|-------------|--------|
 | `migrate-installment-offers.ts` | Re-classifies `offerType="percentage"` + `discountPercentage=0` → `offerType="installment"` (96 records fixed 2026-04-17) | ✅ Applied |
 | `migrate-categories-v2.ts` | Renames `category="health"` → `"healthcare"` to align with the updated 14-value CategorySchema (23 records fixed 2026-04-28) | ✅ Applied |
-| `migrate-consolidate-offer-categories.ts` | Re-classifies `category="lodging"` → `"travel"` and `category="clothing"` → `"shopping"` per the [Category Consolidation](#category-consolidation-spec-048) audit (spec 048, issue #83) | ⏳ Runs on next deploy |
+| `migrate-consolidate-offer-categories.ts` | Re-classifies `category="lodging"` → `"travel"` and `category="clothing"` → `"shopping"` per the [Category Consolidation](#category-consolidation-spec-048) audit (spec 048, issue #83) | ✅ Applied |
+| `migrate-strip-peoples-bank-see-more.ts` | Strips scraped "See more"/"Read more"/"View more" UI-chrome text baked into already-stored People's Bank `description`/`discountLabel` fields (spec 050, issue #90) — the daily crawler's own `stripUiChrome()` fix only cleans offers it re-scrapes, so this backfills already-expired/unretouched ones | ✅ Applied |
 
 ---
 
@@ -1488,6 +1489,8 @@ sequenceDiagram
 | HNB API occasionally returns empty | HNB | 🟡 Intermittent | Retry + alert threshold |
 | No individual offer detail URLs | HNB | 🟡 Minor | Use `id` field to construct detail URL |
 | Applicable dates not extracted — only outer validity period captured | AmEx (NTB) | ✅ Fixed (spec 041) | `parseOfferCards()` now extracts the full conditions block into `description`; e.g. Domino's offer shows validity till Dec 2026 and `description` states it's only valid on specific days of the week |
+| Scraped description/discountLabel contained a leftover "See more" UI-chrome fragment from the source page | People's Bank | ✅ Fixed (spec 050) | Shared `stripUiChrome()` helper applied across all three parsing paths; `migrate-strip-peoples-bank-see-more.ts` backfilled already-stored offers |
+| Offer cards on the main grid had no clickable link at all | All banks | ✅ Fixed (spec 049) | `OfferCardDefault`/`Compact`/`Expanded` now link to the internal `/offers/:id` detail page (spec 046) |
 
 ### Roadmap
 

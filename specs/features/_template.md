@@ -55,5 +55,15 @@ See `specs/api/openapi.yaml` for full request/response schema.
 - Network error: show error toast
 - Expired offers: hidden by default
 
+## Documentation Impact
+<!--
+Does this feature change the architecture, add/remove an API endpoint, add a new
+GitHub Actions workflow or scheduled task, or change a documented SDLC/automation
+process? If so, list exactly what needs updating in README.md and/or CLAUDE.md.
+If nothing needs updating, write "None." Whoever implements this spec must actually
+make those doc updates in the same PR — don't just note it here and leave it undone.
+-->
+-
+
 ## Notes
 <!-- Anything else the developer should know -->
