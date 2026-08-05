@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: Production  # grants access to MONGODB_URI and Vercel secrets
+    permissions:
+      issues: write   # required so "Notify on failure" can actually create an issue (same bug as #98)
 
     steps:
       - uses: actions/checkout@v4
