@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 `crawler/scrapers/peoples_bank.ts` builds each offer's `description` (and sometimes
@@ -63,19 +63,19 @@ No new UI. The visible effect is that People's Bank offer descriptions on
 end with a dangling, non-functional "See more" fragment.
 
 ## Acceptance Criteria
-- [ ] AC1: A paragraph block ending in "See more" (case-insensitive, with or without
+- [x] AC1: A paragraph block ending in "See more" (case-insensitive, with or without
       surrounding whitespace/punctuation) has that fragment stripped from the parsed
       `description` in `parseViaPromotionCards`
-- [ ] AC2: The same stripping applies in the `parseViaHeadings` fallback path
-- [ ] AC3: "Read more" and "View more" trailing fragments are stripped the same way
+- [x] AC2: The same stripping applies in the `parseViaHeadings` fallback path
+- [x] AC3: "Read more" and "View more" trailing fragments are stripped the same way
       as "See more"
-- [ ] AC4: Legitimate description text that happens to contain "more" elsewhere (not
+- [x] AC4: Legitimate description text that happens to contain "more" elsewhere (not
       as a trailing UI-chrome fragment) is left intact — the strip only removes the
       fragment when it appears as a trailing/standalone chrome phrase, not mid-sentence
-- [ ] AC5: A migration script updates existing People's Bank offers in MongoDB whose
+- [x] AC5: A migration script updates existing People's Bank offers in MongoDB whose
       `description` or `discountLabel` ends with one of these fragments, stripping it
       in place
-- [ ] AC6: The migration is idempotent — re-running it after it has already applied
+- [x] AC6: The migration is idempotent — re-running it after it has already applied
       makes zero further changes (per the standard migration template's idempotency
       guarantee)
 

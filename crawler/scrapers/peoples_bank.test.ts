@@ -9,7 +9,7 @@ vi.mock("../utils/http", () => ({
   sleep: vi.fn(),
 }));
 
-import { scrape } from "./peoples_bank";
+import { scrape, stripUiChrome } from "./peoples_bank";
 import { fetchHtml } from "../utils/http";
 
 // ── HTML fixtures ────────────────────────────────────────────────────────────
@@ -150,6 +150,58 @@ const HEADING_HTML = `
   <main>
     <h3>Buy 1 Get 1 Free at Barista Coffee</h3>
     <p>Complimentary coffee for People's Bank cardholders. Valid till 31 March 2026.</p>
+  </main>
+</body></html>
+`;
+
+/**
+ * Current offer-card structure with a trailing "...See more" UI-chrome fragment
+ * baked into the .merchant-name span text, matching the live peoplesbank.lk markup
+ * (spec 050 / issue #90).
+ */
+const OFFER_CARD_SEE_MORE_HTML = `
+<!DOCTYPE html><html><body>
+<section>
+  <article class="offer-card" role="article">
+    <div class="discount-badge">30%</div>
+    <div class="offer-image">
+      <a href="https://www.peoplesbank.lk/promotion/keells-30-off-credit/">
+        <img src="https://www.peoplesbank.lk/roastoth/2023/03/keels.jpg" alt="Keells" />
+      </a>
+    </div>
+    <div class="card-content">
+      <div class="promo-short fw-medium">Keells</div>
+      <div class="meta">
+        <span class="merchant-name">
+          30% off on Fresh Vegetables, Fruit, Seafood &amp; Fresh Meat
+          One Transaction Per Card, Per day <span style="color: red; font-weight: 700;">...See more</span>
+        </span>
+      </div>
+    </div>
+  </article>
+</section>
+</body></html>
+`;
+
+/** Legacy .promotion-card structure with a trailing "Read more" fragment (AC1, AC3) */
+const LEGACY_CARD_READ_MORE_HTML = `
+<!DOCTYPE html><html><body>
+<div class="promotion-card">
+  <span class="discount-badge">15% off</span>
+  <img src="https://www.peoplesbank.lk/images/pizza-hut.jpg" alt="Pizza Hut">
+  <h3><a href="/pizza-hut-offer">Pizza Hut</a></h3>
+  <p>Enjoy 15% discount on dine-in and takeaway orders. Read more</p>
+  <p>Valid till 31 December 2026</p>
+</div>
+</body></html>
+`;
+
+/** Heading-based layout with a trailing "View more" fragment (AC2, AC3) */
+const HEADING_VIEW_MORE_HTML = `
+<!DOCTYPE html><html><body>
+  <main>
+    <h3>Buy 1 Get 1 Free at Barista Coffee</h3>
+    <p>Complimentary coffee for People's Bank cardholders. View more</p>
   </main>
 </body></html>
 `;
@@ -323,5 +375,81 @@ describe("peoples_bank scraper", () => {
 
     const fashion = offers.find((o) => o.merchant === "Fashion Trends");
     expect(fashion?.category).toBe("shopping");
+  });
+
+  // spec 050 / issue #90 — strip "See more"/"Read more"/"View more" UI-chrome
+  describe("stripUiChrome (spec 050 / issue #90)", () => {
+    it("strips a trailing '...See more' fragment", () => {
+      expect(stripUiChrome("Per day ...See more")).toBe("Per day");
+    });
+
+    it("strips 'Read more' and 'View more' trailing fragments the same way (AC3)", () => {
+      expect(stripUiChrome("Enjoy 15% discount on dine-in. Read more")).toBe(
+        "Enjoy 15% discount on dine-in",
+      );
+      expect(stripUiChrome("Complimentary coffee for cardholders. View more")).toBe(
+        "Complimentary coffee for cardholders",
+      );
+    });
+
+    it("is case-insensitive and tolerates trailing punctuation/symbols", () => {
+      expect(stripUiChrome("Some offer text See More")).toBe("Some offer text");
+      expect(stripUiChrome("Some offer text See more...")).toBe("Some offer text");
+      expect(stripUiChrome("Some offer text see more »")).toBe("Some offer text");
+    });
+
+    it("does not strip 'more' when it's part of normal description text (AC4)", () => {
+      expect(stripUiChrome("Enjoy this offer and more categories")).toBe(
+        "Enjoy this offer and more categories",
+      );
+      expect(stripUiChrome("Up to 45% off and more")).toBe("Up to 45% off and more");
+    });
+
+    it("returns an empty string when the entire input is a chrome fragment", () => {
+      expect(stripUiChrome("...See more")).toBe("");
+    });
+
+    it("is a no-op on text with no chrome fragment", () => {
+      expect(stripUiChrome("Complimentary dessert with any main course")).toBe(
+        "Complimentary dessert with any main course",
+      );
+    });
+  });
+
+  it("strips trailing '...See more' from .merchant-name description in parseViaOfferArticles (issue #90)", async () => {
+    vi.mocked(fetchHtml).mockResolvedValueOnce(OFFER_CARD_SEE_MORE_HTML);
+    vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+    const offers = await scrape();
+
+    const keells = offers.find((o) => o.merchant === "Keells");
+    expect(keells?.description).toBeDefined();
+    expect(keells!.description!.toLowerCase()).not.toContain("see more");
+    expect(keells!.description).toContain("Per day");
+  });
+
+  it("strips trailing 'Read more' from description in parseViaPromotionCards (AC1)", async () => {
+    vi.mocked(fetchHtml).mockResolvedValueOnce(LEGACY_CARD_READ_MORE_HTML);
+    vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+    const offers = await scrape();
+
+    const pizzaHut = offers.find((o) => o.merchant === "Pizza Hut");
+    expect(pizzaHut?.description).toBeDefined();
+    expect(pizzaHut!.description!.toLowerCase()).not.toContain("read more");
+    expect(pizzaHut!.description).toContain("takeaway orders");
+  });
+
+  it("strips trailing 'View more' from description in parseViaHeadings fallback (AC2)", async () => {
+    vi.mocked(fetchHtml).mockResolvedValueOnce(HEADING_VIEW_MORE_HTML);
+    vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+    const offers = await scrape();
+
+    expect(offers.length).toBeGreaterThan(0);
+    const description = offers[0]?.description;
+    expect(description).toBeDefined();
+    expect(description!.toLowerCase()).not.toContain("view more");
+    expect(description).toContain("Complimentary coffee");
   });
 });
