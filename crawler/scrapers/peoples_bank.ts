@@ -171,7 +171,8 @@ function parseViaOfferArticles(
 
     // Description from .merchant-name span
     const descMatch = block.match(/<span[^>]+class="[^"]*merchant-name[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
-    const description = descMatch ? cleanText(descMatch[1]!).substring(0, 300) : undefined;
+    const rawDescription = descMatch ? stripUiChrome(cleanText(descMatch[1]!)) : "";
+    const description = rawDescription.length > 0 ? rawDescription.substring(0, 300) : undefined;
 
     // Source URL: first <a href> inside .offer-image
     const imgLinkMatch = block.match(
@@ -248,7 +249,7 @@ function parseViaPromotionCards(
     const merchantLogoUrl = imgMatch ? toAbsoluteUrl(imgMatch[1]!) : undefined;
 
     const paras = [...block.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
-      .map(p => cleanText(p[1]!))
+      .map(p => stripUiChrome(cleanText(p[1]!)))
       .filter(t => t.length > 3);
 
     const description = paras[0]?.substring(0, 300);
@@ -309,7 +310,7 @@ function parseViaHeadings(
     const merchantLogoUrl = imgMatch ? imgMatch[1] : undefined;
 
     const paras = [...after.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
-      .map(p => cleanText(p[1]!)).filter(t => t.length > 5);
+      .map(p => stripUiChrome(cleanText(p[1]!))).filter(t => t.length > 5);
     const description = paras.find(t => t.toLowerCase() !== rawTitle.toLowerCase())?.substring(0, 300);
     const { validFrom, validUntil } = extractDates(paras.join(" "));
 
@@ -421,4 +422,20 @@ function cleanText(html: string): string {
     .replace(/&[a-z]+;/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Matches a trailing "See more" / "Read more" / "View more" UI-chrome fragment
+ * (case-insensitive), along with any surrounding ellipsis/punctuation, anchored
+ * to the end of the string. The People's Bank site embeds this toggle text as
+ * plain text inside the same paragraph/span as the real offer description
+ * (e.g. "...One Transaction Per Card, Per day ...See more"), so it must only
+ * strip when the phrase is a trailing fragment — not when "more" appears
+ * naturally mid-sentence (e.g. "and more categories").
+ */
+export const TRAILING_UI_CHROME_RE = /[\s.…»›]*\b(?:see|read|view)\s+more\b[\s.…»›]*$/i;
+
+/** Strips a trailing "See more"/"Read more"/"View more" UI-chrome fragment from scraped text. */
+export function stripUiChrome(text: string): string {
+  return text.replace(TRAILING_UI_CHROME_RE, "").trim();
 }
