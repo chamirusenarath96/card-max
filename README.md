@@ -69,7 +69,7 @@ graph TD
         DBU["db.ts — upsert + expire stale offers\nnew/changed offers marked enrichmentStatus: pending"]
     end
 
-    GEMINI[("Google Gemini API\ngemini-2.0-flash — generateContent (text + vision)")]
+    GEMINI[("Google Gemini API\ngemini-2.5-flash — generateContent (text + vision)")]
 
     DB[("MongoDB Atlas M0\noffers collection\n~700 docs · 4 indexes")]
 
