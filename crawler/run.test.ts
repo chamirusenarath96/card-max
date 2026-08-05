@@ -41,6 +41,7 @@ describe("crawler run pipeline", () => {
       disconnectDb: vi.fn().mockResolvedValue(undefined),
       upsertOffers: upsertMock,
       expireStaleOffers: expireMock,
+      getActiveOfferCountsByBank: vi.fn().mockResolvedValue({}),
     }));
 
     vi.doMock("./scrapers/combank", () => ({
@@ -120,6 +121,7 @@ describe("crawler run pipeline", () => {
       disconnectDb: vi.fn().mockResolvedValue(undefined),
       upsertOffers: vi.fn().mockResolvedValue({ inserted: 1, updated: 0, skipped: 0 }),
       expireStaleOffers: vi.fn().mockResolvedValue(0),
+      getActiveOfferCountsByBank: vi.fn().mockResolvedValue({}),
     }));
     vi.doMock("./scrapers/combank", () => ({
       scrape: vi.fn().mockResolvedValue([]),

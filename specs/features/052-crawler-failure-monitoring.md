@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 The daily crawler (`crawler/run.ts`) scrapes 7 banks and only fails the whole GitHub
@@ -238,16 +238,16 @@ Environment Variables section — this just needs to also be passed to the
 - `.github/workflows/crawler.yml` — pass the 3 new env vars to the "Run crawler" step
 
 ## Acceptance Criteria
-- [ ] AC1: When a scraper's `RunSummary.status === "error"`, `detectFailures()` returns a `BankFailure` with `kind: "error"` for that bank
-- [ ] AC2: When a scraper returns `scraped: 0` and the bank had a non-zero baseline active-offer count, `detectFailures()` returns a `BankFailure` with `kind: "zero_offers"`
-- [ ] AC3: When a scraper returns `scraped: 0` and the bank's baseline was already 0, `detectFailures()` does NOT report a failure for that bank
-- [ ] AC4: When a bank in `EXPECTED_BANKS` is absent from the `summaries` array, `detectFailures()` returns a `BankFailure` with `kind: "missing_from_run"`
-- [ ] AC5: `reportFailures()` checks for an existing open issue (via the GitHub search endpoint) before creating a new one, and skips creation if one is found
-- [ ] AC6: `reportFailures()` creates an issue titled per the `kind`-specific pattern (e.g. `crawler: hnb scraper failed`) with labels `["bug", "crawler"]` when no open issue exists
-- [ ] AC7: If `GITHUB_FEEDBACK_TOKEN` is unset, `reportFailures()` logs a warning and returns without making any network calls or throwing
-- [ ] AC8: If the GitHub API call throws (network error, non-2xx), `reportFailures()` logs a warning for that specific failure and continues processing the remaining failures, without throwing
-- [ ] AC9: `crawler/run.ts`'s `process.exit()` code is unaffected by `reportFailures()` — it remains driven solely by `hasError` from the scraper `Promise.allSettled` results
-- [ ] AC10: `npm run type-check` passes with no new errors
+- [x] AC1: When a scraper's `RunSummary.status === "error"`, `detectFailures()` returns a `BankFailure` with `kind: "error"` for that bank
+- [x] AC2: When a scraper returns `scraped: 0` and the bank had a non-zero baseline active-offer count, `detectFailures()` returns a `BankFailure` with `kind: "zero_offers"`
+- [x] AC3: When a scraper returns `scraped: 0` and the bank's baseline was already 0, `detectFailures()` does NOT report a failure for that bank
+- [x] AC4: When a bank in `EXPECTED_BANKS` is absent from the `summaries` array, `detectFailures()` returns a `BankFailure` with `kind: "missing_from_run"`
+- [x] AC5: `reportFailures()` checks for an existing open issue (via the GitHub search endpoint) before creating a new one, and skips creation if one is found
+- [x] AC6: `reportFailures()` creates an issue titled per the `kind`-specific pattern (e.g. `crawler: hnb scraper failed`) with labels `["bug", "crawler"]` when no open issue exists
+- [x] AC7: If `GITHUB_FEEDBACK_TOKEN` is unset, `reportFailures()` logs a warning and returns without making any network calls or throwing
+- [x] AC8: If the GitHub API call throws (network error, non-2xx), `reportFailures()` logs a warning for that specific failure and continues processing the remaining failures, without throwing
+- [x] AC9: `crawler/run.ts`'s `process.exit()` code is unaffected by `reportFailures()` — it remains driven solely by `hasError` from the scraper `Promise.allSettled` results
+- [x] AC10: `npm run type-check` passes with no new errors
 
 ## Test Cases
 

@@ -5,10 +5,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OfferInput } from "../../specs/data/offer.schema";
 
-const { mockFindOneAndUpdate, mockUpdateMany, mockFindOne } = vi.hoisted(() => ({
+const { mockFindOneAndUpdate, mockUpdateMany, mockFindOne, mockAggregate } = vi.hoisted(() => ({
   mockFindOneAndUpdate: vi.fn(),
   mockUpdateMany: vi.fn(),
   mockFindOne: vi.fn(),
+  mockAggregate: vi.fn(),
 }));
 
 vi.mock("../../src/lib/models/offer.model", () => ({
@@ -16,6 +17,7 @@ vi.mock("../../src/lib/models/offer.model", () => ({
     findOneAndUpdate: mockFindOneAndUpdate,
     updateMany: mockUpdateMany,
     findOne: mockFindOne,
+    aggregate: mockAggregate,
   },
 }));
 
@@ -28,7 +30,7 @@ vi.mock("mongoose", () => ({
   },
 }));
 
-import { upsertOffers, expireStaleOffers } from "./db";
+import { upsertOffers, expireStaleOffers, getActiveOfferCountsByBank } from "./db";
 
 const MOCK_OFFER: OfferInput = {
   bank: "sampath_bank",
@@ -204,5 +206,34 @@ describe("expireStaleOffers", () => {
     expect(expired).toBe(5);
     const [filter] = mockUpdateMany.mock.calls[0];
     expect(filter.title.$nin).toHaveLength(0);
+  });
+});
+
+describe("getActiveOfferCountsByBank", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns correct per-bank counts from a mocked aggregate result (AC2, AC3)", async () => {
+    mockAggregate.mockResolvedValue([
+      { _id: "sampath_bank", count: 12 },
+      { _id: "hnb", count: 3 },
+    ]);
+
+    const counts = await getActiveOfferCountsByBank();
+
+    expect(counts).toEqual({ sampath_bank: 12, hnb: 3 });
+    expect(mockAggregate).toHaveBeenCalledWith([
+      { $match: { isExpired: false } },
+      { $group: { _id: "$bank", count: { $sum: 1 } } },
+    ]);
+  });
+
+  it("returns an empty object when there are no active offers", async () => {
+    mockAggregate.mockResolvedValue([]);
+
+    const counts = await getActiveOfferCountsByBank();
+
+    expect(counts).toEqual({});
   });
 });

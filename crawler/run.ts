@@ -8,7 +8,9 @@ import dotenv from "dotenv";
 // Load .env.local first (Next.js convention for local secrets), fall back to .env
 dotenv.config({ path: ".env.local" });
 dotenv.config();
-import { connectDb, disconnectDb, upsertOffers, expireStaleOffers } from "./utils/db";
+import { connectDb, disconnectDb, upsertOffers, expireStaleOffers, getActiveOfferCountsByBank } from "./utils/db";
+import { detectFailures, reportFailures } from "./utils/failureAlerts";
+import type { RunSummary } from "./utils/failureAlerts";
 import * as combank from "./scrapers/combank";
 import * as sampath from "./scrapers/sampath";
 import * as hnb from "./scrapers/hnb";
@@ -37,17 +39,6 @@ const SCRAPERS: ScraperConfig[] = [
   { name: "bank_of_ceylon", module: boc },
 ];
 
-interface RunSummary {
-  bank: string;
-  status: "success" | "error";
-  scraped?: number;
-  inserted?: number;
-  updated?: number;
-  expired?: number;
-  error?: string;
-  durationMs?: number;
-}
-
 async function main(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI;
   if (!mongoUri) {
@@ -56,6 +47,7 @@ async function main(): Promise<void> {
   }
 
   await connectDb(mongoUri);
+  const previousActiveCounts = await getActiveOfferCountsByBank();
 
   const summaries: RunSummary[] = [];
   let hasError = false;
@@ -99,6 +91,11 @@ async function main(): Promise<void> {
       }
     })
   );
+
+  const failures = detectFailures(summaries, previousActiveCounts);
+  if (failures.length > 0) {
+    await reportFailures(failures); // advisory — never throws
+  }
 
   await disconnectDb();
 
