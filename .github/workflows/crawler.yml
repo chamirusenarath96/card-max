@@ -100,5 +100,5 @@ jobs:
                 '- [ ] Verify HNB API endpoint is responsive',
                 '- [ ] Re-run workflow manually once fixed',
               ].join('\n'),
-              labels: ['bug', 'crawler']
+              labels: ['bug', 'urgent', 'crawler']
             });

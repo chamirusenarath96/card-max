@@ -63,5 +63,5 @@ jobs:
                 '- [ ] Check Gemini API status',
                 '- [ ] Re-run workflow manually once fixed — pending/failed offers are retried automatically',
               ].join('\n'),
-              labels: ['bug', 'enrichment']
+              labels: ['bug', 'urgent', 'enrichment']
             });
