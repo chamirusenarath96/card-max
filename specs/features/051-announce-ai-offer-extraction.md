@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Spec 044 (AI-assisted offer enrichment — semantic search field + precise
@@ -74,16 +74,16 @@ visitors who haven't dismissed it, exactly as it does for any other active
 announcement.
 
 ## Acceptance Criteria
-- [ ] AC1: Running the migration script creates exactly one new `Announcement`
+- [x] AC1: Running the migration script creates exactly one new `Announcement`
       document with `active: true` and a message describing the AI-extraction feature
-- [ ] AC2: If any other announcement was `active: true` before the migration runs, it
+- [x] AC2: If any other announcement was `active: true` before the migration runs, it
       is set to `active: false` as part of the same script run
-- [ ] AC3: Running the migration script a second time does not create a duplicate
+- [x] AC3: Running the migration script a second time does not create a duplicate
       announcement — it updates the existing one (matched by `message`) instead of
       inserting a new document
-- [ ] AC4: The created document validates against `AnnouncementSchema` (message <= 280
+- [x] AC4: The created document validates against `AnnouncementSchema` (message <= 280
       chars, `active` boolean)
-- [ ] AC5: After the migration runs, `GET /api/announcements/active` returns this
+- [x] AC5: After the migration runs, `GET /api/announcements/active` returns this
       announcement (verifies AC1/AC2 end-to-end through the existing spec 045 API,
       not just the raw DB write)
 
