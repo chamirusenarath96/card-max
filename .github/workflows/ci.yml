@@ -169,7 +169,7 @@ jobs:
                 '',
                 'The deploy job has been blocked. Fix the failing migration before merging.',
               ].join('\n'),
-              labels: ['bug', 'deploy'],
+              labels: ['bug', 'urgent', 'deploy'],
             });
 
   # ── Job 4: Deploy to Vercel (push to master only, after CI + E2E + migrate pass) ─
@@ -313,5 +313,5 @@ jobs:
                 '',
                 'Please investigate and redeploy.',
               ].join('\n'),
-              labels: ['bug', 'deploy'],
+              labels: ['bug', 'urgent', 'deploy'],
             });

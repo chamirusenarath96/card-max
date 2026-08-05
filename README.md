@@ -1593,25 +1593,45 @@ Issue labels:
 
 ```
 (untriaged issue) ──spec-writer──▶ spec-drafted ──human, manual──▶ approved ──implementer──▶ in-progress ──implementer──▶ closed
+        │                                                              │
+  pipeline auto-creates                                   human, manual ▼ (optional)
+     +bug +urgent                                                +priority
+  (jumps the queue                                        (jumps the queue ahead of
+   for spec-writing)                                        older plain-approved issues)
 ```
 
 1. A feature or bug starts as a plain GitHub issue — just a short description, no label.
-2. **`card-max-spec-writer`** (every 12h) finds untriaged open issues, drafts a full spec
-   for each under `specs/features/`, commits it straight to `master` (spec-only commits
-   are allowed directly per the Git Conventions below), then comments on the issue with
-   a link to the spec and labels it `spec-drafted`.
+   **Exception**: issues auto-created by a failing pipeline (`crawler.yml`, `enrich.yml`,
+   `ci.yml`'s `migrate`/`deploy` jobs) are created pre-labeled `bug` + `urgent` (plus a
+   category label — `crawler`/`enrichment`/`deploy`).
+2. **`card-max-spec-writer`** (daily) finds untriaged open issues and drafts a full spec
+   for each under `specs/features/` — **any issue labeled both `bug` and `urgent` is
+   drafted first**, ahead of older non-urgent issues, so a broken pipeline gets a fix
+   spec'd before routine feature work without anyone having to manually reprioritize.
+   It commits straight to `master` (spec-only commits are allowed directly per the Git
+   Conventions below), then comments on the issue with a link to the spec and labels it
+   `spec-drafted`.
 3. **A human reviews the drafted spec and manually relabels the issue `approved`** — this
    is the only manual gate in the whole pipeline; nothing is implemented without it.
-4. **`card-max-implementer`** (hourly) only ever acts on issues labeled `approved`. It
-   flips the label to `in-progress`, implements the spec on a `feat/NNN-slug` branch,
-   writes the required tests, runs all four local verification gates, opens a PR, polls
-   CI to completion, squash-merges once everything passes, and closes the issue. It also
-   recovers stale `in-progress` issues left over from a run that died mid-way (resumes
-   the existing PR, or reverts the label to `approved` if no branch/PR exists).
+4. **Optionally, a human can also label an `approved` issue `priority`** to fast-track
+   it — `card-max-implementer` always checks for `approved` + `priority` issues first and
+   picks the oldest of those ahead of any older plain-`approved` issue. Priority never
+   skips step 5's recovery check, so it can't cause the agent to abandon or interrupt
+   already-in-progress work — it only affects which issue gets picked *next*, on the
+   agent's regular schedule (there's no way to trigger an out-of-band run just by
+   labeling an issue `priority`; manually clicking "Run now" on the task is the only way
+   to get an immediate run).
+5. **`card-max-implementer`** (daily) always clears any unfinished `in-progress` work
+   first (resumes the existing PR, or reverts the label to `approved` if no branch/PR
+   exists), *then* picks its next issue: the oldest `priority`-labeled `approved` issue
+   if any exist, otherwise the oldest plain `approved` issue. It flips the chosen one to
+   `in-progress`, implements the spec on a `feat/NNN-slug` branch, writes the required
+   tests, runs all four local verification gates, opens a PR, polls CI to completion,
+   squash-merges once everything passes, and closes the issue.
 
 The 41 specs that predate this workflow have no linked issue; they're tracked instead by
 an unchecked `- [ ]` item in the [Roadmap](#known-limitations--roadmap) above, which both
 agents fall back to when no `approved`-labeled issue is available.
 
-Full agent prompts and label definitions (`spec-drafted`, `approved`, `in-progress`) live
-in the "Scheduled Automation" section of `CLAUDE.md`.
+Full agent prompts and label definitions (`spec-drafted`, `approved`, `priority`,
+`in-progress`, `bug`, `urgent`) live in the "Scheduled Automation" section of `CLAUDE.md`.

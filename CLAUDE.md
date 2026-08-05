@@ -367,18 +367,26 @@ Two scheduled agents maintain the project autonomously, driven by a **GitHub Iss
 (untriaged issue) ──spec-writer──▶ spec-drafted ──human, manual──▶ approved ──implementer──▶ in-progress ──implementer──▶ closed
 ```
 
-- Every feature/bug starts as a plain GitHub issue (short description, no label).
-- `card-max-spec-writer` drafts a spec for it, links the spec back to the issue with a `**GitHub Issue**: #N` line in the spec file, comments on the issue with the spec path, and labels it `spec-drafted`.
+- Every feature/bug starts as a plain GitHub issue (short description, no label) — **except** issues auto-created by a failing pipeline (`crawler.yml`, `enrich.yml`, `ci.yml`'s `migrate`/`deploy` jobs), which are created pre-labeled `bug` + `urgent` (plus a category label: `crawler`/`enrichment`/`deploy`).
+- `card-max-spec-writer` drafts a spec for it, links the spec back to the issue with a `**GitHub Issue**: #N` line in the spec file, comments on the issue with the spec path, and labels it `spec-drafted`. **Any untriaged issue labeled both `bug` and `urgent` is drafted first**, ahead of older non-urgent issues — this is how a broken pipeline gets a fix spec'd before routine feature work, without a human having to manually reprioritize anything.
 - **A human reviews the spec and manually swaps the label to `approved`** — this is the only manual gate in the pipeline; nothing is implemented without it.
-- `card-max-implementer` only ever picks up issues labeled `approved`, flips them to `in-progress` while it works, and closes the issue once the PR is merged. It also has a recovery check for stale `in-progress` issues left over from a run that failed mid-way.
+- **Optional: a human can additionally label an `approved` issue `priority`** to fast-track it. `card-max-implementer` always checks for `approved`+`priority` issues first and picks the oldest of those ahead of any older plain-`approved` issue. Priority never skips the recovery step — any unfinished `in-progress` work from a prior run is always resumed/cleared first, so a priority flag can never cause abandoned work. "ASAP" is bounded by the task's own schedule (see table below) — flagging an issue `priority` doesn't trigger an out-of-band run; it just wins the next scheduled run's selection. Manually clicking "Run now" on the task is the only way to get an immediate run.
+- `card-max-implementer` only ever picks up issues labeled `approved` (optionally `priority`), flips the chosen one to `in-progress` while it works, and closes the issue once the PR is merged. It also has a recovery check for stale `in-progress` issues left over from a run that failed mid-way.
 - The 41 specs written before this workflow existed (no `**GitHub Issue**` line) fall back to the legacy signal: an unchecked `- [ ]` item in `README.md`'s "Known Limitations & Roadmap" section.
 
 | Task ID | Schedule | Purpose |
 |---------|----------|---------|
-| `card-max-spec-writer` | Every 12 hours | Finds untriaged open issues → drafts a spec for each → commits spec-only changes to master → comments + labels the issue `spec-drafted`. Never touches `approved`/`in-progress` labels or closes issues. |
-| `card-max-implementer` | Every hour | Picks the oldest issue labeled `approved` → implements → tests → verifies CI → merges the PR → closes the issue |
+| `card-max-spec-writer` | Daily | Finds untriaged open issues → drafts `bug`+`urgent` ones first, then the rest oldest-first → commits spec-only changes to master → comments + labels the issue `spec-drafted`. Never touches `approved`/`priority`/`in-progress` labels or closes issues. |
+| `card-max-implementer` | Daily | Clears any unfinished `in-progress` work first, then picks the oldest `priority`-labeled `approved` issue if any exist, otherwise the oldest plain `approved` issue → implements → tests → verifies CI → merges the PR → closes the issue |
 
-Labels used: `spec-drafted`, `approved`, `in-progress` — created automatically by `card-max-spec-writer` on first run if they don't already exist on the repo.
+**Lifecycle labels** (`spec-drafted`, `approved`, `in-progress`, `urgent`) — created automatically by `card-max-spec-writer` on first run if they don't already exist on the repo.
+
+**Severity/priority labels** (informational, layered on top of the lifecycle — never removed by either agent except where noted):
+- `bug` — GitHub's built-in default label; used on any issue describing broken behavior
+- `urgent` — combined with `bug`, jumps the queue for spec-writing (see above). All four pipeline failure-notification steps (`crawler.yml`, `enrich.yml`, `ci.yml`'s `migrate` and `deploy` jobs) create their issues with `['bug', 'urgent', <category>]` automatically
+- `priority` (optional, human-applied fast-track on top of `approved`) — jumps the queue for *implementation*, not spec-writing. Not auto-created — GitHub lets you create it inline the first time you apply it from the issue's label picker, or run `gh label create priority --repo chamirusenarath96/card-max --color "d93f0b" --description "Fast-track: card-max-implementer picks this before other approved issues"`
+
+Note the two queue-jumps are independent and cover different stages: `urgent` (+`bug`) affects which untriaged issue gets a spec drafted next; `priority` affects which already-`approved` issue gets implemented next. A pipeline-failure issue naturally benefits from both in sequence — `urgent` gets it spec'd quickly, and a human can add `priority` after approving that spec to also fast-track its implementation.
 
 Both tasks read this file (`CLAUDE.md`) and the `.claude/commands/` directory for implementation guidance. Do not duplicate rules here that are already in those command files.
 
