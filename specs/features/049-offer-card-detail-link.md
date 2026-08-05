@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 Offer cards on the main grid (`OfferCardDefault`, `OfferCardCompact`,
@@ -63,17 +63,17 @@ unchanged) once the user navigates to the detail page.
   `OfferCardExpanded`
 
 ## Acceptance Criteria
-- [ ] AC1: `OfferCardDefault` links to `/offers/<offer._id>`
-- [ ] AC2: `OfferCardCompact` links to `/offers/<offer._id>`
-- [ ] AC3: `OfferCardExpanded` links to `/offers/<offer._id>`
-- [ ] AC4: The card's existing visual content (merchant, title, description, discount,
+- [x] AC1: `OfferCardDefault` links to `/offers/<offer._id>`
+- [x] AC2: `OfferCardCompact` links to `/offers/<offer._id>`
+- [x] AC3: `OfferCardExpanded` links to `/offers/<offer._id>`
+- [x] AC4: The card's existing visual content (merchant, title, description, discount,
       bank, category, badges) renders unchanged alongside the new link
-- [ ] AC5: The description "Show more"/"Show less" toggle (`desc-toggle`, only present
+- [x] AC5: The description "Show more"/"Show less" toggle (`desc-toggle`, only present
       on `OfferCardDefault`) still works and does not trigger navigation to the detail
       page when clicked
-- [ ] AC6: Clicking a card on the main offers grid navigates the browser to the
+- [x] AC6: Clicking a card on the main offers grid navigates the browser to the
       corresponding `/offers/[id]` page (e2e)
-- [ ] AC7: The card link has no `target="_blank"` — navigation happens in the same
+- [x] AC7: The card link has no `target="_blank"` — navigation happens in the same
       tab (internal route, unlike the old external `sourceUrl` CTA)
 
 ## Test Cases

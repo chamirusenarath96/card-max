@@ -105,6 +105,34 @@ test.describe("Offer Listing (Feature 001)", () => {
     await expect(grid.or(notFound)).toBeVisible({ timeout: 10000 });
     expect(capturedUrl).not.toContain("includeExpired=true");
   });
+
+  // AC6 (spec 049): clicking a card on the main grid navigates to its
+  // internal /offers/[id] detail page. The grid is server-rendered directly
+  // against the live DB (page.route() can't intercept that server-side
+  // fetch — see the 047 pagination tests below), so this reads the real
+  // card's href rather than asserting a mocked id, and skips gracefully if
+  // there's no live DB / no offers to click, matching the resilient pattern
+  // used throughout this file.
+  test("clicking a card on the main grid navigates to its /offers/[id] detail page (spec 049)", async ({ page }) => {
+    await page.goto("/");
+    const grid = page.getByTestId("offer-grid");
+    const emptyState = page.getByTestId("empty-state");
+    await expect(grid.or(emptyState)).toBeVisible({ timeout: 10000 });
+
+    const hasOffers = await grid.isVisible().catch(() => false);
+    test.skip(!hasOffers, "no live DB, or no offers to click");
+
+    const firstCard = page.getByTestId("offer-card").first();
+    const href = await firstCard.getAttribute("href");
+    expect(href).toMatch(/^\/offers\/.+/);
+
+    await firstCard.click();
+    await expect(page).toHaveURL(new RegExp(href!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), { timeout: 10000 });
+
+    const detail = page.getByTestId("offer-detail");
+    const notFound = page.getByTestId("offer-not-found");
+    await expect(detail.or(notFound)).toBeVisible({ timeout: 10000 });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo, formatValidityPeriod } from "./offer-card-shared";
@@ -32,8 +33,9 @@ export function OfferCardDefault({ offer }: Props) {
      * the Card's overflow-hidden doesn't clip the box-shadow.
      * Expired offers get muted with opacity + grayscale.
      */
-    <div
-      className={cn("group relative h-full", offer.isExpired && "opacity-50 grayscale")}
+    <Link
+      href={`/offers/${offer._id}`}
+      className={cn("group relative block h-full", offer.isExpired && "opacity-50 grayscale")}
       data-testid="offer-card"
     >
       {/* Glowing border — fades in on hover using bank brand colour */}
@@ -107,7 +109,11 @@ export function OfferCardDefault({ offer }: Props) {
                 {isLong && (
                   <button
                     type="button"
-                    onClick={() => setDescExpanded((v) => !v)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDescExpanded((v) => !v);
+                    }}
                     className="mt-0.5 text-[11px] font-medium text-primary underline-offset-2 hover:underline"
                     data-testid="desc-toggle"
                   >
@@ -153,6 +159,6 @@ export function OfferCardDefault({ offer }: Props) {
           </CardContent>
         </div>
       </Card>
-    </div>
+    </Link>
   );
 }
