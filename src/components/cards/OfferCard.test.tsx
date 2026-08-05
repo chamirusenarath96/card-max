@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { OfferCard } from "./OfferCard";
 import type { Offer } from "../../../specs/data/offer.schema";
@@ -125,16 +125,34 @@ describe("OfferCard", () => {
     expect(screen.getByTestId("offer-type-badge")).not.toHaveTextContent("OFF");
   });
 
-  // Regression (spec 046 AC6): offer-card CTAs remain unchanged by the new
-  // /offers/[id] detail page. Note: spec 024's external "View Offer Details"
-  // link was already removed in a later commit (opened broken bank pages) —
-  // cards render no sourceUrl link today, and spec 046 does not reintroduce one.
-  it("does not render an external sourceUrl link on any card variant (spec 046 AC6)", () => {
+  // Spec 049 supersedes spec 046 AC6: cards now link internally to
+  // /offers/<id> instead of rendering no CTA at all (external sourceUrl link
+  // was removed earlier by commit caf5c85fd and is not reintroduced here).
+  it("links to the internal /offers/<id> detail page on every card variant (spec 049 AC1-AC3)", () => {
     const { rerender } = render(<OfferCard offer={BASE_OFFER} size="default" />);
-    expect(screen.queryByTestId("offer-view-link")).not.toBeInTheDocument();
+    expect(screen.getByTestId("offer-card")).toHaveAttribute("href", `/offers/${BASE_OFFER._id}`);
     rerender(<OfferCard offer={BASE_OFFER} size="compact" />);
-    expect(screen.queryByTestId("offer-view-link")).not.toBeInTheDocument();
+    expect(screen.getByTestId("offer-card")).toHaveAttribute("href", `/offers/${BASE_OFFER._id}`);
     rerender(<OfferCard offer={BASE_OFFER} size="expanded" />);
-    expect(screen.queryByTestId("offer-view-link")).not.toBeInTheDocument();
+    expect(screen.getByTestId("offer-card")).toHaveAttribute("href", `/offers/${BASE_OFFER._id}`);
+  });
+
+  it("card link does not open in a new tab (internal navigation, spec 049 AC7)", () => {
+    render(<OfferCard offer={BASE_OFFER} />);
+    const card = screen.getByTestId("offer-card");
+    expect(card).not.toHaveAttribute("target", "_blank");
+    expect(card).not.toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("clicking desc-toggle does not navigate to the detail page (spec 049 AC5)", () => {
+    const offerWithLongDesc: Offer = {
+      ...BASE_OFFER,
+      description: "A".repeat(200),
+    };
+    render(<OfferCard offer={offerWithLongDesc} />);
+    const toggle = screen.getByTestId("desc-toggle");
+    const eventNotPrevented = fireEvent.click(toggle);
+    expect(eventNotPrevented).toBe(false);
+    expect(toggle).toHaveTextContent("Show less");
   });
 });

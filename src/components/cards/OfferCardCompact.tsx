@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Offer } from "../../../specs/data/offer.schema";
 import { BANK_METADATA } from "../../../specs/data/offer.schema";
 import { CATEGORY_LABELS, getBadgeLabel, getExpiryInfo, formatValidityPeriod } from "./offer-card-shared";
@@ -27,8 +28,9 @@ export function OfferCardCompact({ offer }: Props) {
   const shownDesc = isLong && !descExpanded ? `${desc.slice(0, DESC_LIMIT)}…` : desc;
 
   return (
-    <div
-      className={cn("group relative h-full", offer.isExpired && "opacity-50 grayscale")}
+    <Link
+      href={`/offers/${offer._id}`}
+      className={cn("group relative block h-full", offer.isExpired && "opacity-50 grayscale")}
       data-testid="offer-card"
     >
       {/* Glowing border on hover */}
@@ -99,7 +101,11 @@ export function OfferCardCompact({ offer }: Props) {
                 {isLong && (
                   <button
                     type="button"
-                    onClick={() => setDescExpanded((v) => !v)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDescExpanded((v) => !v);
+                    }}
                     className="mt-0.5 text-[10px] font-medium text-primary underline-offset-2 hover:underline"
                     data-testid="desc-toggle"
                   >
@@ -143,6 +149,6 @@ export function OfferCardCompact({ offer }: Props) {
           </CardContent>
         </div>
       </Card>
-    </div>
+    </Link>
   );
 }
