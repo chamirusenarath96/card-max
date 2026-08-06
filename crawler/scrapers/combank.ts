@@ -15,6 +15,7 @@
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { fetchHtml, pLimit, sleep } from "../utils/http";
+import { fetchHtmlWithProxyFallback } from "../utils/proxyFetch";
 import { parseDiscount } from "../utils/parseDiscount";
 
 const LISTING_URL = "https://www.combank.lk/rewards-promotions";
@@ -55,7 +56,7 @@ export async function scrape(): Promise<OfferInput[]> {
 
   try {
     // Phase 1: get offer URLs from listing page
-    const listingHtml = await fetchHtml(LISTING_URL);
+    const listingHtml = await fetchHtmlWithProxyFallback(LISTING_URL, "commercial_bank", () => fetchHtml(LISTING_URL));
     const offerLinks = extractOfferLinks(listingHtml);
     console.log(`[combank] Found ${offerLinks.length} offer links`);
 
@@ -67,7 +68,7 @@ export async function scrape(): Promise<OfferInput[]> {
     const tasks = offerLinks.map(({ url, category }) => async () => {
       try {
         await sleep(800);
-        const detailHtml = await fetchHtml(url, 0);
+        const detailHtml = await fetchHtmlWithProxyFallback(url, "commercial_bank", () => fetchHtml(url, 0));
         return parseDetailPage(detailHtml, url, category);
       } catch (err) {
         console.warn(`[combank] Failed to fetch ${url}:`, (err as Error).message);
