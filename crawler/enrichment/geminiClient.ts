@@ -8,12 +8,15 @@ import { GoogleGenAI } from "@google/genai";
 // scraped offers, so latency/cost per offer matters more than raw quality.
 // Also eligible for the Gemini API's free tier (see #95's cost caveat).
 //
-// gemini-2.0-flash was retired by Google on 2026-06-01 (every request
-// returned free-tier "limit: 0" instead of a clean error). gemini-2.5-flash
-// is Google's documented direct replacement and is still free-tier eligible
-// as of 2026-08 — see the Gemini API free-tier model list before changing
-// this again, since Google's free-tier lineup shifts over time.
-export const ENRICHMENT_MODEL = "gemini-2.5-flash";
+// Pinned dated model IDs kept breaking within weeks as Google retired/
+// gated them: gemini-2.0-flash was retired 2026-06-01 ("limit: 0" instead
+// of a clean error), then gemini-2.5-flash turned out to be blocked for
+// new API projects specifically ("no longer available to new users", 404).
+// Using Google's self-updating "-latest" alias instead, so this always
+// resolves to whichever Flash model Google currently recommends for new
+// projects, without needing another manual migration each time the
+// lineup shifts.
+export const ENRICHMENT_MODEL = "gemini-flash-latest";
 
 let client: GoogleGenAI | undefined;
 
