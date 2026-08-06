@@ -101,7 +101,7 @@ this section previously listed:
    **not** sweep the full ~700-offer collection on every run. This keeps enrichment
    fully decoupled from the scrape/upsert path (needed for AC4/AC6) and bounds
    per-run cost to that day's newly-scraped offers.
-2. **AI provider/model**: **Google Gemini** (`gemini-2.5-flash`, via `@google/genai`),
+2. **AI provider/model**: **Google Gemini** (`gemini-flash-latest`, via `@google/genai`),
    for both text summarization / date-condition parsing and image/vision extraction —
    one provider for both parts of the pipeline. **Superseded 2026-08-02**: originally
    Claude (Anthropic); switched to Gemini to use the reviewer's existing free-tier
@@ -111,13 +111,17 @@ this section previously listed:
    successfully run in production under the original choice). `crawler/enrichment/
    geminiClient.ts` (renamed from `anthropicClient.ts`) is the sole call site for the
    provider SDK; `GEMINI_API_KEY` replaces `ANTHROPIC_API_KEY` as the required secret.
-   **Model superseded again 2026-08-05**: the original pick, `gemini-2.0-flash`, was
-   retired by Google on 2026-06-01 — every enrichment run since the Gemini switch had
-   been silently failing on every offer with a free-tier `limit: 0` error (a retired
-   model, not an exhausted quota). Moved to `gemini-2.5-flash`, Google's documented
-   direct replacement and still free-tier eligible as of 2026-08. Exact model choice
-   (e.g. cost/latency-tier selection) remains an implementation-time
-   detail, not a spec-level constraint.
+   **Model superseded twice more, 2026-08-05**: the original pick, `gemini-2.0-flash`,
+   was retired by Google on 2026-06-01 — every enrichment run since the Gemini switch
+   had been silently failing on every offer with a free-tier `limit: 0` error (a
+   retired model, not an exhausted quota). The first fix, `gemini-2.5-flash`, turned
+   out to *also* fail immediately — "This model models/gemini-2.5-flash is no longer
+   available to new users" (404), since it's restricted to pre-existing API projects
+   only. Rather than pin a third dated model ID that could break again in weeks,
+   switched to Google's self-updating `gemini-flash-latest` alias, which always
+   resolves to whichever Flash model Google currently recommends for new projects.
+   Exact underlying model resolved by that alias is an implementation-time detail,
+   not a spec-level constraint.
 3. **Vector storage**: `embedding` is stored in a **separate index**, not inline in
    the main offers collection query path, and it **integrates with the existing
    Atlas Search index** (spec 013) rather than introducing an unrelated search
