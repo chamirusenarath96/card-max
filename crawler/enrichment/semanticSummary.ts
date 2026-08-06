@@ -19,7 +19,12 @@ export async function generateSemanticSummary(
   const response = await client.models.generateContent({
     model: ENRICHMENT_MODEL,
     contents: buildPrompt(input),
-    config: { maxOutputTokens: 200 },
+    // thinkingBudget: 0 disables Gemini's default "thinking" pass — without
+    // it, thinking tokens are counted against maxOutputTokens and can
+    // consume the entire budget before the model writes the actual answer,
+    // producing truncated/garbled summaries (#116). This task is a plain
+    // 1-2 sentence rewrite with no need for multi-step reasoning.
+    config: { maxOutputTokens: 200, thinkingConfig: { thinkingBudget: 0 } },
   });
 
   const text = response.text?.trim();

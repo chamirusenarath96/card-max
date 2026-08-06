@@ -85,6 +85,26 @@ describe("extractTextFromImages", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
+  it("disables thinking so the token budget isn't consumed by reasoning (#116)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Map([["content-type", "image/jpeg"]]) as unknown as Headers,
+        arrayBuffer: async () => new ArrayBuffer(100),
+      })
+    );
+    mockCreate.mockResolvedValue({ text: "Some text." });
+
+    await extractTextFromImages(["https://bank.lk/promo.jpg"]);
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ thinkingConfig: { thinkingBudget: 0 } }),
+      })
+    );
+  });
+
   it("returns undefined when the model finds no conditions text (NONE)", async () => {
     vi.stubGlobal(
       "fetch",
