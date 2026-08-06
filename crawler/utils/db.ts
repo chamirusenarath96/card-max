@@ -140,3 +140,15 @@ export async function expireStaleOffers(
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/**
+ * Per-bank count of currently active (non-expired) offers, used as the
+ * "before this run" baseline for zero-offer failure detection (spec 052).
+ */
+export async function getActiveOfferCountsByBank(): Promise<Record<string, number>> {
+  const rows = await OfferModel.aggregate<{ _id: string; count: number }>([
+    { $match: { isExpired: false } },
+    { $group: { _id: "$bank", count: { $sum: 1 } } },
+  ]);
+  return Object.fromEntries(rows.map((r) => [r._id, r.count]));
+}

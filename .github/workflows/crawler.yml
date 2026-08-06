@@ -42,6 +42,9 @@ jobs:
         run: npm run crawler
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          GITHUB_FEEDBACK_TOKEN: ${{ secrets.GITHUB_FEEDBACK_TOKEN }}
+          GITHUB_REPO_OWNER: ${{ secrets.GITHUB_REPO_OWNER }}
+          GITHUB_REPO_NAME: ${{ secrets.GITHUB_REPO_NAME }}
 
       # After new data is written to MongoDB, bust the Vercel ISR cache so
       # users see fresh offers within seconds instead of waiting up to 1 hour.
