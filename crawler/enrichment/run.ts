@@ -62,6 +62,10 @@ export async function runEnrichment(): Promise<EnrichmentRunSummary> {
     if (patch.enrichmentStatus === "done") {
       done++;
       consecutiveFailures = 0;
+      console.log(
+        `[enrichment] Done "${doc.title}": summary="${patch.semanticSummary ?? "(none)"}" ` +
+          `applicableDates=${JSON.stringify(patch.applicableDates ?? null)}`
+      );
     } else {
       failed++;
       consecutiveFailures++;
