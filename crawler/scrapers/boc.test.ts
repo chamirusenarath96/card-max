@@ -9,8 +9,15 @@ vi.mock("../utils/http", () => ({
   sleep: vi.fn(),
 }));
 
+vi.mock("../utils/proxyProviders/registry", () => ({
+  getConfiguredProviders: vi.fn(() => []),
+  getBankProviderMap: vi.fn(() => ({})),
+  selectProviderForBank: vi.fn(() => null),
+}));
+
 import { scrape } from "./boc";
 import { fetchHtml } from "../utils/http";
+import { getConfiguredProviders, selectProviderForBank } from "../utils/proxyProviders/registry";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -160,5 +167,23 @@ describe("boc scraper", () => {
 
     expect(merchants).toContain("Pizza Hut");
     expect(merchants).toContain("Keells");
+  });
+
+  it("recovers a category whose direct fetch rejects but proxy fetch succeeds, and skips a category where both reject (AC14)", async () => {
+    const proxyFetchHtml = vi.fn().mockResolvedValue(CATEGORY_HTML);
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+    vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+
+    // First category: direct fetch fails, proxy recovers. Remaining categories: both fail (skipped).
+    vi.mocked(fetchHtml)
+      .mockRejectedValueOnce(new Error("HTTP 403"))
+      .mockRejectedValue(new Error("HTTP 403"));
+    proxyFetchHtml.mockResolvedValueOnce(CATEGORY_HTML).mockRejectedValue(new Error("Proxy also failed"));
+
+    const offers = await scrape();
+
+    expect(offers.length).toBeGreaterThan(0);
+    const merchants = offers.map((o) => o.merchant);
+    expect(merchants).toContain("Pizza Hut");
   });
 });

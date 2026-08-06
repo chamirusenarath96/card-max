@@ -14,6 +14,7 @@
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { fetchHtml, sleep } from "../utils/http";
+import { fetchHtmlWithProxyFallback } from "../utils/proxyFetch";
 import { parseDiscount } from "../utils/parseDiscount";
 
 const BASE_URL = "https://www.boc.lk";
@@ -45,7 +46,7 @@ export async function scrape(): Promise<OfferInput[]> {
   for (const { slug, defaultCategory } of CATEGORIES) {
     const url = `${BASE_URL}/personal-banking/card-offers/${slug}`;
     try {
-      const html = await fetchHtml(url);
+      const html = await fetchHtmlWithProxyFallback(url, "bank_of_ceylon", () => fetchHtml(url));
       const cards = parseOfferCards(html, url);
       console.log(`[boc] ${slug}: found ${cards.length} offer cards`);
 

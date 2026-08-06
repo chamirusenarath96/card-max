@@ -16,6 +16,7 @@
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { parseDiscount } from "../utils/parseDiscount";
 import { fetchHtmlSessioned, sleep } from "../utils/http";
+import { getConfiguredProviders, getBankProviderMap, selectProviderForBank } from "../utils/proxyProviders/registry";
 
 const BASE_URL = "https://www.nationstrust.com";
 const LISTING_URL = "https://www.nationstrust.com/promotions/what-s-new";
@@ -57,7 +58,15 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
   const cookieJar = new Map<string, string>();
 
   try {
-    const listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
+    let listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
+
+    if (isBlockPage(listingHtml)) {
+      const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+      if (provider) {
+        console.log(`[ntb] HTTP blocked, retrying listing via ${provider.name}…`);
+        listingHtml = await provider.fetchHtml(LISTING_URL).catch(() => listingHtml);
+      }
+    }
 
     if (isBlockPage(listingHtml)) {
       console.warn("[ntb] HTTP: listing page is blocked by Incapsula");
@@ -74,7 +83,14 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
     for (const url of campaignLinks) {
       await sleep(400);
       try {
-        const html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
+        let html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
+        if (isBlockPage(html)) {
+          const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+          if (provider) {
+            console.log(`[ntb] HTTP blocked, retrying campaign via ${provider.name}: ${url}`);
+            html = await provider.fetchHtml(url).catch(() => html);
+          }
+        }
         if (isBlockPage(html)) {
           console.warn(`[ntb] HTTP: campaign page blocked: ${url}`);
           continue;
