@@ -3,7 +3,8 @@
  * Spec: specs/features/004-performance.md
  *
  * Tests focus on:
- *   - /api/ping endpoint availability (warmup route)
+ *   - /api/health endpoint availability (warmup route — spec 056 removed the
+ *     duplicate /api/ping route in favor of the canonical /api/health)
  *   - /api/offers _timing field presence (observability)
  *   - Page loading without visible layout shift (CLS)
  *   - Offer grid or skeleton renders within timeout (LCP proxy)
@@ -35,14 +36,14 @@ const MOCK_API_RESPONSE = {
 };
 
 test.describe("Performance (Feature 004)", () => {
-  test("/api/ping responds without a 500 error (AC: warmup cron target)", async ({
+  test("/api/health responds without a 500 error (AC: warmup cron target)", async ({
     request,
   }) => {
     // The warmup route should be reachable — accept 200 (DB up) or 503 (no DB in CI)
-    const res = await request.get("/api/ping");
+    const res = await request.get("/api/health");
     expect([200, 503]).toContain(res.status());
     const body = await res.json();
-    expect(typeof body.ok).toBe("boolean");
+    expect(typeof body.status).toBe("string");
   });
 
   test("/api/offers response includes _timing field (AC3: observability)", async ({

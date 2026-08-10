@@ -132,3 +132,32 @@ describe("ci.yml deploy job has no Atlas warmup health ping (AC3)", () => {
     expect(deploySection).toContain("api/revalidate");
   });
 });
+
+describe("duplicate warmup workflow removed (spec 056, AC1 + AC2)", () => {
+  it("warmup.yml no longer exists", () => {
+    expect(existsSync(join(workflowsDir, "warmup.yml"))).toBe(false);
+  });
+
+  it("/api/ping route no longer exists", () => {
+    const pingDir = join(ROOT, "src", "app", "api", "ping");
+    expect(existsSync(join(pingDir, "route.ts"))).toBe(false);
+    expect(existsSync(join(pingDir, "route.test.ts"))).toBe(false);
+  });
+
+  it("atlas-warmup.yml is unchanged — still the sole warmup cron on /api/health every 4 minutes (AC4)", () => {
+    const atlasWarmup = readWorkflow("atlas-warmup.yml");
+    expect(atlasWarmup).toContain('cron: "*/4 * * * *"');
+    expect(atlasWarmup).toContain("api/health");
+  });
+});
+
+describe("crawler.yml, enrich.yml, scraper-smoke.yml use composite setup action (spec 056, AC3)", () => {
+  it.each(["crawler.yml", "enrich.yml", "scraper-smoke.yml"])(
+    "%s references ./.github/actions/setup and has no inline actions/setup-node step",
+    (workflowFile) => {
+      const workflow = readWorkflow(workflowFile);
+      expect(workflow).toContain("uses: ./.github/actions/setup");
+      expect(workflow).not.toContain("actions/setup-node@v4");
+    }
+  );
+});
