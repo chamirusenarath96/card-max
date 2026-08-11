@@ -1,6 +1,7 @@
 /**
  * WebScrapingAPI provider — unit tests
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC12)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC12),
+ *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC2)
  */
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { createWebScrapingApiProvider } from "./webscrapingapi";
@@ -41,5 +42,18 @@ describe("createWebScrapingApiProvider", () => {
 
     const provider = createWebScrapingApiProvider("test-key");
     await expect(provider.fetchHtml("https://example.com")).rejects.toThrow("WebScrapingAPI HTTP 500");
+  });
+
+  it("includes the response body text in the thrown error when present (AC2)", async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve('{"error":"rate limit exceeded"}'),
+    } as Response);
+
+    const provider = createWebScrapingApiProvider("test-key");
+    await expect(provider.fetchHtml("https://example.com")).rejects.toThrow(
+      'WebScrapingAPI HTTP 429 fetching https://example.com: {"error":"rate limit exceeded"}'
+    );
   });
 });
