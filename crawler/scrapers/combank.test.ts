@@ -14,12 +14,12 @@ vi.mock("../utils/http", () => ({
 vi.mock("../utils/proxyProviders/registry", () => ({
   getConfiguredProviders: vi.fn(() => []),
   getBankProviderMap: vi.fn(() => ({})),
-  selectProviderForBank: vi.fn(() => null),
+  orderedProvidersForBank: vi.fn(() => []),
 }));
 
 import { scrape } from "./combank";
 import { fetchHtml } from "../utils/http";
-import { getConfiguredProviders, selectProviderForBank } from "../utils/proxyProviders/registry";
+import { getConfiguredProviders, orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
 const LISTING_HTML = `
 <html><body>
@@ -103,7 +103,7 @@ describe("combank scraper", () => {
   it("still returns parsed offers when the listing-page direct fetch rejects but the configured proxy provider succeeds (AC13)", async () => {
     const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
     vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-    vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
     vi.mocked(fetchHtml)
       .mockRejectedValueOnce(new Error("HTTP 403"))

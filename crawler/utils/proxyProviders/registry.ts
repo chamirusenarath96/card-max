@@ -1,6 +1,7 @@
 /**
  * Provider registry + selection
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6),
+ *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3)
  */
 import type { ProxyProvider } from "./types";
 import { createZenRowsProvider } from "./zenrows";
@@ -38,4 +39,17 @@ export function selectProviderForBank(
 
   const hash = [...bank].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   return providers[hash % providers.length];
+}
+
+/** The bank's deterministically selected provider first, followed by any other
+ *  configured providers — so a caller can retry via a second provider when the
+ *  first one's fetchHtml() throws, instead of giving up immediately. */
+export function orderedProvidersForBank(
+  bank: string,
+  providers: ProxyProvider[],
+  bankMap: Record<string, string> = {}
+): ProxyProvider[] {
+  const first = selectProviderForBank(bank, providers, bankMap);
+  if (!first) return [];
+  return [first, ...providers.filter((p) => p !== first)];
 }

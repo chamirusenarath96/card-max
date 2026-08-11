@@ -12,12 +12,12 @@ vi.mock("../utils/http", () => ({
 vi.mock("../utils/proxyProviders/registry", () => ({
   getConfiguredProviders: vi.fn(() => []),
   getBankProviderMap: vi.fn(() => ({})),
-  selectProviderForBank: vi.fn(() => null),
+  orderedProvidersForBank: vi.fn(() => []),
 }));
 
 import { scrape } from "./boc";
 import { fetchHtml } from "../utils/http";
-import { getConfiguredProviders, selectProviderForBank } from "../utils/proxyProviders/registry";
+import { getConfiguredProviders, orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -172,7 +172,7 @@ describe("boc scraper", () => {
   it("recovers a category whose direct fetch rejects but proxy fetch succeeds, and skips a category where both reject (AC14)", async () => {
     const proxyFetchHtml = vi.fn().mockResolvedValue(CATEGORY_HTML);
     vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-    vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
     // First category: direct fetch fails, proxy recovers. Remaining categories: both fail (skipped).
     vi.mocked(fetchHtml)
