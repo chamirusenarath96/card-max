@@ -3,6 +3,7 @@
  * Spec: specs/features/044-ai-offer-enrichment.md (AC3, AC4, AC5, AC6)
  */
 import { describe, it, expect, vi } from "vitest";
+import { ApiError } from "@google/genai";
 import { enrichOffer } from "./enrichOffer";
 
 const BASE_OFFER = {
@@ -55,6 +56,40 @@ describe("enrichOffer", () => {
     );
 
     expect(result).toEqual({ enrichmentStatus: "failed" });
+  });
+
+  it("logs the Gemini error's HTTP status when present, distinguishing config errors from quota errors (AC4, #119)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const apiError = new ApiError({ message: "got status: INVALID_ARGUMENT.", status: 400 });
+
+    await enrichOffer(
+      { ...BASE_OFFER, description: "Every Thursday." },
+      {
+        fetchSourceHtml: vi.fn().mockResolvedValue("<div></div>"),
+        generateSummary: vi.fn().mockRejectedValue(apiError),
+        extractImagesText: vi.fn(),
+      }
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("(status: 400)"), apiError.message);
+    warnSpy.mockRestore();
+  });
+
+  it("does not throw and omits the status suffix when the error has no HTTP status (AC4 edge case)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await enrichOffer(
+      { ...BASE_OFFER, description: "Every Thursday." },
+      {
+        fetchSourceHtml: vi.fn().mockResolvedValue("<div></div>"),
+        generateSummary: vi.fn().mockRejectedValue(new Error("network error")),
+        extractImagesText: vi.fn(),
+      }
+    );
+
+    expect(result).toEqual({ enrichmentStatus: "failed" });
+    expect(warnSpy).toHaveBeenCalledWith(expect.not.stringContaining("status:"), "network error");
+    warnSpy.mockRestore();
   });
 
   it("sets enrichmentStatus to failed when enrichment exceeds its time budget (AC4)", async () => {

@@ -120,9 +120,10 @@ async function describeImage(image: {
       createPartFromBase64(image.data, image.mediaType),
       VISION_PROMPT,
     ]),
-    // See semanticSummary.ts — disables thinking so the token budget goes
-    // entirely to the extracted text, not an internal reasoning pass (#116).
-    config: { maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } },
+    // See semanticSummary.ts (#119) — no thinkingConfig, generous
+    // maxOutputTokens headroom instead so an unavoidable thinking pass can't
+    // starve the extracted text (#116).
+    config: { maxOutputTokens: 1024 },
   });
 
   return response.text?.trim();
