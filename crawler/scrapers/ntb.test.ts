@@ -188,6 +188,73 @@ describe("ntb scraper", () => {
       expect(PlaywrightCrawler).not.toHaveBeenCalled();
     });
 
+    it("retries the listing fetch via the proxy provider when the direct fetch throws, and uses the proxy result (spec 059 AC1)", async () => {
+      const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+
+      vi.mocked(fetchHtmlSessioned)
+        .mockRejectedValueOnce(new Error("HTTP 403 fetching https://www.nationstrust.com/promotions/what-s-new"))
+        .mockResolvedValueOnce(CAMPAIGN_HTML);
+
+      const offers = await scrape();
+
+      expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("nationstrust.com"));
+      expect(offers.length).toBeGreaterThan(0);
+      expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
+    });
+
+    it("retries a campaign-page fetch via the proxy provider when the direct fetch throws (spec 059 AC2)", async () => {
+      const proxyFetchHtml = vi.fn().mockResolvedValue(CAMPAIGN_HTML);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+
+      vi.mocked(fetchHtmlSessioned)
+        .mockResolvedValueOnce(LISTING_HTML)
+        .mockRejectedValueOnce(new Error("HTTP 403 fetching campaign page"));
+
+      const offers = await scrape();
+
+      expect(proxyFetchHtml).toHaveBeenCalledWith(CAMPAIGN_URL);
+      expect(offers.length).toBeGreaterThan(0);
+      expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
+    });
+
+    it("falls through to Crawlee when the listing fetch throws and no proxy provider is configured (spec 059 AC3)", async () => {
+      vi.mocked(selectProviderForBank).mockReturnValue(null);
+      vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
+
+      setupCrawlerMock(() => ({
+        waitForSelector: vi.fn().mockRejectedValue(new Error("Timeout")),
+        evaluate: vi.fn().mockResolvedValue(""),
+        $$eval: vi.fn().mockResolvedValue([]),
+      }));
+
+      const offers = await scrape();
+      expect(Array.isArray(offers)).toBe(true);
+      expect(PlaywrightCrawler).toHaveBeenCalled();
+    });
+
+    it("returns null from the HTTP path (falling through to Crawlee) when both the direct fetch and the proxy provider throw for the listing page (spec 059 AC4)", async () => {
+      const proxyFetchHtml = vi.fn().mockRejectedValue(new Error("proxy also failed"));
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+
+      vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
+
+      setupCrawlerMock(() => ({
+        waitForSelector: vi.fn().mockRejectedValue(new Error("Timeout")),
+        evaluate: vi.fn().mockResolvedValue(""),
+        $$eval: vi.fn().mockResolvedValue([]),
+      }));
+
+      const offers = await scrape();
+
+      expect(proxyFetchHtml).toHaveBeenCalled();
+      expect(PlaywrightCrawler).toHaveBeenCalled();
+      expect(Array.isArray(offers)).toBe(true);
+    });
+
     it("falls back to scrapeWithCrawlee() when both the direct and proxy-retried listing fetches are blocked (AC16)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(BLOCK_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);

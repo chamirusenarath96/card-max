@@ -58,7 +58,15 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
   const cookieJar = new Map<string, string>();
 
   try {
-    let listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
+    let listingHtml: string;
+    try {
+      listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
+    } catch (err) {
+      const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+      if (!provider) throw err;
+      console.log(`[ntb] Direct fetch threw (${(err as Error).message}), retrying listing via ${provider.name}…`);
+      listingHtml = await provider.fetchHtml(LISTING_URL);
+    }
 
     if (isBlockPage(listingHtml)) {
       const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
@@ -83,7 +91,15 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
     for (const url of campaignLinks) {
       await sleep(400);
       try {
-        let html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
+        let html: string;
+        try {
+          html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
+        } catch (err) {
+          const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+          if (!provider) throw err;
+          console.log(`[ntb] Direct fetch threw for ${url}, retrying via ${provider.name}…`);
+          html = await provider.fetchHtml(url);
+        }
         if (isBlockPage(html)) {
           const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
           if (provider) {

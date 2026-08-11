@@ -5,8 +5,8 @@
 ## Status
 - [x] Spec drafted
 - [x] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
+- [x] Implementation started
+- [x] Tests written
 - [ ] Done
 
 ## Purpose
@@ -175,20 +175,20 @@ is set, so this is a safe, additive change.
   fallback paths (listing page and campaign page)
 
 ## Acceptance Criteria
-- [ ] AC1: When `fetchHtmlSessioned()` throws for the listing page (e.g. a
+- [x] AC1: When `fetchHtmlSessioned()` throws for the listing page (e.g. a
       non-2xx status) and a proxy provider is configured, `scrapeViaHttp()`
       retries the listing fetch via that provider instead of returning `null`
       immediately
-- [ ] AC2: When `fetchHtmlSessioned()` throws for a campaign page and a proxy
+- [x] AC2: When `fetchHtmlSessioned()` throws for a campaign page and a proxy
       provider is configured, the campaign-page loop retries that specific page
       via the provider instead of skipping it silently
-- [ ] AC3: When no proxy provider is configured (`selectProviderForBank` returns
+- [x] AC3: When no proxy provider is configured (`selectProviderForBank` returns
       `null`), behavior is unchanged from today — the original error propagates
       to the existing catch/return-null path
-- [ ] AC4: When the proxy provider's `fetchHtml()` itself also throws, the
+- [x] AC4: When the proxy provider's `fetchHtml()` itself also throws, the
       original failure is still handled gracefully (logged, function returns
       `null` or continues to the next campaign link) — never crashes the crawl
-- [ ] AC5: `npm run type-check` and `npm run test` pass with no new errors
+- [x] AC5: `npm run type-check` and `npm run test` pass with no new errors
 
 ## Test Cases
 
