@@ -34,16 +34,14 @@ describe("generateSemanticSummary", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  it("disables thinking so the token budget isn't consumed by reasoning (#116)", async () => {
+  it("omits thinkingConfig and gives maxOutputTokens headroom so thinking tokens can't starve the answer (#116, #119)", async () => {
     mockCreate.mockResolvedValue({ text: "Summary." });
 
     await generateSemanticSummary({ title: "Offer", merchant: "Merchant", category: "other" });
 
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({ thinkingConfig: { thinkingBudget: 0 } }),
-      })
-    );
+    const [[call]] = mockCreate.mock.calls;
+    expect(call.config.thinkingConfig).toBeUndefined();
+    expect(call.config.maxOutputTokens).toBeGreaterThanOrEqual(1024);
   });
 
   it("returns undefined when the response has no text content", async () => {
