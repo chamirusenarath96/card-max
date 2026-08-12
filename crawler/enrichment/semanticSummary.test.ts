@@ -1,14 +1,15 @@
 /**
  * generateSemanticSummary — unit tests
  * Spec: specs/features/044-ai-offer-enrichment.md (AC3, AC4)
+ *       specs/features/057-enrichment-multi-provider-llm-strategy.md (AC15)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+const { mockGenerateText } = vi.hoisted(() => ({ mockGenerateText: vi.fn() }));
 
-vi.mock("./geminiClient", () => ({
-  getGeminiClient: () => ({ models: { generateContent: mockCreate } }),
-  ENRICHMENT_MODEL: "gemini-flash-latest",
+vi.mock("./providers/router", () => ({
+  generateText: mockGenerateText,
+  sharedRouter: {},
 }));
 
 import { generateSemanticSummary } from "./semanticSummary";
@@ -19,9 +20,7 @@ describe("generateSemanticSummary", () => {
   });
 
   it("returns a non-empty summary for a well-formed offer (AC3)", async () => {
-    mockCreate.mockResolvedValue({
-      text: "20% off dining at Pizza Hut, a great weekday deal.",
-    });
+    mockGenerateText.mockResolvedValue("20% off dining at Pizza Hut, a great weekday deal.");
 
     const result = await generateSemanticSummary({
       title: "20% off at Pizza Hut",
@@ -31,21 +30,27 @@ describe("generateSemanticSummary", () => {
     });
 
     expect(result).toBe("20% off dining at Pizza Hut, a great weekday deal.");
-    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
   });
 
-  it("omits thinkingConfig and gives maxOutputTokens headroom so thinking tokens can't starve the answer (#116, #119)", async () => {
-    mockCreate.mockResolvedValue({ text: "Summary." });
+  it("builds a prompt containing the offer's title, merchant, and category (AC15)", async () => {
+    mockGenerateText.mockResolvedValue("Summary.");
 
-    await generateSemanticSummary({ title: "Offer", merchant: "Merchant", category: "other" });
+    await generateSemanticSummary({
+      title: "20% off at Pizza Hut",
+      description: "Every weekday",
+      merchant: "Pizza Hut",
+      category: "dining",
+    });
 
-    const [[call]] = mockCreate.mock.calls;
-    expect(call.config.thinkingConfig).toBeUndefined();
-    expect(call.config.maxOutputTokens).toBeGreaterThanOrEqual(1024);
+    const [, prompt] = mockGenerateText.mock.calls[0] as [unknown, string];
+    expect(prompt).toContain("Pizza Hut");
+    expect(prompt).toContain("dining");
+    expect(prompt).toContain("20% off at Pizza Hut");
   });
 
-  it("returns undefined when the response has no text content", async () => {
-    mockCreate.mockResolvedValue({ text: undefined });
+  it("returns undefined when the router returns an empty string", async () => {
+    mockGenerateText.mockResolvedValue("");
 
     const result = await generateSemanticSummary({
       title: "Offer",
@@ -57,7 +62,7 @@ describe("generateSemanticSummary", () => {
   });
 
   it("propagates errors so the caller can mark enrichment as failed (AC4)", async () => {
-    mockCreate.mockRejectedValue(new Error("AI provider unavailable"));
+    mockGenerateText.mockRejectedValue(new Error("AI provider unavailable"));
 
     await expect(
       generateSemanticSummary({ title: "Offer", merchant: "Merchant", category: "other" })

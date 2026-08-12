@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 The enrichment pipeline (`specs/features/044-ai-offer-enrichment.md`) hardcodes a
