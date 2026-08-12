@@ -206,6 +206,81 @@ const HEADING_VIEW_MORE_HTML = `
 </body></html>
 `;
 
+/**
+ * Single offer-card article whose listing-page text has no recognizable
+ * validity wording, so the listing pass yields no validUntil (spec 054).
+ */
+const SINGLE_OFFER_CARD_NO_DATE_HTML = `
+<!DOCTYPE html><html><body>
+<section>
+  <article class="offer-card" role="article">
+    <div class="discount-badge">30%</div>
+    <div class="offer-image">
+      <a href="https://www.peoplesbank.lk/promotion/keells-30-off-credit/">
+        <img src="https://www.peoplesbank.lk/roastoth/2023/03/keels.jpg" alt="Keells" />
+      </a>
+    </div>
+    <div class="card-content">
+      <div class="promo-short fw-medium">Keells</div>
+      <div class="meta">
+        <span class="merchant-name">30% off on Fresh Vegetables, Fruit, Seafood</span>
+      </div>
+    </div>
+  </article>
+</section>
+</body></html>
+`;
+
+/**
+ * Same as above, but the listing pass already yields a validUntil, so the
+ * detail-page fetch should be skipped entirely (AC4).
+ */
+const SINGLE_OFFER_CARD_WITH_DATE_HTML = `
+<!DOCTYPE html><html><body>
+<section>
+  <article class="offer-card" role="article">
+    <div class="discount-badge">30%</div>
+    <div class="offer-image">
+      <a href="https://www.peoplesbank.lk/promotion/keells-30-off-credit/">
+        <img src="https://www.peoplesbank.lk/roastoth/2023/03/keels.jpg" alt="Keells" />
+      </a>
+    </div>
+    <div class="card-content">
+      <div class="promo-short fw-medium">Keells</div>
+      <div class="meta">
+        <span class="merchant-name">30% off on Fresh Vegetables. Valid till 31 December 2026</span>
+      </div>
+    </div>
+  </article>
+</section>
+</body></html>
+`;
+
+/** Detail page containing the `Validity: Till <date> ((<condition>))` wording (AC2, AC3) */
+const DETAIL_PAGE_VALIDITY_HTML = `
+<!DOCTYPE html><html><body>
+<main>
+  <h1>Keells — 30% off</h1>
+  <p>30% off on Fresh Vegetables, Fruit, Seafood &amp; Fresh Meat.</p>
+  <p>Validity: Till August 31, 2026 ((Every Monday &amp; Wednesday))</p>
+</main>
+</body></html>
+`;
+
+/** Detail page with the validity line but no parenthesised condition (edge case) */
+const DETAIL_PAGE_VALIDITY_NO_CONDITION_HTML = `
+<!DOCTYPE html><html><body>
+<main><p>Validity: Till August 31, 2026</p></main>
+</body></html>
+`;
+
+/** Detail page with no recognizable validity line at all (AC5) */
+const DETAIL_PAGE_NO_VALIDITY_HTML = `
+<!DOCTYPE html><html><body>
+<main><p>Terms and conditions apply. Contact your nearest branch for details.</p></main>
+</body></html>
+`;
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("peoples_bank scraper", () => {
@@ -451,5 +526,97 @@ describe("peoples_bank scraper", () => {
     expect(description).toBeDefined();
     expect(description!.toLowerCase()).not.toContain("view more");
     expect(description).toContain("Complimentary coffee");
+  });
+
+  // spec 054 / issue #96 — detail-page validity date extraction
+  describe("detail-page validity fetch (spec 054 / issue #96)", () => {
+    it("fetches detail page and extracts validUntil when listing pass has no date (AC1, AC2)", async () => {
+      vi.mocked(fetchHtml).mockResolvedValueOnce(SINGLE_OFFER_CARD_NO_DATE_HTML);
+      vi.mocked(fetchHtml).mockResolvedValueOnce(DETAIL_PAGE_VALIDITY_HTML);
+      vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+      const offers = await scrape();
+
+      const keells = offers.find((o) => o.merchant === "Keells");
+      expect(keells).toBeDefined();
+      expect(keells?.validUntil).toBeInstanceOf(Date);
+      expect(keells!.validUntil!.getFullYear()).toBe(2026);
+      expect(keells!.validUntil!.getMonth()).toBe(7); // August = 7
+      expect(keells!.validUntil!.getDate()).toBe(31);
+
+      // Detail page was fetched using the offer's sourceUrl
+      expect(fetchHtml).toHaveBeenCalledWith(
+        "https://www.peoplesbank.lk/promotion/keells-30-off-credit/",
+      );
+    });
+
+    it("appends parenthesised condition text to description (AC3)", async () => {
+      vi.mocked(fetchHtml).mockResolvedValueOnce(SINGLE_OFFER_CARD_NO_DATE_HTML);
+      vi.mocked(fetchHtml).mockResolvedValueOnce(DETAIL_PAGE_VALIDITY_HTML);
+      vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+      const offers = await scrape();
+
+      const keells = offers.find((o) => o.merchant === "Keells");
+      expect(keells?.description).toContain("Every Monday & Wednesday");
+    });
+
+    it("leaves description unchanged when the validity line has no condition (edge case)", async () => {
+      vi.mocked(fetchHtml).mockResolvedValueOnce(SINGLE_OFFER_CARD_NO_DATE_HTML);
+      vi.mocked(fetchHtml).mockResolvedValueOnce(DETAIL_PAGE_VALIDITY_NO_CONDITION_HTML);
+      vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+      const offers = await scrape();
+
+      const keells = offers.find((o) => o.merchant === "Keells");
+      expect(keells?.validUntil).toBeInstanceOf(Date);
+      expect(keells?.validUntil!.getFullYear()).toBe(2026);
+      expect(keells?.description).not.toContain("(");
+    });
+
+    it("skips detail-page fetch when listing pass already has validUntil (AC4)", async () => {
+      vi.mocked(fetchHtml).mockResolvedValueOnce(SINGLE_OFFER_CARD_WITH_DATE_HTML);
+      vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+      const offers = await scrape();
+
+      const keells = offers.find((o) => o.merchant === "Keells");
+      expect(keells?.validUntil).toBeInstanceOf(Date);
+      expect(keells!.validUntil!.getFullYear()).toBe(2026);
+      expect(keells!.validUntil!.getMonth()).toBe(11); // December = 11
+
+      // The only fetch that should have happened for the detail page's sourceUrl
+      // is none — it should never appear as a fetchHtml argument.
+      const calledUrls = vi.mocked(fetchHtml).mock.calls.map((c) => c[0]);
+      expect(calledUrls).not.toContain(
+        "https://www.peoplesbank.lk/promotion/keells-30-off-credit/",
+      );
+    });
+
+    it("detail page with no validity line leaves validUntil undefined (AC5)", async () => {
+      vi.mocked(fetchHtml).mockResolvedValueOnce(SINGLE_OFFER_CARD_NO_DATE_HTML);
+      vi.mocked(fetchHtml).mockResolvedValueOnce(DETAIL_PAGE_NO_VALIDITY_HTML);
+      vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+      const offers = await scrape();
+
+      const keells = offers.find((o) => o.merchant === "Keells");
+      expect(keells).toBeDefined();
+      expect(keells?.validUntil).toBeUndefined();
+    });
+
+    it("detail-page fetch failure is caught and offer still returned with other fields (AC6)", async () => {
+      vi.mocked(fetchHtml).mockResolvedValueOnce(SINGLE_OFFER_CARD_NO_DATE_HTML);
+      vi.mocked(fetchHtml).mockRejectedValueOnce(new Error("HTTP 500"));
+      vi.mocked(fetchHtml).mockResolvedValue(NO_PROMOTIONS_HTML);
+
+      const offers = await scrape();
+
+      const keells = offers.find((o) => o.merchant === "Keells");
+      expect(keells).toBeDefined();
+      expect(keells?.validUntil).toBeUndefined();
+      expect(keells?.merchant).toBe("Keells");
+      expect(keells?.discountPercentage).toBe(30);
+    });
   });
 });
