@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 `src/components/cards/OfferImage.tsx` renders the stored `merchantLogoUrl` with
@@ -60,14 +60,14 @@ bank-hosted logo was previously blocked by referrer-based hotlink protection now
 the real logo instead of the blurry generic favicon fallback.
 
 ## Acceptance Criteria
-- [ ] AC1: The primary-stage `<Image>` in `OfferImage.tsx` (rendering
+- [x] AC1: The primary-stage `<Image>` in `OfferImage.tsx` (rendering
       `offer.merchantLogoUrl`) has `referrerPolicy="no-referrer"` set
-- [ ] AC2: The favicon-fallback stage's `<Image>` is unaffected (no referrer-policy
+- [x] AC2: The favicon-fallback stage's `<Image>` is unaffected (no referrer-policy
       change required there)
-- [ ] AC3: `buildClearbitUrl` is renamed to `buildFaviconFallbackUrl` in
+- [x] AC3: `buildClearbitUrl` is renamed to `buildFaviconFallbackUrl` in
       `crawler/utils/logo.ts`, with its call site in `OfferImage.tsx` updated to match
       and no remaining references to the old name
-- [ ] AC4: A spot check across at least 3 different banks' `merchantLogoUrl` values
+- [x] AC4: A spot check across at least 3 different banks' `merchantLogoUrl` values
       confirms the logo still loads correctly with `referrerPolicy="no-referrer"` set
       (no bank CDN in the current dataset requires a referrer)
 
