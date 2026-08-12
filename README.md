@@ -326,10 +326,9 @@ URLs, extracts offer blocks with regex, and handles both `<img>` tags and CSS
 
 **Image resolution chain (display time):** When no scraped `merchantLogoUrl` is stored,
 `OfferImage.tsx` falls back to Google's favicon service (`google.com/s2/favicons?domain=...`)
-using the `MERCHANT_DOMAINS` map in `crawler/utils/logo.ts` (40+ curated Sri Lankan merchant
-domains; the function is still named `buildClearbitUrl` for historical reasons — it no
-longer calls Clearbit, see #97). If that also fails, a gradient icon with the category
-symbol and merchant name is shown. Bank-hosted `merchantLogoUrl` images render with
+via `buildFaviconFallbackUrl` using the `MERCHANT_DOMAINS` map in `crawler/utils/logo.ts`
+(40+ curated Sri Lankan merchant domains). If that also fails, a gradient icon with the
+category symbol and merchant name is shown. Bank-hosted `merchantLogoUrl` images render with
 `referrerPolicy="no-referrer"` so bank hotlink-protection doesn't block them (#97).
 
 ### Crawler Pipeline

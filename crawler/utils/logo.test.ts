@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   resolveMerchantDomain,
-  buildClearbitUrl,
+  buildFaviconFallbackUrl,
   resolveMerchantImage,
   resetBrandfetchCounter,
   getBrandfetchCallCount,
@@ -55,15 +55,15 @@ describe("resolveMerchantDomain — curated map", () => {
   });
 });
 
-describe("buildClearbitUrl", () => {
+describe("buildFaviconFallbackUrl", () => {
   it("builds a Google favicon URL from a known merchant", () => {
-    expect(buildClearbitUrl("Keells")).toBe(
+    expect(buildFaviconFallbackUrl("Keells")).toBe(
       "https://www.google.com/s2/favicons?domain=keells.com&sz=128"
     );
   });
 
   it("returns undefined for an unknown merchant", () => {
-    expect(buildClearbitUrl("Unknown Merchant XYZ")).toBeUndefined();
+    expect(buildFaviconFallbackUrl("Unknown Merchant XYZ")).toBeUndefined();
   });
 });
 
