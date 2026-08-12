@@ -158,4 +158,54 @@ describe("enrichment run pipeline", () => {
     // Not every offer was processed — the run stopped short of the full 8.
     expect(enrichOfferMock.mock.calls.length).toBeLessThan(8);
   });
+
+  it("does not trip the circuit breaker for an offer that succeeds after an internal provider-cooldown retry (spec 057 AC17)", async () => {
+    process.env.MONGODB_URI = "mongodb://localhost:27017/test";
+    process.env.GEMINI_API_KEY = "test-key";
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    // A router-level cooldown retry (spec 057) is invisible to run.ts — it
+    // either resolves "done" or, if all providers are exhausted, "failed".
+    // Alternating fail/done here proves consecutiveFailures resets on every
+    // "done" regardless of whatever retrying happened inside enrichOffer,
+    // so the breaker never trips even though total failures accumulate.
+    const offers = Array.from({ length: 6 }, (_, i) => mockOffer({ _id: `offer-${i}` }));
+    const findMock = vi.fn().mockReturnValue({ lean: () => Promise.resolve(offers) });
+    const updateOneMock = vi.fn().mockResolvedValue(undefined);
+    const enrichOfferMock = vi
+      .fn()
+      .mockResolvedValueOnce({ enrichmentStatus: "failed" })
+      .mockResolvedValueOnce({ enrichmentStatus: "done" })
+      .mockResolvedValueOnce({ enrichmentStatus: "failed" })
+      .mockResolvedValueOnce({ enrichmentStatus: "done" })
+      .mockResolvedValueOnce({ enrichmentStatus: "failed" })
+      .mockResolvedValueOnce({ enrichmentStatus: "done" });
+
+    vi.doMock("dotenv", () => ({ default: { config: vi.fn() }, config: vi.fn() }));
+    vi.doMock("mongoose", () => ({
+      default: { connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn().mockResolvedValue(undefined) },
+    }));
+    vi.doMock("../../src/lib/models/offer.model", () => ({
+      OfferModel: { find: findMock, updateOne: updateOneMock },
+    }));
+    vi.doMock("./enrichOffer", () => ({ enrichOffer: enrichOfferMock }));
+
+    await import("./run");
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled());
+
+    const summaryCall = logSpy.mock.calls.find(
+      (args) => typeof args[0] === "string" && args[0].includes("haltedEarly")
+    );
+    const summary = JSON.parse(summaryCall![0] as string);
+
+    expect(summary.haltedEarly).toBe(false);
+    expect(summary.done).toBe(3);
+    expect(summary.failed).toBe(3);
+    expect(enrichOfferMock.mock.calls.length).toBe(6);
+  });
 });

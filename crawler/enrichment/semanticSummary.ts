@@ -1,8 +1,10 @@
 /**
- * Generates a cleaned, search-oriented summary of an offer via Gemini.
+ * Generates a cleaned, search-oriented summary of an offer via the shared
+ * LLM provider router.
  * Spec: specs/features/044-ai-offer-enrichment.md (AC3)
+ *       specs/features/057-enrichment-multi-provider-llm-strategy.md (AC15)
  */
-import { getGeminiClient, ENRICHMENT_MODEL } from "./geminiClient";
+import { generateText, sharedRouter } from "./providers/router";
 
 export interface SemanticSummaryInput {
   title: string;
@@ -14,23 +16,7 @@ export interface SemanticSummaryInput {
 export async function generateSemanticSummary(
   input: SemanticSummaryInput
 ): Promise<string | undefined> {
-  const client = getGeminiClient();
-
-  const response = await client.models.generateContent({
-    model: ENRICHMENT_MODEL,
-    contents: buildPrompt(input),
-    // thinkingConfig: { thinkingBudget: 0 } previously disabled Gemini's
-    // "thinking" pass, but a self-updating "-latest" model rotation started
-    // rejecting that value with 400 INVALID_ARGUMENT (#119). Rather than pin
-    // a new magic thinkingBudget number that could break identically on the
-    // next rotation, we omit thinkingConfig and instead give maxOutputTokens
-    // enough headroom to absorb an unavoidable thinking pass before the
-    // model writes the actual answer, avoiding the original truncation
-    // problem (#116) without depending on the field being supported.
-    config: { maxOutputTokens: 1024 },
-  });
-
-  const text = response.text?.trim();
+  const text = (await generateText(sharedRouter, buildPrompt(input))).trim();
   return text || undefined;
 }
 
