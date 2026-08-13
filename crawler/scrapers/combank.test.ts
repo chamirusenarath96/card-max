@@ -1,5 +1,5 @@
-/**
- * Commercial Bank scraper — unit tests
+﻿/**
+ * Commercial Bank scraper â€” unit tests
  * Spec: specs/features/002-crawler.md (AC1, AC2)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -39,7 +39,7 @@ const DETAIL_HTML = `
 </html>
 `;
 
-// discountPercentage 200 exceeds OfferInputSchema max(100) → safeParse fails
+// discountPercentage 200 exceeds OfferInputSchema max(100) â†’ safeParse fails
 const INVALID_DETAIL_HTML = `
 <html><body>
   <h2>200% off at Test Merchant</h2>
@@ -111,7 +111,8 @@ describe("combank scraper", () => {
 
     const offers = await scrape();
 
-    expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("combank.lk"));
+    expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("combank.lk"), "commercial_bank");
     expect(offers.length).toBeGreaterThan(0);
   });
 });
+

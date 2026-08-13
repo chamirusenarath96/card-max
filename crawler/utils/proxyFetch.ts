@@ -1,7 +1,8 @@
-/**
+﻿/**
  * Scraping-proxy fallback wrapper for direct-fetch call sites.
  * Spec: specs/features/053-scraping-proxy-fallback.md (AC7-AC10),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3-AC5)
+ *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3-AC5),
+ *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5)
  */
 import { getConfiguredProviders, getBankProviderMap, orderedProvidersForBank } from "./proxyProviders/registry";
 
@@ -25,11 +26,11 @@ export async function fetchHtmlWithProxyFallback(
   for (const provider of providers) {
     try {
       console.log(`[proxyFetch] Retrying ${bank} via ${provider.name}: ${url}`);
-      return await provider.fetchHtml(url);
+      return await provider.fetchHtml(url, bank);
     } catch (err) {
       lastErr = err as Error;
       console.warn(`[proxyFetch] Provider ${provider.name} failed for ${bank} (${url}):`, lastErr.message);
     }
   }
-  throw lastErr; // all configured providers failed — rethrow the most recent error, caller's existing catch handles it
+  throw lastErr; // all configured providers failed
 }

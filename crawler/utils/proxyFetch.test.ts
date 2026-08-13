@@ -1,5 +1,5 @@
-/**
- * fetchHtmlWithProxyFallback — unit tests
+﻿/**
+ * fetchHtmlWithProxyFallback â€” unit tests
  * Spec: specs/features/053-scraping-proxy-fallback.md (AC7-AC10),
  *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3-AC5)
  */
@@ -39,7 +39,7 @@ describe("fetchHtmlWithProxyFallback", () => {
     const html = await fetchHtmlWithProxyFallback("https://example.com", "commercial_bank", directFetch);
 
     expect(html).toBe("<html>proxied</html>");
-    expect(providerFetchHtml).toHaveBeenCalledWith("https://example.com");
+    expect(providerFetchHtml).toHaveBeenCalledWith("https://example.com", expect.any(String));
   });
 
   it("rejects (does not swallow) when the direct fetch rejects and no provider is configured (AC9)", async () => {
@@ -83,8 +83,8 @@ describe("fetchHtmlWithProxyFallback", () => {
     const html = await fetchHtmlWithProxyFallback("https://example.com", "boc", directFetch);
 
     expect(html).toBe("<html>from second provider</html>");
-    expect(firstFetchHtml).toHaveBeenCalledWith("https://example.com");
-    expect(secondFetchHtml).toHaveBeenCalledWith("https://example.com");
+    expect(firstFetchHtml).toHaveBeenCalledWith("https://example.com", expect.any(String));
+    expect(secondFetchHtml).toHaveBeenCalledWith("https://example.com", expect.any(String));
   });
 
   it("rejects with the last provider's error when every configured provider fails (AC3)", async () => {
@@ -106,3 +106,4 @@ describe("fetchHtmlWithProxyFallback", () => {
     ).rejects.toThrow("WebScrapingAPI HTTP 500");
   });
 });
+
