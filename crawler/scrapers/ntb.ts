@@ -1,13 +1,13 @@
-/**
+﻿/**
  * Nations Trust Bank (nationstrust.com) offer scraper
  * Spec: specs/features/008-playwright-ntb-fallback.md
  *
  * NTB is protected by Incapsula/Imperva. Strategy:
- *   1. Try plain HTTP first — works from residential IPs (fast, no browser overhead)
+ *   1. Try plain HTTP first â€” works from residential IPs (fast, no browser overhead)
  *   2. If Incapsula blocks the HTTP response, fall back to Crawlee PlaywrightCrawler
  *      which runs a real Chromium browser and can pass JS challenges.
- *   3. Crawlee uses LISTING → CAMPAIGN two-phase navigation to find offer tables.
- *   4. On any error: log warning and return [] — never crash the crawl.
+ *   3. Crawlee uses LISTING â†’ CAMPAIGN two-phase navigation to find offer tables.
+ *   4. On any error: log warning and return [] â€” never crash the crawl.
  *
  * Note on waitForLoadState: we use "load" (not "networkidle") because Incapsula's
  * challenge JS polls the network continuously, causing "networkidle" to time out.
@@ -35,7 +35,7 @@ const REQUEST_LABELS = {
 } as const;
 
 export async function scrape(): Promise<OfferInput[]> {
-  console.log("[ntb] Starting scrape…");
+  console.log("[ntb] Starting scrapeâ€¦");
 
   // Step 1: Try plain HTTP first (works from residential IPs)
   const httpOffers = await scrapeViaHttp();
@@ -44,12 +44,12 @@ export async function scrape(): Promise<OfferInput[]> {
     return httpOffers;
   }
 
-  // Step 2: HTTP blocked — fall back to Crawlee Playwright
-  console.log("[ntb] HTTP blocked, falling back to Crawlee PlaywrightCrawler…");
+  // Step 2: HTTP blocked â€” fall back to Crawlee Playwright
+  console.log("[ntb] HTTP blocked, falling back to Crawlee PlaywrightCrawlerâ€¦");
   return scrapeWithCrawlee();
 }
 
-// ── HTTP path ────────────────────────────────────────────────────────────────
+// â”€â”€ HTTP path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Returns the list of offers scraped via plain HTTP, or null if Incapsula blocks.
@@ -64,15 +64,15 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
     } catch (err) {
       const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
       if (!provider) throw err;
-      console.log(`[ntb] Direct fetch threw (${(err as Error).message}), retrying listing via ${provider.name}…`);
-      listingHtml = await provider.fetchHtml(LISTING_URL);
+      console.log(`[ntb] Direct fetch threw (${(err as Error).message}), retrying listing via ${provider.name}â€¦`);
+      listingHtml = await provider.fetchHtml(LISTING_URL, "nations_trust_bank");
     }
 
     if (isBlockPage(listingHtml)) {
       const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
       if (provider) {
-        console.log(`[ntb] HTTP blocked, retrying listing via ${provider.name}…`);
-        listingHtml = await provider.fetchHtml(LISTING_URL).catch(() => listingHtml);
+        console.log(`[ntb] HTTP blocked, retrying listing via ${provider.name}â€¦`);
+        listingHtml = await provider.fetchHtml(LISTING_URL, "nations_trust_bank").catch(() => listingHtml);
       }
     }
 
@@ -97,14 +97,14 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
         } catch (err) {
           const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
           if (!provider) throw err;
-          console.log(`[ntb] Direct fetch threw for ${url}, retrying via ${provider.name}…`);
-          html = await provider.fetchHtml(url);
+          console.log(`[ntb] Direct fetch threw for ${url}, retrying via ${provider.name}â€¦`);
+          html = await provider.fetchHtml(url, "nations_trust_bank");
         }
         if (isBlockPage(html)) {
           const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
           if (provider) {
             console.log(`[ntb] HTTP blocked, retrying campaign via ${provider.name}: ${url}`);
-            html = await provider.fetchHtml(url).catch(() => html);
+            html = await provider.fetchHtml(url, "nations_trust_bank").catch(() => html);
           }
         }
         if (isBlockPage(html)) {
@@ -127,7 +127,7 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
   }
 }
 
-// ── Crawlee Playwright path ──────────────────────────────────────────────────
+// â”€â”€ Crawlee Playwright path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function scrapeWithCrawlee(): Promise<OfferInput[]> {
   process.env.CRAWLEE_STORAGE_DIR = "/tmp/crawlee-ntb";
@@ -168,7 +168,7 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
           const { url, label } = request;
 
           if (label === REQUEST_LABELS.LISTING) {
-            // Wait for an actual promotion link — this handles the Incapsula challenge
+            // Wait for an actual promotion link â€” this handles the Incapsula challenge
             // redirect transparently: the selector won't match until the real page loads.
             try {
               await page.waitForSelector('a[href*="/promotions/what-s-new/"]', { timeout: 45000 });
@@ -243,7 +243,7 @@ async function scrapeWithCrawlee(): Promise<OfferInput[]> {
   return allOffers;
 }
 
-// ── Shared helpers ───────────────────────────────────────────────────────────
+// â”€â”€ Shared helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function pushValidOffers(
   rows: OfferRow[],
@@ -283,12 +283,12 @@ function pushValidOffers(
   }
 }
 
-// ── HTML parsing helpers ─────────────────────────────────────────────────────
+// â”€â”€ HTML parsing helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Returns true when a URL looks like an actual image rather than a homepage URL.
  * NTB's og:image is misconfigured and returns just "https://www.nationstrust.com"
- * (no path, no image extension) — this guard discards such values.
+ * (no path, no image extension) â€” this guard discards such values.
  */
 function isLikelyImageUrl(url: string): boolean {
   return (
@@ -299,7 +299,7 @@ function isLikelyImageUrl(url: string): boolean {
 
 /**
  * Extract the best available image URL from a campaign page.
- * Priority: og:image → twitter:image → first prominent <img> → undefined.
+ * Priority: og:image â†’ twitter:image â†’ first prominent <img> â†’ undefined.
  */
 function extractPageImage(html: string): string | undefined {
   // og:image (both attribute orderings)
@@ -385,7 +385,7 @@ function parseCampaignTable(html: string): OfferRow[] {
   return rows;
 }
 
-// ── Data extraction helpers ──────────────────────────────────────────────────
+// â”€â”€ Data extraction helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function extractDiscount(text: string): string | undefined {
   const match = text.match(
@@ -454,3 +454,4 @@ function cleanText(html: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+

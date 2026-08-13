@@ -1,7 +1,8 @@
-/**
+﻿/**
  * Provider registry + selection
  * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3)
+ *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3),
+ *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5)
  */
 import type { ProxyProvider } from "./types";
 import { createZenRowsProvider } from "./zenrows";
@@ -17,11 +18,50 @@ export function getConfiguredProviders(env: NodeJS.ProcessEnv = process.env): Pr
 export function getBankProviderMap(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   if (!env.PROXY_BANK_MAP) return {};
   try {
-    return JSON.parse(env.PROXY_BANK_MAP);
+    const raw = JSON.parse(env.PROXY_BANK_MAP) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === "string") out[k] = v;
+      else if (v && typeof v === "object" && "provider" in (v as Record<string, unknown>)) {
+        out[k] = String((v as Record<string, unknown>)["provider"]);
+      }
+    }
+    return out;
   } catch {
     console.warn("[proxyProviders] PROXY_BANK_MAP is not valid JSON — ignoring");
     return {};
   }
+}
+
+export function getBankJsRenderMap(env: NodeJS.ProcessEnv = process.env): Record<string, boolean> {
+  // Explicit map via PROXY_BANK_JS_RENDER_MAP
+  if (env.PROXY_BANK_JS_RENDER_MAP) {
+    try {
+      const parsed = JSON.parse(env.PROXY_BANK_JS_RENDER_MAP) as Record<string, boolean>;
+      return parsed;
+    } catch {
+      // ignore
+    }
+  }
+  // Fallback: extended PROXY_BANK_MAP object form carries jsRender
+  if (env.PROXY_BANK_MAP) {
+    try {
+      const raw = JSON.parse(env.PROXY_BANK_MAP) as Record<string, unknown>;
+      const out: Record<string, boolean> = {};
+      let hasAny = false;
+      for (const [k, v] of Object.entries(raw)) {
+        if (v && typeof v === "object") {
+          const obj = v as Record<string, unknown>;
+          if ("jsRender" in obj) { out[k] = !!obj["jsRender"]; hasAny = true; }
+          else if ("js_render" in obj) { out[k] = !!obj["js_render"]; hasAny = true; }
+        }
+      }
+      if (hasAny) return out;
+    } catch {
+      // ignore
+    }
+  }
+  return {};
 }
 
 /** Deterministic (no shared mutable state) so the same bank always maps to the

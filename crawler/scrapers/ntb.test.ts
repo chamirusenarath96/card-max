@@ -1,5 +1,5 @@
-/**
- * Nations Trust Bank scraper — unit tests
+﻿/**
+ * Nations Trust Bank scraper â€” unit tests
  * Spec: specs/features/008-playwright-ntb-fallback.md (AC2, AC3)
  *       specs/features/002-crawler.md (AC1, AC2)
  *
@@ -30,7 +30,7 @@ import { fetchHtmlSessioned } from "../utils/http";
 import { PlaywrightCrawler } from "crawlee";
 import { getConfiguredProviders, selectProviderForBank } from "../utils/proxyProviders/registry";
 
-// ── Fixture HTML ─────────────────────────────────────────────────────────────
+// â”€â”€ Fixture HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const CAMPAIGN_URL =
   "https://www.nationstrust.com/promotions/what-s-new/enjoy-exclusive-savings-on-dining";
@@ -87,14 +87,14 @@ function setupCrawlerMock(pageFactory: (label: string) => Record<string, unknown
   });
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
+// â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("ntb scraper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  // ── HTTP path ────────────────────────────────────────────────────────────
+  // â”€â”€ HTTP path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   describe("HTTP path", () => {
     it("AC1/AC2: returns valid OfferInput objects when HTTP succeeds", async () => {
@@ -117,7 +117,7 @@ describe("ntb scraper", () => {
     it("falls through to Crawlee when HTTP listing is blocked", async () => {
       vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
 
-      // Crawlee fallback: selector times out → no offers
+      // Crawlee fallback: selector times out â†’ no offers
       setupCrawlerMock(() => ({
         waitForSelector: vi.fn().mockRejectedValue(new Error("Timeout")),
         evaluate: vi.fn().mockResolvedValue(""),
@@ -181,7 +181,7 @@ describe("ntb scraper", () => {
 
       const offers = await scrape();
 
-      expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("nationstrust.com"));
+      expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("nationstrust.com"), "nations_trust_bank");
       expect(offers.length).toBeGreaterThan(0);
       expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
       // Crawlee must not be invoked since the HTTP+proxy path already succeeded
@@ -199,7 +199,7 @@ describe("ntb scraper", () => {
 
       const offers = await scrape();
 
-      expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("nationstrust.com"));
+      expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("nationstrust.com"), "nations_trust_bank");
       expect(offers.length).toBeGreaterThan(0);
       expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
     });
@@ -215,7 +215,7 @@ describe("ntb scraper", () => {
 
       const offers = await scrape();
 
-      expect(proxyFetchHtml).toHaveBeenCalledWith(CAMPAIGN_URL);
+      expect(proxyFetchHtml).toHaveBeenCalledWith(CAMPAIGN_URL, "nations_trust_bank");
       expect(offers.length).toBeGreaterThan(0);
       expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
     });
@@ -276,7 +276,7 @@ describe("ntb scraper", () => {
     });
   });
 
-  // ── Crawlee fallback path ────────────────────────────────────────────────
+  // â”€â”€ Crawlee fallback path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   describe("Crawlee fallback path", () => {
     beforeEach(() => {
@@ -332,3 +332,4 @@ describe("ntb scraper", () => {
     });
   });
 });
+
