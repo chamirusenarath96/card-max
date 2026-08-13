@@ -233,4 +233,22 @@ describe("sampath scraper", () => {
       "https://www.sampath.lk/sampath-cards/credit-card-offer"
     );
   });
+  it("logs truncated raw response when API returns 0 promotions (062 AC1)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(fetchJson).mockResolvedValue({ data: [] });
+    await scrape();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("API returned 0 promotions"));
+    warnSpy.mockRestore();
+  });
+  it("truncates raw log at 2KB when response is large (062 AC1)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const large = { data: [], extra: "x".repeat(5000) };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(fetchJson).mockResolvedValue(large as any);
+    await scrape();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const call = warnSpy.mock.calls.find((c: any) => String(c[0]).includes("raw response"));
+    expect(call).toBeDefined();
+    warnSpy.mockRestore();
+  });
 });
