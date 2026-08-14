@@ -22,13 +22,13 @@ vi.mock("crawlee", () => ({
 vi.mock("../utils/proxyProviders/registry", () => ({
   getConfiguredProviders: vi.fn(() => []),
   getBankProviderMap: vi.fn(() => ({})),
-  selectProviderForBank: vi.fn(() => null),
+  orderedProvidersForBank: vi.fn(() => []),
 }));
 
 import { scrape } from "./ntb";
 import { fetchHtmlSessioned } from "../utils/http";
 import { PlaywrightCrawler } from "crawlee";
-import { getConfiguredProviders, selectProviderForBank } from "../utils/proxyProviders/registry";
+import { getConfiguredProviders, orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
 // â”€â”€ Fixture HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -173,7 +173,7 @@ describe("ntb scraper", () => {
     it("retries the blocked listing page via the assigned proxy provider and returns the proxy-fetched offers when that retry succeeds (AC15)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned)
         .mockResolvedValueOnce(BLOCK_HTML) // listing: direct fetch blocked
@@ -191,7 +191,7 @@ describe("ntb scraper", () => {
     it("retries the listing fetch via the proxy provider when the direct fetch throws, and uses the proxy result (spec 059 AC1)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned)
         .mockRejectedValueOnce(new Error("HTTP 403 fetching https://www.nationstrust.com/promotions/what-s-new"))
@@ -207,7 +207,7 @@ describe("ntb scraper", () => {
     it("retries a campaign-page fetch via the proxy provider when the direct fetch throws (spec 059 AC2)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(CAMPAIGN_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned)
         .mockResolvedValueOnce(LISTING_HTML)
@@ -221,7 +221,7 @@ describe("ntb scraper", () => {
     });
 
     it("falls through to Crawlee when the listing fetch throws and no proxy provider is configured (spec 059 AC3)", async () => {
-      vi.mocked(selectProviderForBank).mockReturnValue(null);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([]);
       vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
 
       setupCrawlerMock(() => ({
@@ -238,7 +238,7 @@ describe("ntb scraper", () => {
     it("returns null from the HTTP path (falling through to Crawlee) when both the direct fetch and the proxy provider throw for the listing page (spec 059 AC4)", async () => {
       const proxyFetchHtml = vi.fn().mockRejectedValue(new Error("proxy also failed"));
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
 
@@ -258,7 +258,7 @@ describe("ntb scraper", () => {
     it("falls back to scrapeWithCrawlee() when both the direct and proxy-retried listing fetches are blocked (AC16)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(BLOCK_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
 
