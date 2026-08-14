@@ -48,9 +48,29 @@ export async function scrape(): Promise<OfferInput[]> {
         if (fetchError) throw lastErr ?? fetchError;
       } else { throw fetchError; }
     }
-    const promotions = extractPromotionList(raw!);
+    let promotions = extractPromotionList(raw!);
     if (promotions.length === 0) {
       try { const rawStr = JSON.stringify(raw); const truncated = rawStr.length > 2048 ? rawStr.slice(0, 2048) + "…[truncated]" : rawStr; console.warn(`[sampath] API returned 0 promotions — raw response (truncated 2KB): ${truncated}`); } catch { console.warn("[sampath] API returned 0 promotions — check response shape (raw not stringifiable)"); }
+      // AC2: zero-result proxy fallback — retry via orderedProvidersForBank when direct fetch returned 0
+      const zeroProviders = orderedProvidersForBank("sampath_bank", getConfiguredProviders(), getBankProviderMap());
+      if (zeroProviders.length > 0) {
+        for (const provider of zeroProviders) {
+          try {
+            console.log(`[sampath] Direct fetch returned 0 promotions, retrying via ${provider.name}…`);
+            const body = await provider.fetchHtml(API_URL, "sampath_bank");
+            let parsed: SampathApiResponse;
+            try { parsed = JSON.parse(body) as SampathApiResponse; } catch { continue; }
+            const proxyPromotions = extractPromotionList(parsed);
+            if (proxyPromotions.length > 0) {
+              raw = parsed;
+              promotions = proxyPromotions;
+              break;
+            }
+          } catch (e) {
+            console.warn(`[sampath] Provider ${provider.name} failed for sampath_bank zero-fallback (${API_URL}):`, (e as Error).message);
+          }
+        }
+      }
     }
     let skipped = 0;
     for (const item of promotions) {
