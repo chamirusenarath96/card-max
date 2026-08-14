@@ -10,8 +10,15 @@ vi.mock("../utils/http", () => ({
   sleep: vi.fn(),
 }));
 
+vi.mock("../utils/proxyProviders/registry", () => ({
+  getConfiguredProviders: vi.fn().mockReturnValue([]),
+  getBankProviderMap: vi.fn().mockReturnValue({}),
+  orderedProvidersForBank: vi.fn().mockReturnValue([]),
+}));
+
 import { scrape } from "./sampath";
 import { fetchJson } from "../utils/http";
+import { orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
 /** Realistic promotion matching the actual Sampath API response shape */
 const VALID_PROMOTION = {
@@ -89,6 +96,7 @@ const JUNK_MASTERCARD_ENTRY = {
 describe("sampath scraper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(orderedProvidersForBank).mockReturnValue([]);
   });
 
   it("returns valid OfferInput objects with correct bank and title (AC1, AC2)", async () => {
@@ -250,5 +258,62 @@ describe("sampath scraper", () => {
     const call = warnSpy.mock.calls.find((c: any) => String(c[0]).includes("raw response"));
     expect(call).toBeDefined();
     warnSpy.mockRestore();
+  });
+
+  // 065 AC2: zero-result proxy fallback
+  it("falls back to ZenRows proxy when direct returns 0 and proxy returns data (065 AC2)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ data: [] });
+    const proxyData = { data: [VALID_PROMOTION] };
+    const mockProvider = {
+      name: "zenrows",
+      fetchHtml: vi.fn().mockResolvedValue(JSON.stringify(proxyData)),
+    };
+    vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
+    const offers = await scrape();
+    expect(mockProvider.fetchHtml).toHaveBeenCalledWith("https://www.sampath.lk/api/card-promotions?page_number=1&size=200", "sampath_bank");
+    expect(offers).toHaveLength(1);
+    expect(offers[0].merchant).toBe("Pizza Hut");
+  });
+
+  it("falls back to proxy when direct fetch throws (065 AC2)", async () => {
+    vi.mocked(fetchJson).mockRejectedValue(new Error("network down"));
+    const proxyData = { data: [VALID_PROMOTION] };
+    const mockProvider = {
+      name: "zenrows",
+      fetchHtml: vi.fn().mockResolvedValue(JSON.stringify(proxyData)),
+    };
+    vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
+    const offers = await scrape();
+    expect(mockProvider.fetchHtml).toHaveBeenCalled();
+    expect(offers).toHaveLength(1);
+  });
+
+  it("does not crash when no proxy configured and direct returns 0 (065 edge)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ data: [] });
+    vi.mocked(orderedProvidersForBank).mockReturnValue([]);
+    const offers = await scrape();
+    expect(offers).toHaveLength(0);
+  });
+
+  // 065 AC3: keep existing shapes working
+  it("parses bare array and {data:[]} shapes without regression (065 AC3)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue([VALID_PROMOTION]);
+    expect((await scrape()).length).toBeGreaterThan(0);
+    vi.mocked(fetchJson).mockResolvedValue({ data: [VALID_PROMOTION] });
+    expect((await scrape()).length).toBeGreaterThan(0);
+    // third shape: { promotions: [...] } observed on 2026-08-13 empty/wrapped
+    vi.mocked(fetchJson).mockResolvedValue({ promotions: [VALID_PROMOTION] } as unknown as Record<string, unknown>);
+    expect((await scrape()).length).toBeGreaterThan(0);
+  });
+
+  it("proxy also returning 0 still surfaces as 0 not swallowed (065 edge)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ data: [] });
+    const mockProvider = {
+      name: "zenrows",
+      fetchHtml: vi.fn().mockResolvedValue(JSON.stringify({ data: [] })),
+    };
+    vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
+    const offers = await scrape();
+    expect(offers).toHaveLength(0);
   });
 });
