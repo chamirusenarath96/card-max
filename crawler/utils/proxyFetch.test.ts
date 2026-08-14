@@ -11,6 +11,12 @@ vi.mock("./proxyProviders/registry", () => ({
   orderedProvidersForBank: vi.fn(),
 }));
 
+vi.mock("./http", async () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const actual = await vi.importActual("./http") as any;
+  return { ...actual, sleep: vi.fn().mockResolvedValue(undefined) };
+});
+
 import { fetchHtmlWithProxyFallback } from "./proxyFetch";
 import { getConfiguredProviders, getBankProviderMap, orderedProvidersForBank } from "./proxyProviders/registry";
 
@@ -104,6 +110,37 @@ describe("fetchHtmlWithProxyFallback", () => {
     await expect(
       fetchHtmlWithProxyFallback("https://example.com", "boc", directFetch)
     ).rejects.toThrow("WebScrapingAPI HTTP 500");
+  });
+
+  it("retries direct fetch once on ConnectTimeoutError and returns on second success without calling proxy (063 AC1)", async () => {
+    const err = new Error("fetch failed");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (err as any).cause = new Error("ConnectTimeoutError: Connect Timeout Error");
+    const directFetch = vi.fn().mockRejectedValueOnce(err).mockResolvedValueOnce("<html>retry success</html>");
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: vi.fn() }]);
+    vi.mocked(getBankProviderMap).mockReturnValue({});
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: vi.fn() }]);
+
+    const html = await fetchHtmlWithProxyFallback("https://www.combank.lk/test", "commercial_bank", directFetch);
+
+    expect(html).toBe("<html>retry success</html>");
+    expect(directFetch).toHaveBeenCalledTimes(2);
+    expect(orderedProvidersForBank).not.toHaveBeenCalled();
+  });
+
+  it("falls back to proxy when ConnectTimeout retry also fails and proxy succeeds (063 AC1)", async () => {
+    const err = new Error("UND_ERR_CONNECT_TIMEOUT");
+    const directFetch = vi.fn().mockRejectedValue(err);
+    const providerFetch = vi.fn().mockResolvedValue("<html>proxied after timeout</html>");
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetch }]);
+    vi.mocked(getBankProviderMap).mockReturnValue({});
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetch }]);
+
+    const html = await fetchHtmlWithProxyFallback("https://www.combank.lk/test", "commercial_bank", directFetch);
+
+    expect(html).toBe("<html>proxied after timeout</html>");
+    expect(directFetch).toHaveBeenCalledTimes(2);
+    expect(providerFetch).toHaveBeenCalledWith("https://www.combank.lk/test", expect.any(String));
   });
 });
 

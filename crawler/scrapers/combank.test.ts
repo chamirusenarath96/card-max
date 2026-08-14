@@ -114,5 +114,20 @@ describe("combank scraper", () => {
     expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("combank.lk"), "commercial_bank");
     expect(offers.length).toBeGreaterThan(0);
   });
+
+  it("retries on ConnectTimeoutError via proxyFetch and returns offers on retry (063 AC1)", async () => {
+    const err = new Error("fetch failed");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (err as any).cause = new Error("ConnectTimeoutError: Connect Timeout Error");
+    vi.mocked(fetchHtml)
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce(LISTING_HTML)
+      .mockResolvedValue(DETAIL_HTML);
+
+    const offers = await scrape();
+
+    expect(offers.length).toBeGreaterThan(0);
+    expect(offers[0].bank).toBe("commercial_bank");
+  });
 });
 
