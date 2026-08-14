@@ -156,4 +156,44 @@ describe("crawler run pipeline", () => {
 
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
+
+  it("exits with 0 when a bank returns 0 offers but baseline had active offers (063 AC4) — zero_offers does not set hasError", async () => {
+    process.env.MONGODB_URI = "mongodb://localhost:27017/test";
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    vi.doMock("dotenv", () => ({
+      default: { config: vi.fn() },
+      config: vi.fn(),
+    }));
+    vi.doMock("./utils/db", () => ({
+      connectDb: vi.fn().mockResolvedValue(undefined),
+      disconnectDb: vi.fn().mockResolvedValue(undefined),
+      upsertOffers: vi.fn().mockResolvedValue({ inserted: 0, updated: 0, skipped: 0 }),
+      expireStaleOffers: vi.fn().mockResolvedValue(0),
+      getActiveOfferCountsByBank: vi.fn().mockResolvedValue({ sampath_bank: 12 }),
+    }));
+    vi.doMock("./utils/failureAlerts", async () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actual = await vi.importActual("./utils/failureAlerts") as any;
+      return { ...actual, reportFailures: vi.fn().mockResolvedValue(undefined) };
+    });
+    vi.doMock("./scrapers/combank", () => ({ scrape: vi.fn().mockResolvedValue([{ bank: "commercial_bank" }]) }));
+    vi.doMock("./scrapers/sampath", () => ({ scrape: vi.fn().mockResolvedValue([]) }));
+    vi.doMock("./scrapers/hnb", () => ({ scrape: vi.fn().mockResolvedValue([{ bank: "hnb" }]) }));
+    vi.doMock("./scrapers/ntb", () => ({ scrape: vi.fn().mockResolvedValue([{ bank: "nations_trust_bank" }]) }));
+    vi.doMock("./scrapers/amex", () => ({ scrape: vi.fn().mockResolvedValue([{ bank: "amex_ntb" }]) }));
+    vi.doMock("./scrapers/peoples_bank", () => ({ scrape: vi.fn().mockResolvedValue([{ bank: "peoples_bank" }]) }));
+    vi.doMock("./scrapers/boc", () => ({ scrape: vi.fn().mockResolvedValue([{ bank: "bank_of_ceylon" }]) }));
+
+    await import("./run");
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled(), { timeout: 5000 });
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("sampath_bank scraped 0"));
+  });
 });
