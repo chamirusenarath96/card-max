@@ -16,7 +16,7 @@
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { parseDiscount } from "../utils/parseDiscount";
 import { fetchHtmlSessioned, sleep } from "../utils/http";
-import { getConfiguredProviders, getBankProviderMap, selectProviderForBank } from "../utils/proxyProviders/registry";
+import { getConfiguredProviders, getBankProviderMap, orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
 const BASE_URL = "https://www.nationstrust.com";
 const LISTING_URL = "https://www.nationstrust.com/promotions/what-s-new";
@@ -35,7 +35,7 @@ const REQUEST_LABELS = {
 } as const;
 
 export async function scrape(): Promise<OfferInput[]> {
-  console.log("[ntb] Starting scrapeâ€¦");
+  console.log("[ntb] Starting scrape...");
 
   // Step 1: Try plain HTTP first (works from residential IPs)
   const httpOffers = await scrapeViaHttp();
@@ -45,7 +45,7 @@ export async function scrape(): Promise<OfferInput[]> {
   }
 
   // Step 2: HTTP blocked â€” fall back to Crawlee Playwright
-  console.log("[ntb] HTTP blocked, falling back to Crawlee PlaywrightCrawlerâ€¦");
+  console.log("[ntb] HTTP blocked, falling back to Crawlee PlaywrightCrawler...");
   return scrapeWithCrawlee();
 }
 
@@ -58,21 +58,42 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
   const cookieJar = new Map<string, string>();
 
   try {
-    let listingHtml: string;
+    let listingHtml = "";
     try {
       listingHtml = await fetchHtmlSessioned(LISTING_URL, cookieJar, BASE_URL, 0);
     } catch (err) {
-      const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
-      if (!provider) throw err;
-      console.log(`[ntb] Direct fetch threw (${(err as Error).message}), retrying listing via ${provider.name}â€¦`);
-      listingHtml = await provider.fetchHtml(LISTING_URL, "nations_trust_bank");
+      const providers = orderedProvidersForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+      if (providers.length === 0) throw err;
+      let lastErr = err as Error;
+      let succeeded = false;
+      for (const provider of providers) {
+        try {
+          console.log(`[ntb] Direct fetch threw (${lastErr.message}), retrying listing via ${provider.name}...`);
+          listingHtml = await provider.fetchHtml(LISTING_URL, "nations_trust_bank");
+          succeeded = true;
+          break;
+        } catch (e) {
+          lastErr = e as Error;
+          console.warn(`[ntb] Provider ${provider.name} failed for nations_trust_bank listing:`, lastErr.message);
+        }
+      }
+      if (!succeeded) throw lastErr;
     }
 
     if (isBlockPage(listingHtml)) {
-      const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
-      if (provider) {
-        console.log(`[ntb] HTTP blocked, retrying listing via ${provider.name}â€¦`);
-        listingHtml = await provider.fetchHtml(LISTING_URL, "nations_trust_bank").catch(() => listingHtml);
+      const providers = orderedProvidersForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+      for (const provider of providers) {
+        try {
+          console.log(`[ntb] HTTP blocked, retrying listing via ${provider.name}...`);
+          const proxyHtml = await provider.fetchHtml(LISTING_URL, "nations_trust_bank");
+          if (!isBlockPage(proxyHtml)) {
+            listingHtml = proxyHtml;
+            break;
+          }
+          console.warn(`[ntb] Provider ${provider.name} returned blocked page for nations_trust_bank`);
+        } catch (e) {
+          console.warn(`[ntb] Provider ${provider.name} failed for nations_trust_bank blocked listing:`, (e as Error).message);
+        }
       }
     }
 
@@ -91,20 +112,41 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
     for (const url of campaignLinks) {
       await sleep(400);
       try {
-        let html: string;
+        let html = "";
         try {
           html = await fetchHtmlSessioned(url, cookieJar, LISTING_URL, 0);
         } catch (err) {
-          const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
-          if (!provider) throw err;
-          console.log(`[ntb] Direct fetch threw for ${url}, retrying via ${provider.name}â€¦`);
-          html = await provider.fetchHtml(url, "nations_trust_bank");
+          const providers = orderedProvidersForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+          if (providers.length === 0) throw err;
+          let lastErr = err as Error;
+          let succeeded = false;
+          for (const provider of providers) {
+            try {
+              console.log(`[ntb] Direct fetch threw for ${url}, retrying via ${provider.name}...`);
+              html = await provider.fetchHtml(url, "nations_trust_bank");
+              succeeded = true;
+              break;
+            } catch (e) {
+              lastErr = e as Error;
+              console.warn(`[ntb] Provider ${provider.name} failed for nations_trust_bank campaign ${url}:`, lastErr.message);
+            }
+          }
+          if (!succeeded) throw lastErr;
         }
         if (isBlockPage(html)) {
-          const provider = selectProviderForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
-          if (provider) {
-            console.log(`[ntb] HTTP blocked, retrying campaign via ${provider.name}: ${url}`);
-            html = await provider.fetchHtml(url, "nations_trust_bank").catch(() => html);
+          const providers = orderedProvidersForBank("nations_trust_bank", getConfiguredProviders(), getBankProviderMap());
+          for (const provider of providers) {
+            try {
+              console.log(`[ntb] HTTP blocked, retrying campaign via ${provider.name}: ${url}...`);
+              const proxyHtml = await provider.fetchHtml(url, "nations_trust_bank");
+              if (!isBlockPage(proxyHtml)) {
+                html = proxyHtml;
+                break;
+              }
+              console.warn(`[ntb] Provider ${provider.name} returned blocked page for ${url}`);
+            } catch (e) {
+              console.warn(`[ntb] Provider ${provider.name} failed for nations_trust_bank blocked campaign ${url}:`, (e as Error).message);
+            }
           }
         }
         if (isBlockPage(html)) {
