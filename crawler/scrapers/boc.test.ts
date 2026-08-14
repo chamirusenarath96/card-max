@@ -186,4 +186,39 @@ describe("boc scraper", () => {
     const merchants = offers.map((o) => o.merchant);
     expect(merchants).toContain("Pizza Hut");
   });
+
+  it("falls back to webscrapingapi when ZenRows returns REQS001 and succeeds via second provider (067 AC1)", async () => {
+    const zenrowsFetch = vi.fn().mockRejectedValue(new Error("ZenRows HTTP 403 fetching https://www.boc.lk/personal-banking/card-offers/online: REQS001: Requests to this domain are forbidden"));
+    const wsaFetch = vi.fn().mockResolvedValue(CATEGORY_HTML);
+    vi.mocked(getConfiguredProviders).mockReturnValue([
+      { name: "zenrows", fetchHtml: zenrowsFetch },
+      { name: "webscrapingapi", fetchHtml: wsaFetch },
+    ]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([
+      { name: "zenrows", fetchHtml: zenrowsFetch },
+      { name: "webscrapingapi", fetchHtml: wsaFetch },
+    ]);
+
+    // Direct fetch fails for first category, then proxy retries zenrows (REQS001) then wsa succeeds
+    vi.mocked(fetchHtml).mockRejectedValue(new Error("HTTP 403"));
+    // For remaining categories, both direct and proxy fail to keep test isolated to one success
+    // The proxy loop will try zenrows (fail) then wsa (success) for first category
+    const offers = await scrape();
+    expect(zenrowsFetch).toHaveBeenCalled();
+    expect(wsaFetch).toHaveBeenCalled();
+    expect(offers.length).toBeGreaterThan(0);
+    expect(offers[0].merchant).toBe("Pizza Hut");
+  });
+
+  it("surfaces error when ZenRows REQS001 and no secondary provider is configured (067 AC4)", async () => {
+    const zenrowsFetch = vi.fn().mockRejectedValue(new Error("REQS001: Requests to this domain are forbidden"));
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
+    vi.mocked(fetchHtml).mockRejectedValue(new Error("HTTP 403"));
+
+    const offers = await scrape();
+    // All categories fail, so 0 offers - surfaced as empty, not thrown, and will trigger zero_offers via failureAlerts
+    expect(offers).toHaveLength(0);
+    expect(zenrowsFetch).toHaveBeenCalled();
+  });
 });
