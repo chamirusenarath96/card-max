@@ -68,6 +68,14 @@ No new UI. NTB offers reappear in listing when fix lands; currently 0.
 - `PROXY_BANK_MAP` missing `nations_trust_bank` — hash fallback to `orderedProvidersForBank`, verify in test
 - Both HTTP and Playwright paths fail — HTTP proxy path should succeed from blocked IP, otherwise Crawlee still fails gracefully
 
+## Clarifications
+
+### Session 2026-08-15
+- Q: Should NTB be explicitly listed in PROXY_BANK_JS_RENDER_MAP with js_render=true or rely on hash fallback? -> A: Explicitly listed with js_render=true; hash fallback is safety net only.
+- Q: When ZenRows also returns 403/REQS001 for NTB, should the scraper try the secondary provider before failing? -> A: Yes, orderedProvidersForBank tries ZenRows then webscrapingapi when configured; failure only after all providers exhausted.
+- Q: What baseline triggers zero_offers for NTB when it scrapes 0? -> A: previousActiveCounts[nations_trust_bank] > 0 triggers zero_offers; no threshold beyond >0.
+- Q: Is a manual gh workflow run zenrows-verify.yml for nations_trust_bank required before merging? -> A: Manual run required when secrets are configured; if unavailable locally, mocked unit test plus log evidence suffices and workflow run is documented follow-up.
+
 ## Documentation Impact
 None. If proxy env vars or js_render allowlist steps need documenting, update `.env.example` and `README.md` Crawler section. This spec documents `zenrows-verify.yml` verification for 141-143.
 
