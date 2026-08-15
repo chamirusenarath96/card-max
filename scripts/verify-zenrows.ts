@@ -43,7 +43,7 @@ async function verifyBank(bank: string, urls: string[]) {
         if (bank === "sampath_bank") {
           try {
             const j = JSON.parse(html);
-            const count = Array.isArray(j) ? j.length : Array.isArray((j as any).data) ? (j as any).data.length : Object.keys(j).length;
+            const count = Array.isArray(j) ? j.length : Array.isArray((j as unknown as {data: unknown[]}).data) ? (j as unknown as {data: unknown[]}).data.length : Object.keys(j).length;
             console.log(`    JSON parsed, top-level count/keys: ${count}`);
           } catch {
             console.log(`    not JSON, HTML length ${html.length}`);
@@ -58,7 +58,7 @@ async function verifyBank(bank: string, urls: string[]) {
 }
 
 async function main() {
-  const arg = process.argv.find((a) => a.startsWith("--bank="))?.split("=")[1] || process.argv[2] === "--bank" ? process.argv[3] : undefined;
+  // arg parsed via bankArg below
   const bankArg = (process.argv.find((a) => a.startsWith("--bank"))?.split("=")[1] || (process.argv.includes("--bank") ? process.argv[process.argv.indexOf("--bank") + 1] : "all")).toLowerCase();
   const banks = bankArg === "all" ? Object.keys(BANK_URLS) : [bankArg];
   for (const b of banks) {
