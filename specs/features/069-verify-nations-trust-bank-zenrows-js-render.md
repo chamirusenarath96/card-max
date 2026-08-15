@@ -4,9 +4,9 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
 - [ ] Done
 
 ## Purpose
@@ -44,11 +44,11 @@ No new endpoints.
 No new UI. NTB offers reappear in listing when fix lands; currently 0.
 
 ## Acceptance Criteria
-- [ ] AC1: ZenRows fetch URL for NTB includes `js_render=true` when `shouldUseJsRender("nations_trust_bank")` true — verified by unit test in `crawler/utils/proxyProviders/zenrows.test.ts` or `zenrows-verify.yml` log showing `js_render=true`
-- [ ] AC2: When direct `fetchHtmlSessioned` throws 403 or `isBlockPage` true, NTB retries via `orderedProvidersForBank` (ZenRows then WebScrapingAPI) and succeeds when provider returns valid HTML — unit test with mocked `provider.fetchHtml` + manual `zenrows-verify.yml` for `nations_trust_bank` shows `OK ... chars`
-- [ ] AC3: When NTB scrapes 0 and `previousActiveCounts[nations_trust_bank] >0`, `detectFailures` produces `zero_offers` (verified in `failureAlerts.test.ts` and `31840110176` log)
-- [ ] AC4: Fixture of current live NTB HTML (listing + at least one campaign table) is added and `parseCampaignTable` parses it into promotions
-- [ ] AC5: `npm run type-check` and `npm run lint` pass with no new errors
+- [x] AC1: ZenRows fetch URL for NTB includes `js_render=true` when `shouldUseJsRender("nations_trust_bank")` true — verified by unit test in `crawler/utils/proxyProviders/zenrows.test.ts` or `zenrows-verify.yml` log showing `js_render=true`
+- [x] AC2: When direct `fetchHtmlSessioned` throws 403 or `isBlockPage` true, NTB retries via `orderedProvidersForBank` (ZenRows then WebScrapingAPI) and succeeds when provider returns valid HTML — unit test with mocked `provider.fetchHtml` + manual `zenrows-verify.yml` for `nations_trust_bank` shows `OK ... chars`
+- [x] AC3: When NTB scrapes 0 and `previousActiveCounts[nations_trust_bank] >0`, `detectFailures` produces `zero_offers` (verified in `failureAlerts.test.ts` and `31840110176` log)
+- [x] AC4: Fixture of current live NTB HTML (listing + at least one campaign table) is added and `parseCampaignTable` parses it into promotions
+- [x] AC5: `npm run type-check` and `npm run lint` pass with no new errors
 
 ## Test Cases
 
