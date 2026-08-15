@@ -4,9 +4,9 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
 - [ ] Done
 
 ## Purpose
@@ -44,11 +44,11 @@ No new endpoints.
 No new UI. BOC offers reappear when fix lands; currently 0.
 
 ## Acceptance Criteria
-- [ ] AC1: When ZenRows returns REQS001 / 400 for BOC, scraper retries via secondary provider (webscrapingapi) if configured and succeeds when provider returns valid HTML — unit test with mocked `zenrowsFetch` (REQS001) + `wsaFetch` (CATEGORY_HTML) + manual `zenrows-verify.yml` for `bank_of_ceylon` shows `OK ... chars`
-- [ ] AC2: BOC categories that previously returned REQS001 now parse via fallback fixture into promotions (at least 1 per category)
-- [ ] AC3: When BOC scrapes 0 and `previousActiveCounts[bank_of_ceylon] >0`, `detectFailures` produces `zero_offers` (verified in `failureAlerts.test.ts` and `31840110176` log with `had 30 active`)
-- [ ] AC4: When no secondary provider is configured and ZenRows fails, failure is surfaced as 0 / `zero_offers`, not swallowed
-- [ ] AC5: `npm run type-check` and `npm run lint` pass with no new errors
+- [x] AC1: When ZenRows returns REQS001 / 400 for BOC, scraper retries via secondary provider (webscrapingapi) if configured and succeeds when provider returns valid HTML — unit test with mocked `zenrowsFetch` (REQS001) + `wsaFetch` (CATEGORY_HTML) + manual `zenrows-verify.yml` for `bank_of_ceylon` shows `OK ... chars`
+- [x] AC2: BOC categories that previously returned REQS001 now parse via fallback fixture into promotions (at least 1 per category)
+- [x] AC3: When BOC scrapes 0 and `previousActiveCounts[bank_of_ceylon] >0`, `detectFailures` produces `zero_offers` (verified in `failureAlerts.test.ts` and `31840110176` log with `had 30 active`)
+- [x] AC4: When no secondary provider is configured and ZenRows fails, failure is surfaced as 0 / `zero_offers`, not swallowed
+- [x] AC5: `npm run type-check` and `npm run lint` pass with no new errors
 
 ## Test Cases
 
