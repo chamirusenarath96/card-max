@@ -59,6 +59,21 @@ describe("detectFailures", () => {
     });
   });
 
+  it("returns a kind: zero_offers failure for nations_trust_bank when scraped 0 with a non-zero baseline (071 AC3)", () => {
+    const summaries: RunSummary[] = [
+      ...baseSummaries.filter((s) => s.bank !== "nations_trust_bank"),
+      { bank: "nations_trust_bank", status: "success", scraped: 0 },
+    ];
+
+    const failures = detectFailures(summaries, { nations_trust_bank: 8 });
+
+    expect(failures).toContainEqual({
+      bank: "nations_trust_bank",
+      kind: "zero_offers",
+      detail: "returned 0 offers; had 8 active offer(s) before this run",
+    });
+  });
+
   it("does not report a failure when scraped 0 and baseline was already 0 (AC3)", () => {
     const summaries: RunSummary[] = [
       ...baseSummaries.filter((s) => s.bank !== "sampath_bank"),
