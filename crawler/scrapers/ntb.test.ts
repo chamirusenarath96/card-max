@@ -274,6 +274,53 @@ describe("ntb scraper", () => {
       expect(PlaywrightCrawler).toHaveBeenCalled();
       expect(Array.isArray(offers)).toBe(true);
     });
+
+    it("falls back to webscrapingapi when ZenRows returns REQS001 for the listing page and succeeds via second provider (071 AC2)", async () => {
+      const zenrowsFetch = vi.fn().mockRejectedValue(
+        new Error(
+          "ZenRows HTTP 400 fetching https://www.nationstrust.com/promotions/what-s-new: REQS001: Requests to this domain are forbidden"
+        )
+      );
+      const wsaFetch = vi.fn().mockResolvedValue(LISTING_HTML);
+      vi.mocked(getConfiguredProviders).mockReturnValue([
+        { name: "zenrows", fetchHtml: zenrowsFetch },
+        { name: "webscrapingapi", fetchHtml: wsaFetch },
+      ]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([
+        { name: "zenrows", fetchHtml: zenrowsFetch },
+        { name: "webscrapingapi", fetchHtml: wsaFetch },
+      ]);
+
+      vi.mocked(fetchHtmlSessioned)
+        .mockRejectedValueOnce(new Error("HTTP 403 fetching https://www.nationstrust.com/promotions/what-s-new"))
+        .mockResolvedValueOnce(CAMPAIGN_HTML);
+
+      const offers = await scrape();
+
+      expect(zenrowsFetch).toHaveBeenCalled();
+      expect(wsaFetch).toHaveBeenCalled();
+      expect(offers.length).toBeGreaterThan(0);
+      expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
+      expect(PlaywrightCrawler).not.toHaveBeenCalled();
+    });
+
+    it("surfaces zero offers (falls through to Crawlee) when ZenRows REQS001 and no secondary provider is configured", async () => {
+      const zenrowsFetch = vi.fn().mockRejectedValue(new Error("REQS001: Requests to this domain are forbidden"));
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
+      vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
+
+      setupCrawlerMock(() => ({
+        waitForSelector: vi.fn().mockRejectedValue(new Error("Timeout")),
+        evaluate: vi.fn().mockResolvedValue(""),
+        $$eval: vi.fn().mockResolvedValue([]),
+      }));
+
+      const offers = await scrape();
+
+      expect(zenrowsFetch).toHaveBeenCalled();
+      expect(offers).toHaveLength(0);
+    });
   });
 
   // â”€â”€ Crawlee fallback path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
