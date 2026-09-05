@@ -55,6 +55,11 @@ Crawler (GitHub Actions daily cron)
   └── /crawler/utils/       → shared helpers (http, parse, db)
   └── /crawler/run.ts       → entrypoint
 
+Cloudflare Workers scraping PoC (spec 072 — feature-flagged, opt-in)
+  └── /workers/scraper.js   → standalone Worker relaying fetches through Cloudflare's
+                              edge (own runtime scope — excluded from root tsconfig/eslint)
+  └── /scripts/verify-workers.ts → manual PoC verification against blocked bank URLs
+
 Specs (source of truth before code)
   └── /specs/data/          → Zod schemas
   └── /specs/features/      → feature specs with acceptance criteria
@@ -87,6 +92,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - `BRANDFETCH_API_KEY` — secondary logo fallback (free tier: 50 calls/month)
 - `GEMINI_API_KEY` — Google Gemini API key for the AI offer-enrichment workflow (`crawler/enrichment/run.ts`) — free-tier eligible, see #95
 - `GROQ_API_KEY` — optional second, text-only LLM provider for offer enrichment (spec 057) — spills semantic-summary calls to Groq once Gemini's per-minute window is exhausted; omitting it is a fully supported, zero-behavior-change (Gemini-only) configuration
+- `WORKER_SCRAPE_URL` / `WORKER_SECRET` — optional Cloudflare Workers scraping PoC (spec 072); registers an additional `workers` scraping-proxy provider that relays fetches through a deployed `workers/scraper.js` Worker instead of the GH Actions runner's IP. Omitting `WORKER_SCRAPE_URL` is a fully supported, zero-behavior-change (pre-072 provider list) configuration
 - `GITHUB_FEEDBACK_TOKEN` — GitHub PAT with `issues:write` scope; used to create issues from feedback
 - `GITHUB_REPO_OWNER` / `GITHUB_REPO_NAME` — defaults to `chamirusenarath96` / `card-max`
 
