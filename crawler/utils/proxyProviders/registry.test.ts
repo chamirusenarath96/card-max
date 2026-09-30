@@ -26,6 +26,20 @@ describe("getConfiguredProviders", () => {
     } as unknown as NodeJS.ProcessEnv);
     expect(providers.map((p) => p.name)).toEqual(["zenrows", "webscrapingapi"]);
   });
+
+  it("does not include a workers provider when WORKER_SCRAPE_URL is unset (072 AC5 — feature-flagged off by default)", () => {
+    const providers = getConfiguredProviders({ ZENROWS_API_KEY: "key1" } as unknown as NodeJS.ProcessEnv);
+    expect(providers.map((p) => p.name)).toEqual(["zenrows"]);
+  });
+
+  it("appends a 'workers' provider last when WORKER_SCRAPE_URL is set (072 AC1)", () => {
+    const providers = getConfiguredProviders({
+      ZENROWS_API_KEY: "key1",
+      WORKER_SCRAPE_URL: "https://worker.example.dev/scrape",
+      WORKER_SECRET: "shh",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(providers.map((p) => p.name)).toEqual(["zenrows", "workers"]);
+  });
 });
 
 describe("getBankProviderMap", () => {

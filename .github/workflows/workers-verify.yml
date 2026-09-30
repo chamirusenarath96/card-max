@@ -1,0 +1,25 @@
+name: Workers Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      bank:
+        description: Bank to verify
+        type: choice
+        options: [all, nations_trust_bank, bank_of_ceylon, sampath_bank]
+        default: all
+        required: true
+
+jobs:
+  verify:
+    name: Verify Cloudflare Workers PoC per bank
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Verify Workers
+        run: npx tsx scripts/verify-workers.ts --bank ${{ inputs.bank }}
+        env:
+          WORKER_SCRAPE_URL: ${{ secrets.WORKER_SCRAPE_URL }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}

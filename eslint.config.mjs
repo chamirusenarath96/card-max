@@ -18,6 +18,9 @@ const eslintConfig = defineConfig([
     "**/.next/**",
     "**/node_modules/**",
     ".claude/worktrees/**",
+    // Standalone Cloudflare Worker (spec 072) — different runtime globals
+    // (no DOM/Node lib), deployed and linted independently via wrangler.
+    "workers/**",
   ]),
   // Allow CJS require() in plain Node.js scripts
   {

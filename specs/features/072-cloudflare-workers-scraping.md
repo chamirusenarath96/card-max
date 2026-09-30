@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [ ] Done — code scaffolding + architecture/cost decision complete; AC1/AC2 live PoC verification still needs a human with Cloudflare account access (see Findings)
 
 ## Purpose
 GitHub Actions daily crawler runs on a single egress IP and is increasingly blocked by WAF/Incapsula (Daily Crawler 31907638309: nations_trust_bank 0 offers — Crawlee 403 + ZenRows REQS001, sampath_bank 0 — API empty + RESP001, bank_of_ceylon 0 on 4 categories — REQS001, while totalScraped 486 for other banks). ZenRows/WebScrapingAPI proxies help but add cost/latency and still hit REQS001 allowlist. This spec evaluates Cloudflare Workers as a serverless Lambda-alternative that scatters fetches across ~300+ edge colos with effectively random egress IPs, reducing IP-based blocking without an always-on host (unlike Kafka/n8n per #95).
@@ -45,11 +45,11 @@ Worker endpoint (if GH orchestrates): `POST https://<worker>.workers.dev/scrape 
 No new UI. Offers reappear in grid/filter when scrape succeeds; currently 0 for NTB/BOC/Sampath.
 
 ## Acceptance Criteria
-- [ ] AC1: PoC Worker `fetch` (no render) succeeds on 3 currently blocked URLs (`nationstrust.com/promotions/what-s-new`, `boc.lk/personal-banking/card-offers/dining`, `sampath.lk/api/card-promotions?page_number=1&size=200`) at least 2/3 runs over 3 daily runs — logged via `scripts/verify-workers.ts` or `gh workflow run workers-verify.yml` showing `OK ... chars` vs ZenRows `REQS001`/`RESP001`
-- [ ] AC2: For JS-heavy `sampath.lk/api/card-promotions`, Browser Rendering (or `js_render=true` equivalent) returns non-empty `data` where plain Worker `fetch` returns `{"data":[]}` — verified by fixture diff and unit `crawler/scrapers/sampath.test.ts`
-- [ ] AC3: Architecture decision documented: (A) GH orchestrates vs (B) Workers Cron — chosen model includes diagram, secrets flow (`MONGODB_URI` Workers Secrets), and preservation of `failureAlerts` `zero_offers` / `totalExpired` reporting
-- [ ] AC4: Cost table documented: Workers free (100k req/day → ~140 req/day for 7 banks × ~20 pages) vs `Browser Rendering` $5/mo + per-render vs ZenRows ($/k) vs WebScrapingAPI — shows free tier sufficient for pilot and scale estimate
-- [ ] AC5: `npm run type-check` and `npm run lint` pass with no new errors; existing crawler tests still pass when Workers layer is feature-flagged off
+- [ ] AC1: PoC Worker `fetch` (no render) succeeds on 3 currently blocked URLs (`nationstrust.com/promotions/what-s-new`, `boc.lk/personal-banking/card-offers/dining`, `sampath.lk/api/card-promotions?page_number=1&size=200`) at least 2/3 runs over 3 daily runs — logged via `scripts/verify-workers.ts` or `gh workflow run workers-verify.yml` showing `OK ... chars` vs ZenRows `REQS001`/`RESP001`. **BLOCKED — not run.** `scripts/verify-workers.ts` and `workers-verify.yml` are built, but executing them needs a real Cloudflare account + `workers/scraper.js` deployed (`WORKER_SCRAPE_URL`/`WORKER_SECRET` repo secrets) and 3 separate daily runs, neither of which is achievable from an unattended single-session automation run (no Cloudflare credentials are available in this environment, and a live `wrangler deploy` was blocked by the sandbox's action classifier). See Findings.
+- [ ] AC2: For JS-heavy `sampath.lk/api/card-promotions`, Browser Rendering (or `js_render=true` equivalent) returns non-empty `data` where plain Worker `fetch` returns `{"data":[]}` — verified by fixture diff and unit `crawler/scrapers/sampath.test.ts`. **BLOCKED — not run**, same reason as AC1 (also requires Browser Rendering enabled on the account). `workers/scraper.js`'s `fetchRendered()` and `createWorkersProvider`'s `render: true` for `sampath_bank` are implemented and unit-tested (`crawler/utils/proxyProviders/workers.test.ts`) in isolation, but no live fixture diff exists yet.
+- [x] AC3: Architecture decision documented: (A) GH orchestrates vs (B) Workers Cron — chosen model includes diagram, secrets flow (`MONGODB_URI` Workers Secrets), and preservation of `failureAlerts` `zero_offers` / `totalExpired` reporting — see Findings below and README.md's "Scraping Proxy Fallback & Cloudflare Workers PoC" section
+- [x] AC4: Cost table documented: Workers free (100k req/day → ~140 req/day for 7 banks × ~20 pages) vs `Browser Rendering` $5/mo + per-render vs ZenRows ($/k) vs WebScrapingAPI — shows free tier sufficient for pilot and scale estimate — see Findings below
+- [x] AC5: `npm run type-check` and `npm run lint` pass with no new errors; existing crawler tests still pass when Workers layer is feature-flagged off — `workers/` (own runtime, no DOM/Node lib) excluded from `tsconfig.json`/`eslint.config.mjs`; `registry.test.ts` asserts `getConfiguredProviders()` reproduces the exact pre-072 provider list when `WORKER_SCRAPE_URL` is unset
 
 ## Test Cases
 
@@ -72,6 +72,50 @@ No new UI. Offers reappear in grid/filter when scrape succeeds; currently 0 for 
 
 ## Documentation Impact
 If Workers layer is adopted: update `.env.example` (add `WORKER_SCRAPE_URL`, `WORKER_SECRET`), `README.md` Crawler section (GH → Workers diagram, Cron vs Workers), `CLAUDE.md` Banks Supported / Architecture, and `crawler/utils/proxyProviders` registry. For pilot-only decision, update `README.md` Known Limitations with Workers PoC link. Implementer must make those doc updates in same PR — don't just note here.
+
+## Findings
+
+### Architecture decision: Model A (GH Actions orchestrates)
+
+Chosen over Model B (Workers Cron Triggers scraping directly and pushing to Mongo/`/api/crawler`):
+
+- **Drop-in provider, not a new pipeline.** `crawler/utils/proxyProviders/workers.ts` implements the
+  same `ProxyProvider` interface as `zenrows.ts`/`webscrapingapi.ts` and slots into the existing
+  `orderedProvidersForBank()` retry/fallback chain (`registry.ts`) — no changes to `crawler/run.ts`'s
+  control flow, `failureAlerts.ts`'s `zero_offers`/`totalExpired` detection, or any scraper's parsing logic.
+- **Secrets stay put.** `MONGODB_URI` remains a GH Actions secret consumed by `crawler/run.ts`, exactly
+  as today. The Worker only needs `WORKER_SECRET` (a shared bearer token, set via `wrangler secret put`)
+  to authenticate the GH-orchestrated calls — no database credentials are ever exposed to Cloudflare.
+- **No new ingestion surface.** Model B would need a new `POST /api/crawler` (or Mongo Data API) endpoint,
+  its own auth, and its own failure-monitoring path — out of scope for a 1-bank pilot per this spec's
+  "Out of Scope" section.
+- Diagram and full write-up: README.md → "Crawler Design" → "Scraping Proxy Fallback & Cloudflare
+  Workers PoC (spec 072)".
+
+### Cost table
+
+(7 banks × ~1-4 pages/day ≈ 20-30 requests/day; figures from
+[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and
+[Browser Rendering limits](https://developers.cloudflare.com/browser-rendering/platform/limits/),
+fetched 2026-09-05)
+
+| Layer | Free tier | Paid tier | Pilot fits free tier? |
+|-------|-----------|-----------|------------------------|
+| Workers `fetch()` | 100,000 requests/day | $5/mo min, 10M req/mo incl., then $0.30/million | ✅ ~30/day ≪ 100k/day |
+| Browser Rendering | 10 browser-min/day, 3 concurrent (on Workers Free) | Requires Workers Paid ($5/mo), unlimited hours, usage-priced | ✅ ~1 render/day ≪ 10 min |
+| ZenRows (existing) | none — paid from request 1 | usage-based $/1k requests | kept as fallback |
+| WebScrapingAPI (existing) | none — paid from request 1 | usage-based $/1k requests | kept as fallback |
+
+### What's left (blocked in this automation run)
+
+AC1 and AC2 need a real Cloudflare account: deploy `workers/scraper.js` (see `workers/README.md`),
+set `WORKER_SCRAPE_URL`/`WORKER_SECRET` as both local env vars and GH Actions repo secrets, then run
+`npx tsx scripts/verify-workers.ts --bank all` (or `gh workflow run workers-verify.yml -f bank=all`)
+against the 3 blocked URLs — AC1 asks for this over 3 separate daily runs, and AC2 additionally needs
+Browser Rendering enabled (`[browser]` binding uncommented in `workers/wrangler.toml`) to compare a
+`render:true` Sampath fetch against the existing empty-`data` plain fetch. No Cloudflare credentials
+were available in this automated run, and this sandbox's action classifier blocks live `wrangler
+deploy` calls, so this remains a human follow-up before the PoC can graduate to a production fallback.
 
 ## Notes
 - References Daily Crawler 31907638309 logs (NTB 403/REQS001, Sampath empty+RESP001, BOC REQS001 ×4) and specs 068-071 (orderedProvidersForBank, js_render, zero_offers).
