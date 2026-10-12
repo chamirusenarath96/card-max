@@ -296,6 +296,53 @@ causes `networkidle` to never fire).
 activates automatically if Incapsula blocks the HTTP path. Both paths extract the best
 available image from each campaign page (og:image → twitter:image → prominent `<img>`).
 
+#### Scraping Proxy Fallback & Cloudflare Workers PoC (spec 072)
+
+When a direct fetch is blocked (WAF/Incapsula 403, ZenRows `REQS001`), scrapers retry via
+`orderedProvidersForBank()` (`crawler/utils/proxyProviders/registry.ts`) against whichever
+of ZenRows / WebScrapingAPI is configured. Spec [072](specs/features/072-cloudflare-workers-scraping.md)
+evaluated **Cloudflare Workers** as a third, serverless alternative — the GH Actions runner's
+single egress IP is increasingly blocklisted, while a Worker's `fetch()` originates from one
+of 300+ edge colos:
+
+```mermaid
+graph LR
+    CRON["GH Actions Daily Cron\nnpm run crawler"] -->|"POST {url, render, bank}"| WK["Cloudflare Worker\nworkers/scraper.js"]
+    WK -->|"fetch() from edge colo\n(or Browser Rendering if render:true)"| BANK["Bank website\n(nationstrust.com / boc.lk / sampath.lk)"]
+    BANK -->|html/json| WK
+    WK -->|"{ html }"| CRON
+    CRON -->|"validate + upsert"| DB[("MongoDB Atlas")]
+    DB --> REV["POST /api/revalidate\n(Vercel ISR bust)"]
+```
+
+**Architecture decision:** Model **A** — GH Actions orchestrates per-bank calls to the
+Worker's `POST /` endpoint, which returns raw HTML/JSON — chosen over Model B (Workers Cron
+Triggers scraping and pushing directly to Mongo) because it's a drop-in fourth
+`ProxyProvider` (`crawler/utils/proxyProviders/workers.ts`) alongside ZenRows/WebScrapingAPI:
+`MONGODB_URI` stays exactly where it is today (a GH Actions secret consumed by
+`crawler/run.ts`), the existing `orderedProvidersForBank` retry/fallback and
+`failureAlerts.ts` `zero_offers` detection are untouched, and no new `POST /api/crawler`
+ingestion endpoint is needed. The Worker only needs `WORKER_SECRET` (shared-secret auth,
+set via `wrangler secret put`) — no database credentials ever reach Cloudflare.
+
+**Cost estimate** (7 banks × ~1-4 pages/day ≈ 20-30 requests/day, current pricing per
+[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and
+[Browser Rendering limits](https://developers.cloudflare.com/browser-rendering/platform/limits/)):
+
+| Layer | Free tier | Paid tier | Fits pilot free tier? |
+|-------|-----------|-----------|------------------------|
+| Workers `fetch()` (plain HTML/JSON) | 100,000 requests/day | $5/mo min, 10M req/mo included, then $0.30/million | ✅ yes — ~30/day is ~0.03% of the free daily cap |
+| Browser Rendering (Sampath SPA `render:true`) | 10 browser-minutes/day, 3 concurrent, on the Workers Free plan | Requires Workers Paid ($5/mo) — unlimited browser hours, usage-priced | ✅ yes for pilot (1 bank, ~1 render/day ≪ 10 min) |
+| ZenRows / WebScrapingAPI (existing) | none — paid per request from day one | usage-based, $/1k requests | kept as fallback during evaluation |
+
+**Status — pilot only, not yet adopted:** `workers/scraper.js` (PoC Worker) and
+`scripts/verify-workers.ts` (manual verification tool) exist and are feature-flagged off by
+default (`WORKER_SCRAPE_URL` unset). Live verification against blocked bank URLs and the
+Browser Rendering vs. plain-fetch comparison require an actual Cloudflare account +
+deployment and have **not** been run yet — see `workers/README.md` to deploy and
+`specs/features/072-cloudflare-workers-scraping.md`'s Findings section for what a human
+needs to verify before this graduates from PoC to production fallback.
+
 #### AmEx (American Express NTB) — Plain HTTP Category Scrape
 
 ```
@@ -1493,6 +1540,7 @@ sequenceDiagram
 | NTB scraper blocked by HTTP 403 / Incapsula - proxy fallback never triggered on thrown errors | NTB | ✅ Fixed (spec 059, hardened 066/069) | `ntb.ts` now retries via `orderedProvidersForBank` on thrown `403`; ZenRows `js_render=true` per `PROXY_BANK_JS_RENDER_MAP` (spec 061) and `shouldUseJsRender` default for `nations_trust_bank` |
 | BOC ZenRows 422/429 and `REQS001: Requests to this domain are forbidden` - 4 categories `0` offers (52000ms) | BOC | ✅ Fixed (spec 060/061, hardened 067/070) | `boc.ts` falls back to secondary provider (`webscrapingapi`) on ZenRows `400/REQS001` via `orderedProvidersForBank`; `zenrows.ts` adds `js_render=true` + `premium_proxy` handling; `failureAlerts` surfaces `zero_offers` |
 | Daily crawler `ConnectTimeout` / silent per-bank success with `0` offers hid failures | All banks | ✅ Fixed (spec 063, follow-ups 065-067) | `crawler/run.ts` surfaces per-bank summaries and `detectFailures` (`zero_offers` when active>0 but scraped 0); job-level failure issue kept as safety net (spec 052) |
+| GH Actions runner's single egress IP increasingly blocklisted by bank WAFs even via ZenRows/WebScrapingAPI (`REQS001`) | NTB, BOC, Sampath | 🟡 PoC evaluated, not yet adopted (spec 072) | `workers/scraper.js` — Cloudflare Workers `fetch()` from 300+ edge colos as a feature-flagged 4th `ProxyProvider`; live verification pending a Cloudflare account deployment — see [spec 072](specs/features/072-cloudflare-workers-scraping.md) |
 
 ### Roadmap
 

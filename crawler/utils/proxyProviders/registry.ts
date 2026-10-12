@@ -2,16 +2,23 @@
  * Provider registry + selection
  * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6),
  *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3),
- *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5)
+ *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5),
+ *       specs/features/072-cloudflare-workers-scraping.md (AC5)
  */
 import type { ProxyProvider } from "./types";
 import { createZenRowsProvider } from "./zenrows";
 import { createWebScrapingApiProvider } from "./webscrapingapi";
+import { createWorkersProvider } from "./workers";
 
+/**
+ * WORKER_SCRAPE_URL is unset by default, so this PoC provider is a no-op
+ * feature flag — omitting it reproduces the exact pre-072 provider list.
+ */
 export function getConfiguredProviders(env: NodeJS.ProcessEnv = process.env): ProxyProvider[] {
   const providers: ProxyProvider[] = [];
   if (env.ZENROWS_API_KEY) providers.push(createZenRowsProvider(env.ZENROWS_API_KEY));
   if (env.WEBSCRAPINGAPI_API_KEY) providers.push(createWebScrapingApiProvider(env.WEBSCRAPINGAPI_API_KEY));
+  if (env.WORKER_SCRAPE_URL) providers.push(createWorkersProvider(env.WORKER_SCRAPE_URL, env.WORKER_SECRET));
   return providers;
 }
 
