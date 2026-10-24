@@ -34,12 +34,16 @@ requirement, not an incidental choice.
   `brd.superproxy.io:44445` with a sticky per-provider-instance session
   (`-session-<random>`), username format
   `brd-customer-<id>-zone-<zone>-country-lk-session-<session>`
-- **Sri-Lanka geo-lock, enforced at two levels, on both providers:**
-  1. The Bright Data zone itself must be configured (by the operator, in the
-     Bright Data dashboard) to restrict geo-targeting to Sri Lanka only — this
-     spec cannot enforce that from code, it's a Bright Data account setting
-  2. Every request additionally sends `country: "lk"` (Unlocker) or the
-     `-country-lk` username flag (Residential)
+- **Sri-Lanka geo-lock:**
+  - **Web Unlocker:** no dashboard-level "restrict zone to country" setting
+    exists for this product — confirmed against Bright Data's own API
+    reference and best-practices docs, country targeting is request-level
+    only. The lock is therefore enforced entirely by sending `country: "lk"`
+    on every single request (no code path omits it)
+  - **Residential (optional tier):** *does* have a dashboard "Geolocation
+    targeting" setting on the zone's own config page (unlike Web Unlocker) —
+    an operator should set that there, as a second, account-level lock on
+    top of the per-request `-country-lk` username flag this code already sends
   - A startup/periodic check against `https://geo.brdtest.com/mygeo.json`
     (fetched *through* the same zone/session) verifies the reported exit
     country is `lk` — on the first request and every 50 requests after that
