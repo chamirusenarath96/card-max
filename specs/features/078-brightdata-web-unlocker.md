@@ -31,7 +31,7 @@ requirement, not an incidental choice.
   `{ zone, url, format: "raw", country: "lk" }`
 - A second new `ProxyProvider`, `brightdata-residential`
   (`crawler/utils/proxyProviders/brightDataResidential.ts`): proxies through
-  `brd.superproxy.io:33335` with a sticky per-provider-instance session
+  `brd.superproxy.io:44445` with a sticky per-provider-instance session
   (`-session-<random>`), username format
   `brd-customer-<id>-zone-<zone>-country-lk-session-<session>`
 - **Sri-Lanka geo-lock, enforced at two levels, on both providers:**
@@ -106,7 +106,7 @@ POST https://api.brightdata.com/request
   Content-Type: application/json
   body: { "zone": "<BRIGHTDATA_ZONE>", "url": "<target>", "format": "raw", "country": "lk" }
 
-GET  https://<target>   (via brd.superproxy.io:33335, Basic auth with the
+GET  https://<target>   (via brd.superproxy.io:44445, Basic auth with the
                           brd-customer-<id>-zone-<zone>-country-lk-session-<s> username)
 
 GET  https://geo.brdtest.com/mygeo.json   (through either of the above, for the geo-lock check)

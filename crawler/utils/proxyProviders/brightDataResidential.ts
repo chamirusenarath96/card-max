@@ -14,7 +14,7 @@ import type { ProxyProvider } from "./types";
 import { EXPECTED_COUNTRY } from "./brightDataUnlocker";
 
 const PROXY_HOST = "brd.superproxy.io";
-const PROXY_PORT = 33335;
+const PROXY_PORT = 44445; // Bright Data's default super proxy port
 const GEO_CHECK_URL = "https://geo.brdtest.com/mygeo.json";
 const GEO_CHECK_INTERVAL = 50;
 
