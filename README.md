@@ -1096,6 +1096,7 @@ All workflows live in `.github/workflows/`. This table is the authoritative list
 | `atlas-warmup.yml` | Atlas Warmup | every 4 min + manual | Pings `/api/health` to keep the MongoDB Atlas M0 connection warm — the sole warmup cron (spec 056 removed the duplicate `warmup.yml`) | N/A (no npm ci) |
 | `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ✅ |
 | `zenrows-verify.yml` | ZenRows Verify | manual (`workflow_dispatch` `bank: all|sampath_bank|nations_trust_bank|bank_of_ceylon`) | Verifies ZenRows proxy per bank via `npx tsx scripts/verify-zenrows.ts --bank <bank>` (checks `ZENROWS_API_KEY` + `WEBSCRAPINGAPI_API_KEY` + `PROXY_BANK_MAP`); 10-min timeout | ✅ |
+| `brightdata-verify.yml` | Bright Data Verify | manual (`workflow_dispatch` `bank: all|<bank>`) | Runs each bank's real scraper with Bright Data (Web Unlocker + optional Residential, spec 078) configured, checks the Sri-Lanka exit-country geo-lock, reports per-bank offer counts; 15-min timeout | ✅ |
 
 **Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist, now created with `['bug', 'urgent', <category>]` so a broken pipeline jumps the spec-writing queue automatically (see [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)). This requires the workflow to declare `permissions: issues: write` — both `enrich.yml` (#98) and `crawler.yml` (#105) were found missing this and silently failing to report their own failures; both are now fixed.
 
@@ -1648,6 +1649,7 @@ All feature specs live in `specs/`:
 | `specs/features/068-verify-sampath-bank-zenrows-fallback.md` | Verify Sampath ZenRows fallback |
 | `specs/features/069-verify-nations-trust-bank-zenrows-js-render.md` | Verify NTB ZenRows js_render |
 | `specs/features/070-verify-bank-of-ceylon-zenrows-reqs001.md` | Verify BOC ZenRows REQS001 |
+| `specs/features/078-brightdata-web-unlocker.md` | Bright Data Web Unlocker (primary) + Residential (secondary), Sri-Lanka geo-locked, replaces ZenRows/WebScrapingAPI as the default fetcher |
 
 ---
 

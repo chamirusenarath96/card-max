@@ -1,0 +1,31 @@
+name: Bright Data Verify
+on:
+  workflow_dispatch:
+    inputs:
+      bank:
+        description: Bank to verify
+        type: choice
+        options: [all, commercial_bank, sampath_bank, hnb, nations_trust_bank, amex_ntb, peoples_bank, bank_of_ceylon]
+        default: all
+        required: true
+
+jobs:
+  verify:
+    name: Verify Bright Data per bank
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Verify Bright Data
+        run: npx tsx scripts/verify-brightdata.ts --bank ${{ inputs.bank }}
+        env:
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+          BRIGHTDATA_ZONE: ${{ secrets.BRIGHTDATA_ZONE }}
+          BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID: ${{ secrets.BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID }}
+          BRIGHTDATA_RESIDENTIAL_ZONE: ${{ secrets.BRIGHTDATA_RESIDENTIAL_ZONE }}
+          BRIGHTDATA_RESIDENTIAL_PASSWORD: ${{ secrets.BRIGHTDATA_RESIDENTIAL_PASSWORD }}
+          PROXY_BANK_MAP: ${{ vars.PROXY_BANK_MAP }}
+          MONGODB_URI: dummy
