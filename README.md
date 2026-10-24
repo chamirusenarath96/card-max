@@ -326,10 +326,9 @@ URLs, extracts offer blocks with regex, and handles both `<img>` tags and CSS
 
 **Image resolution chain (display time):** When no scraped `merchantLogoUrl` is stored,
 `OfferImage.tsx` falls back to Google's favicon service (`google.com/s2/favicons?domain=...`)
-using the `MERCHANT_DOMAINS` map in `crawler/utils/logo.ts` (40+ curated Sri Lankan merchant
-domains; the function is still named `buildClearbitUrl` for historical reasons — it no
-longer calls Clearbit, see #97). If that also fails, a gradient icon with the category
-symbol and merchant name is shown. Bank-hosted `merchantLogoUrl` images render with
+via `buildFaviconFallbackUrl` using the `MERCHANT_DOMAINS` map in `crawler/utils/logo.ts`
+(40+ curated Sri Lankan merchant domains). If that also fails, a gradient icon with the
+category symbol and merchant name is shown. Bank-hosted `merchantLogoUrl` images render with
 `referrerPolicy="no-referrer"` so bank hotlink-protection doesn't block them (#97).
 
 ### Crawler Pipeline
@@ -965,8 +964,7 @@ Tests live next to their source files (`*.test.ts`, `*.test.tsx`). They use `jsd
 | **API routes** | |
 | `src/app/api/offers/route.test.ts` | Query param validation, bank/category/date filters, pagination, sort orders, Atlas Search vs `$text` fallback, 503 on DB unavailable |
 | `src/app/api/offers/[id]/route.test.ts` | Single-offer fetch by ID, 400 on invalid ID, 404 on not found, 503 on DB error |
-| `src/app/api/health/route.test.ts` | Health endpoint returns 200 with `{ status: "ok" }` |
-| `src/app/api/ping/route.test.ts` | Ping/warmup endpoint returns 200 |
+| `src/app/api/health/route.test.ts` | Health endpoint returns 200 with `{ status: "ok" }` — also the sole warmup endpoint (spec 056 removed the duplicate `/api/ping`) |
 | **Middleware** | |
 | `src/middleware.test.ts` | Rate-limiting logic — allows requests below threshold, blocks above, excludes page routes, passes through on Redis unavailability |
 | **Components** | |
@@ -1032,7 +1030,7 @@ E2E tests are in `e2e/`. They launch a real Chromium browser (+ Mobile Chrome) a
 | `e2e/performance.spec.ts` | Lighthouse CI — Performance ≥80, Accessibility ≥90, Best Practices ≥90, SEO ≥90 on production URL |
 | `e2e/mobile-performance-sla.spec.ts` | Mobile Lighthouse — Performance ≥80, LCP ≤2.5s, CLS ≤0.1, FCP ≤1.8s on Pixel 5 profile |
 | `e2e/interaction-timing.spec.ts` | UI interaction budgets — bank filter (open drawer → select chip → Apply Filters) ≤500ms, category filter ≤500ms, clear-all ≤500ms, pagination ≤500ms, filter drawer open/close ≤500ms each; all `/api/offers` calls mocked to isolate from DB variance; timing results written to `test-results/interaction-timing.json` for the CI dashboard |
-| `e2e/atlas-warmup-cron.spec.ts` | `/api/health` and `/api/ping` respond 200; warmup cron workflow defined in ci config |
+| `e2e/atlas-warmup-cron.spec.ts` | `/api/health` responds with the expected JSON shape (200 connected or 503 no-DB-in-CI) |
 | `e2e/adsense.spec.ts` | AdSense slot renders when enabled; does not inject when `ADSENSE_ENABLED=false` |
 | `e2e/lighthouse.spec.ts` | Core Web Vitals budgets — LCP, FCP via `PerformanceObserver`; search dropdown and filter apply times |
 | `e2e/categories.spec.ts` | Dynamic category filters — `/api/categories` endpoint returns live categories; `FilterDrawer` and `SearchDrawer` show only categories with actual offers |
@@ -1093,11 +1091,11 @@ All workflows live in `.github/workflows/`. This table is the authoritative list
 | Workflow file | Name | Trigger | Purpose | Uses composite action |
 |---|---|---|---|---|
 | `ci.yml` | CI / Deploy | push/PR to master/main | 5 jobs: security audit, lint/type-check/test/build, E2E, DB migrations, Vercel deploy + cache bust | ✅ all 5 jobs |
-| `crawler.yml` | Daily Crawler | daily 20:30 UTC (2:00 AM Colombo) + manual | Scrapes all 7 banks, upserts offers, marks new/changed offers `enrichmentStatus: "pending"`, busts ISR cache | ❌ inline setup |
-| `enrich.yml` | Offer Enrichment | `workflow_run` after Daily Crawler completes + manual | AI-enriches `pending`/`failed` offers via Gemini (`npm run enrich`) — semantic summary + resolved applicable dates; never sweeps the full collection (spec 044) | ❌ inline setup |
-| `atlas-warmup.yml` | Atlas Warmup | every 4 min + manual | Pings `/api/health` to keep the MongoDB Atlas M0 connection warm | N/A (no npm ci) |
-| `warmup.yml` | Atlas Connection Warmup | every 5 min + manual | Pings `/api/ping` — a second, near-duplicate warmup workflow (flagged in the Roadmap for future dedup) | N/A (no npm ci) |
-| `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ❌ inline setup |
+| `crawler.yml` | Daily Crawler | daily 20:30 UTC (2:00 AM Colombo) + manual | Scrapes all 7 banks, upserts offers, marks new/changed offers `enrichmentStatus: "pending"`, busts ISR cache | ✅ |
+| `enrich.yml` | Offer Enrichment | `workflow_run` after Daily Crawler completes + manual | AI-enriches `pending`/`failed` offers via Gemini (`npm run enrich`) — semantic summary + resolved applicable dates; never sweeps the full collection (spec 044) | ✅ |
+| `atlas-warmup.yml` | Atlas Warmup | every 4 min + manual | Pings `/api/health` to keep the MongoDB Atlas M0 connection warm — the sole warmup cron (spec 056 removed the duplicate `warmup.yml`) | N/A (no npm ci) |
+| `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ✅ |
+| `zenrows-verify.yml` | ZenRows Verify | manual (`workflow_dispatch` `bank: all|sampath_bank|nations_trust_bank|bank_of_ceylon`) | Verifies ZenRows proxy per bank via `npx tsx scripts/verify-zenrows.ts --bank <bank>` (checks `ZENROWS_API_KEY` + `WEBSCRAPINGAPI_API_KEY` + `PROXY_BANK_MAP`); 10-min timeout | ✅ |
 
 **Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist, now created with `['bug', 'urgent', <category>]` so a broken pipeline jumps the spec-writing queue automatically (see [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)). This requires the workflow to declare `permissions: issues: write` — both `enrich.yml` (#98) and `crawler.yml` (#105) were found missing this and silently failing to report their own failures; both are now fixed.
 
@@ -1491,6 +1489,10 @@ sequenceDiagram
 | Applicable dates not extracted — only outer validity period captured | AmEx (NTB) | ✅ Fixed (spec 041) | `parseOfferCards()` now extracts the full conditions block into `description`; e.g. Domino's offer shows validity till Dec 2026 and `description` states it's only valid on specific days of the week |
 | Scraped description/discountLabel contained a leftover "See more" UI-chrome fragment from the source page | People's Bank | ✅ Fixed (spec 050) | Shared `stripUiChrome()` helper applied across all three parsing paths; `migrate-strip-peoples-bank-see-more.ts` backfilled already-stored offers |
 | Offer cards on the main grid had no clickable link at all | All banks | ✅ Fixed (spec 049) | `OfferCardDefault`/`Compact`/`Expanded` now link to the internal `/offers/:id` detail page (spec 046) |
+| Sampath API returns 0 promotions with no error (`200 OK` + empty body) - crawler silently succeeded | Sampath | ✅ Fixed (spec 062, hardened 065/068) | `sampath.ts` now logs truncated 2KB raw response on empty, retries via `orderedProvidersForBank` (ZenRows -> WebScrapingAPI) when direct returns 0/throws; `failureAlerts` emits `zero_offers` when `previousActiveCounts>0` but scraped 0 |
+| NTB scraper blocked by HTTP 403 / Incapsula - proxy fallback never triggered on thrown errors | NTB | ✅ Fixed (spec 059, hardened 066/069) | `ntb.ts` now retries via `orderedProvidersForBank` on thrown `403`; ZenRows `js_render=true` per `PROXY_BANK_JS_RENDER_MAP` (spec 061) and `shouldUseJsRender` default for `nations_trust_bank` |
+| BOC ZenRows 422/429 and `REQS001: Requests to this domain are forbidden` - 4 categories `0` offers (52000ms) | BOC | ✅ Fixed (spec 060/061, hardened 067/070) | `boc.ts` falls back to secondary provider (`webscrapingapi`) on ZenRows `400/REQS001` via `orderedProvidersForBank`; `zenrows.ts` adds `js_render=true` + `premium_proxy` handling; `failureAlerts` surfaces `zero_offers` |
+| Daily crawler `ConnectTimeout` / silent per-bank success with `0` offers hid failures | All banks | ✅ Fixed (spec 063, follow-ups 065-067) | `crawler/run.ts` surfaces per-bank summaries and `detectFailures` (`zero_offers` when active>0 but scraped 0); job-level failure issue kept as safety net (spec 052) |
 
 ### Roadmap
 
@@ -1546,13 +1548,25 @@ sequenceDiagram
 - [x] **IP-based rate limiting** — add `src/middleware.ts` using Vercel's Edge Runtime; bucket requests per IP with a sliding-window counter stored in Vercel KV (Redis-compatible); limits: 60 req/min for `/api/offers`, 20 req/min for `/api/search`; return `429` with `Retry-After` header on breach
 - [x] **Security CI step** — add `.github/workflows/security.yml` running `npm audit --audit-level=high` + [Trivy](https://github.com/aquasecurity/trivy) filesystem scan on every PR; block merges on HIGH/CRITICAL vulnerabilities; schedule a weekly full scan; report findings as PR annotations using `aquasecurity/trivy-action`
 - [x] **CI test results dashboard** — build a GitHub Pages site (free hosting) that aggregates and visualises test results across all four suites: Vitest unit/component, Playwright E2E, Lighthouse CI performance, and GitHub Actions workflow status. Use existing libraries — [Allure Report](https://allurereport.org/) for Vitest + Playwright (generates a self-contained HTML report from JUnit/JSON output), with a top-level index page combining Allure, the LHCI HTML report, and a GitHub Actions badge summary. A dedicated `.github/workflows/dashboard.yml` job publishes to the `gh-pages` branch on every push to master using `peaceiris/actions-gh-pages`. No custom backend — all data comes from CI artefacts and the GitHub API badge format.
-- [ ] **Remove duplicate GitHub Actions workflows** — audit `.github/workflows/` and consolidate redundant jobs. **Re-opened**: this was previously checked off, but `atlas-warmup.yml` (pings `/api/health` every 4 min via the `VERCEL_APP_URL` *variable*) and `warmup.yml` (pings `/api/ping` every 5 min via the `VERCEL_APP_URL` *secret*) still both exist as separate, overlapping cron workflows — see the [GitHub Actions Workflows table](#github-actions-workflows). Consolidate into one, and extend the audit to any other duplicated steps (e.g. repeated `npm ci`, Node setup) across workflows that could share a reusable workflow (`workflow_call`) or the existing composite action to reduce maintenance surface and CI minutes.
+- [x] **Remove duplicate GitHub Actions workflows (spec 056)** — audited `.github/workflows/` and consolidated redundant jobs. Removed `warmup.yml` (pinged `/api/ping` every 5 min) since `atlas-warmup.yml` (pings `/api/health` every 4 min) already covers Atlas M0 warmup; deleted the now-unused `/api/ping` route. Migrated `crawler.yml`, `enrich.yml`, and `scraper-smoke.yml` to the composite setup action (`./.github/actions/setup`) introduced by spec 026, which was previously only wired into `ci.yml` — this also brought `scraper-smoke.yml` off a stale Node 20 pin onto Node 22.
 - [x] **Visual UI regression testing** — extend the Playwright E2E suite with automated visual verification so broken layouts, missing components, and rendering regressions are caught before reaching production. Approach: (1) Add Playwright screenshot assertions (`expect(page).toHaveScreenshot()`) for critical views — the offer grid, filter drawer, hero search, and empty/error states — using Playwright's built-in snapshot diffing with a small pixel-diff threshold. (2) Add structural sanity checks that confirm key `data-testid` elements are visible on every page load (offer cards, filter bar, pagination) without relying on specific data, making tests resilient to DB content changes. (3) Run these checks in the existing `e2e` CI job against the production build so any agent-introduced regression (broken layout, removed component, mis-wired prop) is caught automatically before merge.
 - [x] **Cron job summary in CI dashboard** — extend the CI test results dashboard (above) to include a dedicated panel showing the most recent runs of all scheduled workflows (daily crawler, spec-writer, implementer, Atlas warmup). For each run display: workflow name, trigger time, pass/fail status, and a link to the full log. Source data from the GitHub Actions REST API (`/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs?per_page=5`) using a GitHub Actions token available in the dashboard build job; render as a status table alongside the Allure and Lighthouse panels. This gives a single-glance health view of both CI and the autonomous agents that maintain the project.
 
 #### 🐛 Bug fixes
 
 - [x] **AmEx (NTB) scraper — extract applicable dates into `description` field** — The current `amex.ts` scraper captures the outer offer validity period (`validFrom` / `validUntil`) from text matching "Valid till / Valid from … to …", but many AmEx offers are only redeemable on specific days within that window (e.g. "Every Tuesday", "1st to 7th of each month", "Weekends only"). These conditions are present in the offer card text on `americanexpress.lk` but are discarded because `parseOfferCards()` only extracts the first "Valid…" sentence. Reported example: Domino's offer shows `validUntil` = end of promotion period but the discount is only applicable on a particular day each week — a user reading the card has no way to know this. Fix: (1) widen the text extraction in `parseOfferCards()` to capture the full conditions block (`.alloffer-text` or the paragraph following the validity line); (2) populate the `description` field (already in `OfferInputSchema`) with the cleaned conditions text; (3) surface `description` in the offer card expanded view and the "View Offer Details" tooltip. No schema migration needed — `description` is already optional in the Zod schema and the Mongoose model.
+
+#### ✅ Crawler hardening & scraping proxy fallback (specs 052-070, 2026-08)
+- [x] **Crawler failure monitoring (spec 052)** - per-bank success/failure table, `zero_offers` detection (`previousActiveCounts>0` but scraped 0), `Promise.allSettled` + `ConnectTimeout` hardening (spec 063)
+- [x] **Scraping proxy fallback (spec 053)** - `crawler/utils/proxyProviders/` with `zenrows.ts` + `webscrapingapi.ts`, `registry.ts:getConfiguredProviders()` / `orderedProvidersForBank()`, `proxyFetch` retry loop; `failureAlerts` integration
+- [x] **Offer image referrer fix (spec 055)** - `referrerPolicy="no-referrer"` on `OfferImage` to avoid bank hotlink blocking
+- [x] **Dedup warmup workflows (spec 056)** - removed duplicate `warmup.yml`; Atlas warmup is sole `atlas-warmup.yml` (`/api/health` every 4 min)
+- [x] **Enrichment multi-provider LLM (spec 057)** - Gemini primary + Groq spillover for `semanticSummary`; zero-behavior-change when `GROQ_API_KEY` omitted
+- [x] **NTB/BOC ZenRows fixes (specs 059-061)** - NTB thrown-`403` fallback, BOC `422/429` handling, `js_render=true` for `bank_of_ceylon` + `nations_trust_bank` via `PROXY_BANK_JS_RENDER_MAP` / `shouldUseJsRender` default
+- [x] **Sampath empty-response fix (spec 062)** - handles `200 OK` + empty `data`/`[]`, 2KB truncated raw warn, retry with backoff (`venus.hnb.lk`-style)
+- [x] **Daily scrape failure hardening (spec 063)** - `ConnectTimeout` catch + per-bank summary logging, prevents silent `0` success
+- [x] **Zero-offers follow-ups (specs 065-067)** - Sampath/NTB/BOC each wired to `orderedProvidersForBank` for both thrown and zero-result paths; regression fixtures captured from live `REQS001`/`403` bodies
+- [x] **Verify ZenRows fallbacks (specs 068-070)** - `scripts/verify-zenrows.ts` (`--bank all|sampath_bank|nations_trust_bank|bank_of_ceylon`) + `.github/workflows/zenrows-verify.yml` (`workflow_dispatch`) manual verification; `WEBSCRAPINGAPI_API_KEY` secondary fallback verified (BOC `REQS001` -> `webscrapingapi` `OK ... chars`); `PROXY_BANK_MAP`/`PROXY_BANK_JS_RENDER_MAP` vars documented
 
 ---
 
@@ -1568,6 +1582,72 @@ All feature specs live in `specs/`:
 | `specs/features/002-crawler.md` | Crawler pipeline + per-bank scraper interface |
 | `specs/features/003-search.md` | Keyword search |
 | `specs/features/004-performance.md` | Performance targets + optimization plan |
+| `specs/features/005-offer-detail.md` | Offer detail page (internal) |
+| `specs/features/006-save-filter-presets.md` | Save filter presets |
+| `specs/features/007-dark-mode.md` | Dark mode |
+| `specs/features/008-playwright-ntb-fallback.md` | Playwright fallback for NTB |
+| `specs/features/009-merchant-image-resolution.md` | Merchant image resolution |
+| `specs/features/010-amex-offers.md` | AmEx offers (americanexpress.lk) |
+| `specs/features/011-new-banks.md` | New banks (People's Bank, BOC) |
+| `specs/features/012-atlas-warmup-cron.md` | Atlas warmup cron |
+| `specs/features/013-atlas-search-migration.md` | Atlas Search migration |
+| `specs/features/014-adsense-integration.md` | AdSense integration |
+| `specs/features/015-rate-limiting.md` | Rate limiting |
+| `specs/features/016-security-ci.md` | Security CI |
+| `specs/features/017-search-ux-overhaul.md` | Search UX overhaul |
+| `specs/features/018-mobile-performance-sla.md` | Mobile performance SLA |
+| `specs/features/019-filter-drawer.md` | Filter drawer |
+| `specs/features/020-date-range-filter.md` | Date range filter |
+| `specs/features/021-card-view-variants.md` | Card view variants |
+| `specs/features/022-offer-type-display.md` | Offer type display |
+| `specs/features/023-live-search-suggestions.md` | Live search suggestions |
+| `specs/features/024-offer-external-link.md` | Offer external link |
+| `specs/features/025-ci-test-dashboard.md` | CI test dashboard |
+| `specs/features/026-dedup-github-actions.md` | Dedup GitHub Actions |
+| `specs/features/027-visual-regression-testing.md` | Visual regression testing |
+| `specs/features/028-cron-job-summary.md` | Cron job summary |
+| `specs/features/029-ui-interaction-performance-budgets.md` | UI interaction performance budgets |
+| `specs/features/030-dynamic-category-filters.md` | Dynamic category filters |
+| `specs/features/031-lighthouse-web-vitals.md` | Lighthouse Web Vitals |
+| `specs/features/032-accessibility-fixes.md` | Accessibility fixes (WCAG AA) |
+| `specs/features/033-javascript-bundle-optimisation.md` | JS bundle optimisation |
+| `specs/features/034-cold-start-performance.md` | Cold-start performance |
+| `specs/features/035-pagination-controls.md` | Pagination controls |
+| `specs/features/036-sampath-per-offer-detail-url.md` | Sampath per-offer detail URL |
+| `specs/features/037-multi-select-filters.md` | Multi-select filters |
+| `specs/features/038-hnb-scraper-reliability.md` | HNB scraper reliability |
+| `specs/features/039-admin-dashboard.md` | Admin dashboard |
+| `specs/features/040-brand-logo-system.md` | Brand logo system |
+| `specs/features/041-amex-conditions-extraction.md` | AmEx conditions extraction |
+| `specs/features/042-vercel-analytics.md` | Vercel Analytics |
+| `specs/features/043-filter-panel-redesign.md` | Filter panel redesign |
+| `specs/features/044-ai-offer-enrichment.md` | AI offer enrichment (Gemini) |
+| `specs/features/045-announcement-banner.md` | Announcement banner |
+| `specs/features/046-offer-detail-page.md` | Offer detail page |
+| `specs/features/047-fix-last-page-pagination.md` | Fix last-page pagination |
+| `specs/features/048-consolidate-offer-categories.md` | Consolidate offer categories (14-12) |
+| `specs/features/049-offer-card-detail-link.md` | Offer card detail link |
+| `specs/features/050-peoples-bank-see-more-cleanup.md` | People's Bank See-more cleanup |
+| `specs/features/051-announce-ai-offer-extraction.md` | Announce AI offer extraction |
+| `specs/features/052-crawler-failure-monitoring.md` | Crawler failure monitoring (per-bank + zero_offers) |
+| `specs/features/053-scraping-proxy-fallback.md` | Scraping proxy fallback (ZenRows -> WebScrapingAPI) |
+| `specs/features/054-peoples-bank-detail-page-validity.md` | People's Bank detail page validity |
+| `specs/features/055-offer-image-referrer-fix.md` | Offer image referrer fix |
+| `specs/features/056-dedup-warmup-workflows.md` | Dedup warmup workflows |
+| `specs/features/057-enrichment-multi-provider-llm-strategy.md` | Enrichment multi-provider LLM (Gemini+Groq) |
+| `specs/features/058-fix-gemini-thinking-budget-regression.md` | Fix Gemini thinking budget |
+| `specs/features/059-ntb-proxy-fallback-on-thrown-errors.md` | NTB proxy fallback on thrown errors (403) |
+| `specs/features/060-fix-zenrows-boc-provider-errors.md` | Fix ZenRows BOC provider errors (422/429) |
+| `specs/features/061-boc-ntb-zenrows-js-render.md` | BOC/NTB ZenRows js_render |
+| `specs/features/062-sampath-api-empty-response-fix.md` | Sampath API empty-response fix |
+| `specs/features/063-crawler-daily-scrape-failure-2026-08-05.md` | Crawler daily scrape failure 2026-08-05 |
+| `specs/features/064-ai-offer-enrichment-v2-architecture-decision.md` | AI enrichment v2 architecture decision |
+| `specs/features/065-sampath-scraper-zero-offers-followup.md` | Sampath scraper zero-offers followup |
+| `specs/features/066-ntb-scraper-zero-offers-followup.md` | NTB scraper zero-offers followup |
+| `specs/features/067-boc-reject-requirements-fix.md` | BOC REQS001 forbidden fix |
+| `specs/features/068-verify-sampath-bank-zenrows-fallback.md` | Verify Sampath ZenRows fallback |
+| `specs/features/069-verify-nations-trust-bank-zenrows-js-render.md` | Verify NTB ZenRows js_render |
+| `specs/features/070-verify-bank-of-ceylon-zenrows-reqs001.md` | Verify BOC ZenRows REQS001 |
 
 ---
 

@@ -209,7 +209,7 @@ export function resolveMerchantDomain(merchant: string): string {
  * OfferImage.tsx skips the network stage entirely and renders the category icon
  * instead of showing a globe/generic favicon.
  */
-export function buildClearbitUrl(merchant: string): string | undefined {
+export function buildFaviconFallbackUrl(merchant: string): string | undefined {
   const key = normaliseName(merchant);
 
   let domain: string | undefined = MERCHANT_DOMAINS[key];
@@ -327,10 +327,10 @@ export async function resolveMerchantImage(
   // AC5: merchant already has a logo stored — skip all external calls
   if (existingUrl) return existingUrl;
 
-  const clearbitUrl = buildClearbitUrl(merchant);
-  if (clearbitUrl && await isReachable(clearbitUrl)) {
-    console.log(`[logo] Clearbit logo found for ${merchant}`);
-    return clearbitUrl;
+  const faviconUrl = buildFaviconFallbackUrl(merchant);
+  if (faviconUrl && await isReachable(faviconUrl)) {
+    console.log(`[logo] Favicon fallback found for ${merchant}`);
+    return faviconUrl;
   }
 
   // AC2: Brandfetch as secondary fallback when Clearbit fails

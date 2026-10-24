@@ -24,7 +24,7 @@ import {
   Tag,
 } from "lucide-react";
 import type { Offer } from "../../../specs/data/offer.schema";
-import { buildClearbitUrl } from "../../../crawler/utils/logo";
+import { buildFaviconFallbackUrl } from "../../../crawler/utils/logo";
 
 // ── Category metadata ─────────────────────────────────────────────────────────
 
@@ -59,15 +59,15 @@ interface Props {
 type Stage = "primary" | "clearbit" | "icon";
 
 export function OfferImage({ offer, sizes, imgClassName }: Props) {
-  const clearbitUrl = buildClearbitUrl(offer.merchant);
+  const faviconUrl = buildFaviconFallbackUrl(offer.merchant);
 
   const [stage, setStage] = useState<Stage>(
-    offer.merchantLogoUrl ? "primary" : clearbitUrl ? "clearbit" : "icon"
+    offer.merchantLogoUrl ? "primary" : faviconUrl ? "clearbit" : "icon"
   );
 
   function advanceStage() {
     setStage((s) => {
-      if (s === "primary") return clearbitUrl ? "clearbit" : "icon";
+      if (s === "primary") return faviconUrl ? "clearbit" : "icon";
       if (s === "clearbit") return "icon";
       return "icon";
     });
@@ -92,7 +92,7 @@ export function OfferImage({ offer, sizes, imgClassName }: Props) {
     );
   }
 
-  const src = stage === "primary" ? offer.merchantLogoUrl! : clearbitUrl!;
+  const src = stage === "primary" ? offer.merchantLogoUrl! : faviconUrl!;
 
   return (
     <Image
@@ -107,6 +107,9 @@ export function OfferImage({ offer, sizes, imgClassName }: Props) {
       //   server IPs, so let the browser fetch directly instead.
       // - "clearbit" — Clearbit redirects; optimisation breaks redirect following.
       unoptimized
+      // "primary" only — some banks' hotlink protection rejects the request based on
+      // the browser's Referer header even though the same URL works with none.
+      referrerPolicy={stage === "primary" ? "no-referrer" : undefined}
     />
   );
 }

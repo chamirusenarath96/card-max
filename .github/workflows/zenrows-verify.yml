@@ -1,0 +1,26 @@
+name: ZenRows Verify
+on:
+  workflow_dispatch:
+    inputs:
+      bank:
+        description: Bank to verify
+        type: choice
+        options: [all, sampath_bank, nations_trust_bank, bank_of_ceylon]
+        default: all
+        required: true
+
+jobs:
+  verify:
+    name: Verify ZenRows per bank
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Verify ZenRows
+        run: npx tsx scripts/verify-zenrows.ts --bank ${{ inputs.bank }}
+        env:
+          ZENROWS_API_KEY: ${{ secrets.ZENROWS_API_KEY }}
+          WEBSCRAPINGAPI_API_KEY: ${{ secrets.WEBSCRAPINGAPI_API_KEY }}
+          PROXY_BANK_MAP: ${{ vars.PROXY_BANK_MAP }}
+          MONGODB_URI: dummy

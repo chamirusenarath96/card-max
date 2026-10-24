@@ -86,6 +86,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - `VERCEL_REVALIDATION_SECRET` — protects the `/api/revalidate` ISR endpoint
 - `BRANDFETCH_API_KEY` — secondary logo fallback (free tier: 50 calls/month)
 - `GEMINI_API_KEY` — Google Gemini API key for the AI offer-enrichment workflow (`crawler/enrichment/run.ts`) — free-tier eligible, see #95
+- `GROQ_API_KEY` — optional second, text-only LLM provider for offer enrichment (spec 057) — spills semantic-summary calls to Groq once Gemini's per-minute window is exhausted; omitting it is a fully supported, zero-behavior-change (Gemini-only) configuration
 - `GITHUB_FEEDBACK_TOKEN` — GitHub PAT with `issues:write` scope; used to create issues from feedback
 - `GITHUB_REPO_OWNER` / `GITHUB_REPO_NAME` — defaults to `chamirusenarath96` / `card-max`
 

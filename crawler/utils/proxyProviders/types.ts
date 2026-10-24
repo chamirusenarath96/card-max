@@ -1,8 +1,9 @@
-/**
+﻿/**
  * Provider-agnostic interface for scraping-proxy providers.
  * Spec: specs/features/053-scraping-proxy-fallback.md
+ * Spec: specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC2)
  */
 export interface ProxyProvider {
   name: "zenrows" | "webscrapingapi";
-  fetchHtml(url: string): Promise<string>;
+  fetchHtml(url: string, bank?: string): Promise<string>;
 }

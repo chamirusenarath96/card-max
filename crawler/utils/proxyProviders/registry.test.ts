@@ -1,9 +1,10 @@
 /**
  * Proxy provider registry — unit tests
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6),
+ *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getConfiguredProviders, getBankProviderMap, selectProviderForBank } from "./registry";
+import { getConfiguredProviders, getBankProviderMap, selectProviderForBank, orderedProvidersForBank } from "./registry";
 import type { ProxyProvider } from "./types";
 
 describe("getConfiguredProviders", () => {
@@ -80,5 +81,26 @@ describe("selectProviderForBank", () => {
   it("falls through to deterministic hash-based selection when bankMap names a provider that isn't configured", () => {
     const result = selectProviderForBank("commercial_bank", [zenrows], { commercial_bank: "webscrapingapi" });
     expect(result).toBe(zenrows);
+  });
+});
+
+describe("orderedProvidersForBank", () => {
+  const zenrows: ProxyProvider = { name: "zenrows", fetchHtml: vi.fn() };
+  const webscrapingapi: ProxyProvider = { name: "webscrapingapi", fetchHtml: vi.fn() };
+
+  it("returns [] when no providers are configured (AC3)", () => {
+    expect(orderedProvidersForBank("commercial_bank", [])).toEqual([]);
+  });
+
+  it("returns the deterministic pick first, followed by the remaining configured providers (AC3)", () => {
+    const result = orderedProvidersForBank("bank_of_ceylon", [zenrows, webscrapingapi], {
+      bank_of_ceylon: "webscrapingapi",
+    });
+    expect(result).toEqual([webscrapingapi, zenrows]);
+  });
+
+  it("returns just the single configured provider when only one exists (AC4)", () => {
+    const result = orderedProvidersForBank("bank_of_ceylon", [zenrows]);
+    expect(result).toEqual([zenrows]);
   });
 });

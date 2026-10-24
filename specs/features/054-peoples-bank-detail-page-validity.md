@@ -4,10 +4,10 @@
 
 ## Status
 - [x] Spec drafted
-- [ ] Spec reviewed
-- [ ] Implementation started
-- [ ] Tests written
-- [ ] Done
+- [x] Spec reviewed
+- [x] Implementation started
+- [x] Tests written
+- [x] Done
 
 ## Purpose
 `crawler/scrapers/peoples_bank.ts` only parses category *listing* pages
@@ -70,17 +70,17 @@ day-of-week condition text (e.g. "Every Monday & Wednesday") is visible in the
 description alongside the outer date.
 
 ## Acceptance Criteria
-- [ ] AC1: When a People's Bank offer's listing-page pass does not produce a
+- [x] AC1: When a People's Bank offer's listing-page pass does not produce a
       `validUntil`, the scraper fetches that offer's `sourceUrl` detail page
-- [ ] AC2: A detail page containing `Validity: Till <date> ((<condition>))` is parsed
+- [x] AC2: A detail page containing `Validity: Till <date> ((<condition>))` is parsed
       into `validUntil` set to `<date>`
-- [ ] AC3: The parenthesised condition text (e.g. `Every Monday & Wednesday`) is
+- [x] AC3: The parenthesised condition text (e.g. `Every Monday & Wednesday`) is
       appended to the offer's `description`, not discarded
-- [ ] AC4: Offers whose listing-page pass already produced a `validUntil` do not
+- [x] AC4: Offers whose listing-page pass already produced a `validUntil` do not
       trigger an extra detail-page fetch (keeps request volume bounded)
-- [ ] AC5: A detail page with no recognizable validity line leaves `validUntil`
+- [x] AC5: A detail page with no recognizable validity line leaves `validUntil`
       `undefined` (no crash), same as today's behaviour when nothing can be parsed
-- [ ] AC6: The detail-page fetch failing (network error, non-2xx) is caught and
+- [x] AC6: The detail-page fetch failing (network error, non-2xx) is caught and
       logged, leaving the offer's other fields intact rather than failing the whole
       category scrape
 

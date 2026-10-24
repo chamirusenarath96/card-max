@@ -7,11 +7,11 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+const { mockGenerateFromImage } = vi.hoisted(() => ({ mockGenerateFromImage: vi.fn() }));
 
-vi.mock("./geminiClient", () => ({
-  getGeminiClient: () => ({ models: { generateContent: mockCreate } }),
-  ENRICHMENT_MODEL: "gemini-flash-latest",
+vi.mock("./providers/router", () => ({
+  generateFromImage: mockGenerateFromImage,
+  sharedRouter: {},
 }));
 
 import { findImageUrls, extractTextFromImages } from "./extractConditionsFromImages";
@@ -77,32 +77,12 @@ describe("extractTextFromImages", () => {
         arrayBuffer: async () => new ArrayBuffer(1000),
       })
     );
-    mockCreate.mockResolvedValue({ text: "Valid every Thursday in August." });
+    mockGenerateFromImage.mockResolvedValue("Valid every Thursday in August.");
 
     const result = await extractTextFromImages(["https://bank.lk/promo.jpg"]);
 
     expect(result).toBe("Valid every Thursday in August.");
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it("disables thinking so the token budget isn't consumed by reasoning (#116)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        headers: new Map([["content-type", "image/jpeg"]]) as unknown as Headers,
-        arrayBuffer: async () => new ArrayBuffer(100),
-      })
-    );
-    mockCreate.mockResolvedValue({ text: "Some text." });
-
-    await extractTextFromImages(["https://bank.lk/promo.jpg"]);
-
-    expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config: expect.objectContaining({ thinkingConfig: { thinkingBudget: 0 } }),
-      })
-    );
+    expect(mockGenerateFromImage).toHaveBeenCalledTimes(1);
   });
 
   it("returns undefined when the model finds no conditions text (NONE)", async () => {
@@ -114,7 +94,7 @@ describe("extractTextFromImages", () => {
         arrayBuffer: async () => new ArrayBuffer(100),
       })
     );
-    mockCreate.mockResolvedValue({ text: "NONE" });
+    mockGenerateFromImage.mockResolvedValue("NONE");
 
     const result = await extractTextFromImages(["https://bank.lk/promo.png"]);
 
@@ -137,7 +117,7 @@ describe("extractTextFromImages", () => {
     const result = await extractTextFromImages(["https://bank.lk/huge.jpg"]);
 
     expect(result).toBeUndefined();
-    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockGenerateFromImage).not.toHaveBeenCalled();
   });
 
   it("skips a non-image content-type response", async () => {
@@ -153,7 +133,7 @@ describe("extractTextFromImages", () => {
     const result = await extractTextFromImages(["https://bank.lk/not-an-image"]);
 
     expect(result).toBeUndefined();
-    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockGenerateFromImage).not.toHaveBeenCalled();
   });
 
   it("continues to the next image when one download fails", async () => {
@@ -166,7 +146,7 @@ describe("extractTextFromImages", () => {
         arrayBuffer: async () => new ArrayBuffer(100),
       });
     vi.stubGlobal("fetch", fetchMock);
-    mockCreate.mockResolvedValue({ text: "Weekends only." });
+    mockGenerateFromImage.mockResolvedValue("Weekends only.");
 
     const result = await extractTextFromImages(["https://bank.lk/broken.jpg", "https://bank.lk/ok.jpg"]);
 

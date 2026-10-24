@@ -5,6 +5,7 @@
  * Usage: npx tsx crawler/run.ts
  */
 import dotenv from "dotenv";
+import fs from "node:fs";
 // Load .env.local first (Next.js convention for local secrets), fall back to .env
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -76,6 +77,9 @@ async function main(): Promise<void> {
           expired,
           durationMs,
         };
+        if (offers.length === 0 && (previousActiveCounts[name] ?? 0) > 0) {
+          console.warn(`[run] ${name} scraped 0 offers but had ${previousActiveCounts[name]} active before, will be reported as zero_offers`);
+        }
         summaries.push(summary);
         return summary;
       } catch (err) {
@@ -96,6 +100,11 @@ async function main(): Promise<void> {
   if (failures.length > 0) {
     await reportFailures(failures); // advisory — never throws
   }
+
+  // Write summary file for workflow failure issue enrichment (063 AC3)
+  try {
+    fs.writeFileSync("./crawler-summary.json", JSON.stringify({ summaries, failures }, null, 2));
+  } catch {}
 
   await disconnectDb();
 

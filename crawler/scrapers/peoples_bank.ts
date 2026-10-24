@@ -62,6 +62,10 @@ export async function scrape(): Promise<OfferInput[]> {
         if (seenTitles.has(key)) continue;
         seenTitles.add(key);
 
+        if (!raw.validUntil && isFetchableDetailUrl(raw.sourceUrl, url)) {
+          await enrichWithDetailPageValidity(raw);
+        }
+
         const result = OfferInputSchema.safeParse(raw);
         if (result.success) {
           allOffers.push(result.data);
@@ -78,6 +82,35 @@ export async function scrape(): Promise<OfferInput[]> {
 
   console.log(`[peoples_bank] Scraped ${allOffers.length} valid offers`);
   return allOffers;
+}
+
+/** True when `sourceUrl` is a distinct, fetchable detail page (not the listing page itself). */
+function isFetchableDetailUrl(sourceUrl: string | undefined, listingUrl: string): boolean {
+  return !!sourceUrl && sourceUrl.startsWith("http") && sourceUrl !== listingUrl;
+}
+
+/**
+ * Fetch an offer's own detail page (`sourceUrl`) and recover its `Validity: Till
+ * <date> ((<condition>))` line when the listing-page pass didn't yield a date.
+ * Mutates `raw` in place; any fetch/parse failure is caught and logged so the
+ * offer's other fields still make it through unaffected (AC6).
+ */
+async function enrichWithDetailPageValidity(raw: Partial<OfferInput>): Promise<void> {
+  try {
+    const html = await fetchHtml(raw.sourceUrl!);
+    const text = cleanText(preprocessHtml(html));
+    const { validUntil, condition } = extractDates(text);
+
+    if (validUntil) raw.validUntil = validUntil;
+    if (condition) {
+      raw.description = raw.description ? `${raw.description} (${condition})` : `(${condition})`;
+    }
+  } catch (err) {
+    console.warn(
+      `[peoples_bank] Detail-page fetch failed for ${raw.sourceUrl}:`,
+      (err as Error).message,
+    );
+  }
 }
 
 // ── Parsers ──────────────────────────────────────────────────────────────────
@@ -355,7 +388,7 @@ function extractDiscountText(text: string): string | undefined {
   return m ? m[0].trim() : undefined;
 }
 
-function extractDates(text: string): { validFrom?: Date; validUntil?: Date } {
+function extractDates(text: string): { validFrom?: Date; validUntil?: Date; condition?: string } {
   const rangeRe =
     /valid\s+from\s+(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)(?:\s+(\d{4}))?\s+to\s+(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)\s+(\d{4})/i;
   const rangeMatch = text.match(rangeRe);
@@ -372,6 +405,18 @@ function extractDates(text: string): { validFrom?: Date; validUntil?: Date } {
   const tillMatch = text.match(tillRe);
   if (tillMatch) {
     return { validUntil: buildDate(tillMatch[1]!, tillMatch[2]!, tillMatch[3]!) };
+  }
+
+  // Detail-page wording, e.g. "Validity: Till August 31, 2026 ((Every Monday & Wednesday))"
+  const validityRe =
+    /validity\s*:\s*till\s+(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?:\s*\(+\s*([^)]+?)\s*\)+)?/i;
+  const validityMatch = text.match(validityRe);
+  if (validityMatch) {
+    const [, month, day, year, condition] = validityMatch;
+    return {
+      validUntil: buildDate(day!, month!, year!),
+      condition: condition?.trim(),
+    };
   }
 
   return {};

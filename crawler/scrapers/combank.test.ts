@@ -1,5 +1,5 @@
-/**
- * Commercial Bank scraper — unit tests
+﻿/**
+ * Commercial Bank scraper â€” unit tests
  * Spec: specs/features/002-crawler.md (AC1, AC2)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,12 +14,12 @@ vi.mock("../utils/http", () => ({
 vi.mock("../utils/proxyProviders/registry", () => ({
   getConfiguredProviders: vi.fn(() => []),
   getBankProviderMap: vi.fn(() => ({})),
-  selectProviderForBank: vi.fn(() => null),
+  orderedProvidersForBank: vi.fn(() => []),
 }));
 
 import { scrape } from "./combank";
 import { fetchHtml } from "../utils/http";
-import { getConfiguredProviders, selectProviderForBank } from "../utils/proxyProviders/registry";
+import { getConfiguredProviders, orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
 const LISTING_HTML = `
 <html><body>
@@ -39,7 +39,7 @@ const DETAIL_HTML = `
 </html>
 `;
 
-// discountPercentage 200 exceeds OfferInputSchema max(100) → safeParse fails
+// discountPercentage 200 exceeds OfferInputSchema max(100) â†’ safeParse fails
 const INVALID_DETAIL_HTML = `
 <html><body>
   <h2>200% off at Test Merchant</h2>
@@ -103,7 +103,7 @@ describe("combank scraper", () => {
   it("still returns parsed offers when the listing-page direct fetch rejects but the configured proxy provider succeeds (AC13)", async () => {
     const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
     vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-    vi.mocked(selectProviderForBank).mockReturnValue({ name: "zenrows", fetchHtml: proxyFetchHtml });
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
 
     vi.mocked(fetchHtml)
       .mockRejectedValueOnce(new Error("HTTP 403"))
@@ -111,7 +111,23 @@ describe("combank scraper", () => {
 
     const offers = await scrape();
 
-    expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("combank.lk"));
+    expect(proxyFetchHtml).toHaveBeenCalledWith(expect.stringContaining("combank.lk"), "commercial_bank");
     expect(offers.length).toBeGreaterThan(0);
   });
+
+  it("retries on ConnectTimeoutError via proxyFetch and returns offers on retry (063 AC1)", async () => {
+    const err = new Error("fetch failed");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (err as any).cause = new Error("ConnectTimeoutError: Connect Timeout Error");
+    vi.mocked(fetchHtml)
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce(LISTING_HTML)
+      .mockResolvedValue(DETAIL_HTML);
+
+    const offers = await scrape();
+
+    expect(offers.length).toBeGreaterThan(0);
+    expect(offers[0].bank).toBe("commercial_bank");
+  });
 });
+

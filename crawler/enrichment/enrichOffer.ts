@@ -7,6 +7,7 @@
  * core scrape/upsert path, so any error or timeout resolves to
  * `enrichmentStatus: "failed"` instead of rejecting.
  */
+import { ApiError } from "@google/genai";
 import { fetchHtml } from "../utils/http";
 import { generateSemanticSummary } from "./semanticSummary";
 import { findImageUrls, extractTextFromImages } from "./extractConditionsFromImages";
@@ -53,8 +54,9 @@ export async function enrichOffer(
       deps.timeoutMs ?? ENRICHMENT_TIMEOUT_MS
     );
   } catch (err) {
+    const status = getErrorStatus(err);
     console.warn(
-      `[enrichment] Failed for "${offer.title}":`,
+      `[enrichment] Failed for "${offer.title}"${status !== undefined ? ` (status: ${status})` : ""}:`,
       err instanceof Error ? err.message : err
     );
     return { enrichmentStatus: "failed" };
@@ -101,6 +103,15 @@ async function findImagesOnSourcePage(
   } catch {
     return [];
   }
+}
+
+/**
+ * Surfaces the Gemini API's HTTP status (e.g. 429 for quota exhaustion vs
+ * 400 for a bad request) so config regressions like #119 are distinguishable
+ * from expected quota errors in logs without a diagnosis session.
+ */
+function getErrorStatus(err: unknown): number | undefined {
+  return err instanceof ApiError ? err.status : undefined;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

@@ -21,12 +21,12 @@ vi.mock("next/image", () => ({
 }));
 
 // vi.hoisted makes the fn available inside the vi.mock factory (hoisted to top of file)
-const mockBuildClearbitUrl = vi.hoisted(() =>
-  vi.fn(() => "https://logo.clearbit.com/keells.com" as string | null)
+const mockBuildFaviconFallbackUrl = vi.hoisted(() =>
+  vi.fn(() => "https://www.google.com/s2/favicons?domain=keells.com&sz=128" as string | null)
 );
 
 vi.mock("../../../crawler/utils/logo", () => ({
-  buildClearbitUrl: mockBuildClearbitUrl,
+  buildFaviconFallbackUrl: mockBuildFaviconFallbackUrl,
 }));
 
 const BASE_OFFER = {
@@ -52,10 +52,27 @@ describe("OfferImage", () => {
   });
 
   it("renders the category icon fallback when no logo URL and no clearbit match", () => {
-    mockBuildClearbitUrl.mockReturnValueOnce(null);
+    mockBuildFaviconFallbackUrl.mockReturnValueOnce(null);
     const offerNoLogo = { ...BASE_OFFER, merchantLogoUrl: undefined };
     render(<OfferImage offer={offerNoLogo} bankColor="#1B3A6B" />);
     // Icon fallback renders a div (not an <img>) with the merchant name as text
     expect(screen.getByText("Keells Super")).toBeInTheDocument();
+  });
+
+  it("primary-stage Image has referrerPolicy=\"no-referrer\" (AC1)", () => {
+    render(<OfferImage offer={BASE_OFFER} bankColor="#1B3A6B" />);
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("referrerpolicy", "no-referrer");
+  });
+
+  it("favicon-fallback stage Image has no referrer-policy change (AC2)", () => {
+    const offerNoLogo = { ...BASE_OFFER, merchantLogoUrl: undefined };
+    render(<OfferImage offer={offerNoLogo} bankColor="#1B3A6B" />);
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute(
+      "src",
+      "https://www.google.com/s2/favicons?domain=keells.com&sz=128"
+    );
+    expect(img).not.toHaveAttribute("referrerpolicy");
   });
 });

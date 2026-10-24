@@ -7,8 +7,7 @@
  * at MAX_IMAGE_BYTES — an offer with excessive/oversized images degrades to
  * skipping the extras rather than stalling the pipeline.
  */
-import { createPartFromBase64, createUserContent } from "@google/genai";
-import { getGeminiClient, ENRICHMENT_MODEL } from "./geminiClient";
+import { generateFromImage, sharedRouter } from "./providers/router";
 
 const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -112,18 +111,5 @@ async function describeImage(image: {
   data: string;
   mediaType: SupportedMediaType;
 }): Promise<string | undefined> {
-  const client = getGeminiClient();
-
-  const response = await client.models.generateContent({
-    model: ENRICHMENT_MODEL,
-    contents: createUserContent([
-      createPartFromBase64(image.data, image.mediaType),
-      VISION_PROMPT,
-    ]),
-    // See semanticSummary.ts — disables thinking so the token budget goes
-    // entirely to the extracted text, not an internal reasoning pass (#116).
-    config: { maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 } },
-  });
-
-  return response.text?.trim();
+  return generateFromImage(sharedRouter, image, VISION_PROMPT);
 }
