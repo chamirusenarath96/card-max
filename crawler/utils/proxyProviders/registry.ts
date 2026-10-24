@@ -2,14 +2,43 @@
  * Provider registry + selection
  * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6),
  *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3),
- *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5)
+ *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5),
+ *       specs/features/078-brightdata-web-unlocker.md (AC11-AC13)
  */
 import type { ProxyProvider } from "./types";
 import { createZenRowsProvider } from "./zenrows";
 import { createWebScrapingApiProvider } from "./webscrapingapi";
+import { createBrightDataUnlockerProvider } from "./brightDataUnlocker";
+import { createBrightDataResidentialProvider } from "./brightDataResidential";
 
+/**
+ * Bright Data is the designated main fetcher (spec 078) — when either of its
+ * two provider tiers is configured, ZenRows/WebScrapingAPI are NOT added as
+ * further fallbacks. This is deliberate: Bright Data's Sri-Lanka geo-lock
+ * must never be silently abandoned by cascading to a different provider (and
+ * therefore a different, unverified exit country) when it fails. ZenRows/
+ * WebScrapingAPI remain available as a legacy path only for environments
+ * that haven't configured Bright Data at all yet (e.g. local dev).
+ */
 export function getConfiguredProviders(env: NodeJS.ProcessEnv = process.env): ProxyProvider[] {
   const providers: ProxyProvider[] = [];
+
+  if (env.BRIGHTDATA_API_KEY && env.BRIGHTDATA_ZONE) {
+    providers.push(createBrightDataUnlockerProvider(env.BRIGHTDATA_API_KEY, env.BRIGHTDATA_ZONE));
+  }
+  if (env.BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID && env.BRIGHTDATA_RESIDENTIAL_ZONE && env.BRIGHTDATA_RESIDENTIAL_PASSWORD) {
+    providers.push(
+      createBrightDataResidentialProvider({
+        customerId: env.BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID,
+        zone: env.BRIGHTDATA_RESIDENTIAL_ZONE,
+        password: env.BRIGHTDATA_RESIDENTIAL_PASSWORD,
+      })
+    );
+  }
+
+  if (providers.length > 0) return providers;
+
+  // Legacy fallback path — only reached when no Bright Data provider is configured.
   if (env.ZENROWS_API_KEY) providers.push(createZenRowsProvider(env.ZENROWS_API_KEY));
   if (env.WEBSCRAPINGAPI_API_KEY) providers.push(createWebScrapingApiProvider(env.WEBSCRAPINGAPI_API_KEY));
   return providers;
@@ -64,6 +93,8 @@ export function getBankJsRenderMap(env: NodeJS.ProcessEnv = process.env): Record
   return {};
 }
 
+const LEGACY_PROVIDER_NAMES = new Set(["zenrows", "webscrapingapi"]);
+
 /** Deterministic (no shared mutable state) so the same bank always maps to the
  *  same provider within — and across — a run, without needing round-robin counters. */
 export function selectProviderForBank(
@@ -77,8 +108,18 @@ export function selectProviderForBank(
   const explicitMatch = explicit && providers.find((p) => p.name === explicit);
   if (explicitMatch) return explicitMatch;
 
-  const hash = [...bank].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return providers[hash % providers.length];
+  // Legacy ZenRows/WebScrapingAPI-only configurations keep their original
+  // hash-based load distribution between the two (spec 053/060).
+  if (providers.every((p) => LEGACY_PROVIDER_NAMES.has(p.name))) {
+    const hash = [...bank].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    return providers[hash % providers.length];
+  }
+
+  // Priority order otherwise (spec 078): Bright Data Web Unlocker is the main
+  // fetcher for every bank by default — the first configured provider wins
+  // unless a bank is explicitly pinned via PROXY_BANK_MAP (e.g. to Residential
+  // for an "easy" site that doesn't need full anti-bot handling).
+  return providers[0]!;
 }
 
 /** The bank's deterministically selected provider first, followed by any other
