@@ -138,7 +138,23 @@ async function probeNtb(): Promise<void> {
       console.log(`Incapsula marker present: ${body.includes("Incapsula incident ID")}`);
       const linkMatches = [...body.matchAll(/href=["']((?:https?:\/\/(?:www\.)?nationstrust\.com)?\/promotions\/[^"'#?]{5,}\/[^"'#?]{5,})["']/gi)];
       console.log(`Campaign-link regex matches found: ${linkMatches.length}`);
-      console.log(`body (first 2500 chars): ${truncate(body, 2500)}`);
+
+      // Broader: any href containing "promotions" at all, and any fetch()/axios/api call hints
+      const anyPromoHref = [...body.matchAll(/href=["']([^"']*promotions[^"']*)["']/gi)].map((m) => m[1]);
+      const uniquePromoHref = [...new Set(anyPromoHref)];
+      console.log(`Any href containing "promotions" (${uniquePromoHref.length} unique): ${JSON.stringify(uniquePromoHref.slice(0, 40))}`);
+
+      const apiHints = [...body.matchAll(/(?:fetch|axios\.get|axios\.post|url:)\s*\(?["']([^"']{3,120})["']/gi)].map((m) => m[1]);
+      const uniqueApiHints = [...new Set(apiHints)].filter((u) => /api|promotions|campaign/i.test(u));
+      console.log(`API-call hints referencing promotions/campaign (${uniqueApiHints.length}): ${JSON.stringify(uniqueApiHints.slice(0, 20))}`);
+
+      // Look for a Next.js/Nuxt data island regardless of exact tag shape
+      const nextData = body.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      console.log(`__NEXT_DATA__ present: ${!!nextData}${nextData ? ` (first 1000 chars: ${truncate(nextData[1] ?? "", 1000)})` : ""}`);
+
+      // Print a mid-body slice (where the main content usually lives) instead of just the <head>
+      const midStart = Math.max(0, Math.floor(body.length / 2) - 1000);
+      console.log(`body mid-slice (chars ${midStart}-${midStart + 2500}): ${truncate(body.slice(midStart, midStart + 2500), 2500)}`);
     } catch (err) {
       console.log(`FAILED: ${(err as Error).message}`);
     }
