@@ -89,7 +89,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - `GROQ_API_KEY` — optional second, text-only LLM provider for offer enrichment (spec 057) — spills semantic-summary calls to Groq once Gemini's per-minute window is exhausted; omitting it is a fully supported, zero-behavior-change (Gemini-only) configuration
 - `GITHUB_FEEDBACK_TOKEN` — GitHub PAT with `issues:write` scope; used to create issues from feedback
 - `GITHUB_REPO_OWNER` / `GITHUB_REPO_NAME` — defaults to `chamirusenarath96` / `card-max`
-- `BRIGHTDATA_API_KEY` / `BRIGHTDATA_ZONE` — Bright Data Web Unlocker API (spec 078), the main scraping-proxy fetcher; locked to Sri Lanka exit nodes via a `country: "lk"` field sent on every request (Web Unlocker has no dashboard-level country-restriction setting to pair it with). `BRIGHTDATA_ZONE` is the API's name as entered when created (Web Access -> Create API -> Web Unlocker API). Supersedes `ZENROWS_API_KEY`/`WEBSCRAPINGAPI_API_KEY` when set — see `crawler/utils/proxyProviders/registry.ts`
+- `BRIGHTDATA_API_KEY` / `BRIGHTDATA_ZONE` — Bright Data Web Unlocker API (spec 078), the main scraping-proxy fetcher; locked to Sri Lanka exit nodes via a `country: "lk"` field sent on every request (Web Unlocker has no dashboard-level country-restriction setting to pair it with). `BRIGHTDATA_ZONE` is the API's name as entered when created (Web Access -> Create API -> Web Unlocker API). Supersedes `WEBSCRAPINGAPI_API_KEY` (legacy fallback) when set — see `crawler/utils/proxyProviders/registry.ts`
 - `BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID` / `BRIGHTDATA_RESIDENTIAL_ZONE` / `BRIGHTDATA_RESIDENTIAL_PASSWORD` — optional, cheaper Bright Data Residential proxy for "easy" sites (spec 078)
 
 ## Coding Standards

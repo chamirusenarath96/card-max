@@ -1,24 +1,21 @@
 ﻿/**
  * Provider registry + selection
  * Spec: specs/features/053-scraping-proxy-fallback.md (AC1-AC6),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3),
- *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5),
  *       specs/features/078-brightdata-web-unlocker.md (AC11-AC13)
  */
 import type { ProxyProvider } from "./types";
-import { createZenRowsProvider } from "./zenrows";
 import { createWebScrapingApiProvider } from "./webscrapingapi";
 import { createBrightDataUnlockerProvider } from "./brightDataUnlocker";
 import { createBrightDataResidentialProvider } from "./brightDataResidential";
 
 /**
  * Bright Data is the designated main fetcher (spec 078) — when either of its
- * two provider tiers is configured, ZenRows/WebScrapingAPI are NOT added as
- * further fallbacks. This is deliberate: Bright Data's Sri-Lanka geo-lock
- * must never be silently abandoned by cascading to a different provider (and
- * therefore a different, unverified exit country) when it fails. ZenRows/
- * WebScrapingAPI remain available as a legacy path only for environments
- * that haven't configured Bright Data at all yet (e.g. local dev).
+ * two provider tiers is configured, WebScrapingAPI is NOT added as a further
+ * fallback. This is deliberate: Bright Data's Sri-Lanka geo-lock must never
+ * be silently abandoned by cascading to a different provider (and therefore
+ * a different, unverified exit country) when it fails. WebScrapingAPI
+ * remains available as a legacy path only for environments that haven't
+ * configured Bright Data at all yet (e.g. local dev).
  */
 export function getConfiguredProviders(env: NodeJS.ProcessEnv = process.env): ProxyProvider[] {
   const providers: ProxyProvider[] = [];
@@ -39,7 +36,6 @@ export function getConfiguredProviders(env: NodeJS.ProcessEnv = process.env): Pr
   if (providers.length > 0) return providers;
 
   // Legacy fallback path — only reached when no Bright Data provider is configured.
-  if (env.ZENROWS_API_KEY) providers.push(createZenRowsProvider(env.ZENROWS_API_KEY));
   if (env.WEBSCRAPINGAPI_API_KEY) providers.push(createWebScrapingApiProvider(env.WEBSCRAPINGAPI_API_KEY));
   return providers;
 }
@@ -62,38 +58,7 @@ export function getBankProviderMap(env: NodeJS.ProcessEnv = process.env): Record
   }
 }
 
-export function getBankJsRenderMap(env: NodeJS.ProcessEnv = process.env): Record<string, boolean> {
-  // Explicit map via PROXY_BANK_JS_RENDER_MAP
-  if (env.PROXY_BANK_JS_RENDER_MAP) {
-    try {
-      const parsed = JSON.parse(env.PROXY_BANK_JS_RENDER_MAP) as Record<string, boolean>;
-      return parsed;
-    } catch {
-      // ignore
-    }
-  }
-  // Fallback: extended PROXY_BANK_MAP object form carries jsRender
-  if (env.PROXY_BANK_MAP) {
-    try {
-      const raw = JSON.parse(env.PROXY_BANK_MAP) as Record<string, unknown>;
-      const out: Record<string, boolean> = {};
-      let hasAny = false;
-      for (const [k, v] of Object.entries(raw)) {
-        if (v && typeof v === "object") {
-          const obj = v as Record<string, unknown>;
-          if ("jsRender" in obj) { out[k] = !!obj["jsRender"]; hasAny = true; }
-          else if ("js_render" in obj) { out[k] = !!obj["js_render"]; hasAny = true; }
-        }
-      }
-      if (hasAny) return out;
-    } catch {
-      // ignore
-    }
-  }
-  return {};
-}
-
-const LEGACY_PROVIDER_NAMES = new Set(["zenrows", "webscrapingapi"]);
+const LEGACY_PROVIDER_NAMES = new Set(["webscrapingapi"]);
 
 /** Deterministic (no shared mutable state) so the same bank always maps to the
  *  same provider within — and across — a run, without needing round-robin counters. */
@@ -108,8 +73,7 @@ export function selectProviderForBank(
   const explicitMatch = explicit && providers.find((p) => p.name === explicit);
   if (explicitMatch) return explicitMatch;
 
-  // Legacy ZenRows/WebScrapingAPI-only configurations keep their original
-  // hash-based load distribution between the two (spec 053/060).
+  // Legacy WebScrapingAPI-only configuration (spec 053).
   if (providers.every((p) => LEGACY_PROVIDER_NAMES.has(p.name))) {
     const hash = [...bank].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
     return providers[hash % providers.length];

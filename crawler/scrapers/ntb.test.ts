@@ -172,8 +172,8 @@ describe("ntb scraper", () => {
 
     it("retries the blocked listing page via the assigned proxy provider and returns the proxy-fetched offers when that retry succeeds (AC15)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
-      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned)
         .mockResolvedValueOnce(BLOCK_HTML) // listing: direct fetch blocked
@@ -190,8 +190,8 @@ describe("ntb scraper", () => {
 
     it("retries the listing fetch via the proxy provider when the direct fetch throws, and uses the proxy result (spec 059 AC1)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(LISTING_HTML);
-      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned)
         .mockRejectedValueOnce(new Error("HTTP 403 fetching https://www.nationstrust.com/promotions/what-s-new"))
@@ -206,8 +206,8 @@ describe("ntb scraper", () => {
 
     it("retries a campaign-page fetch via the proxy provider when the direct fetch throws (spec 059 AC2)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(CAMPAIGN_HTML);
-      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned)
         .mockResolvedValueOnce(LISTING_HTML)
@@ -237,8 +237,8 @@ describe("ntb scraper", () => {
 
     it("returns null from the HTTP path (falling through to Crawlee) when both the direct fetch and the proxy provider throw for the listing page (spec 059 AC4)", async () => {
       const proxyFetchHtml = vi.fn().mockRejectedValue(new Error("proxy also failed"));
-      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
 
@@ -257,8 +257,8 @@ describe("ntb scraper", () => {
 
     it("falls back to scrapeWithCrawlee() when both the direct and proxy-retried listing fetches are blocked (AC16)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(BLOCK_HTML);
-      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
 
       vi.mocked(fetchHtmlSessioned).mockResolvedValue(BLOCK_HTML);
 
@@ -275,19 +275,19 @@ describe("ntb scraper", () => {
       expect(Array.isArray(offers)).toBe(true);
     });
 
-    it("falls back to webscrapingapi when ZenRows returns REQS001 for the listing page and succeeds via second provider (071 AC2)", async () => {
-      const zenrowsFetch = vi.fn().mockRejectedValue(
+    it("falls back to webscrapingapi when Bright Data returns REQS001 for the listing page and succeeds via second provider (071 AC2)", async () => {
+      const primaryFetchHtml = vi.fn().mockRejectedValue(
         new Error(
-          "ZenRows HTTP 400 fetching https://www.nationstrust.com/promotions/what-s-new: REQS001: Requests to this domain are forbidden"
+          "Provider HTTP 400 fetching https://www.nationstrust.com/promotions/what-s-new: REQS001: Requests to this domain are forbidden"
         )
       );
       const wsaFetch = vi.fn().mockResolvedValue(LISTING_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([
-        { name: "zenrows", fetchHtml: zenrowsFetch },
+        { name: "brightdata-unlocker", fetchHtml: primaryFetchHtml },
         { name: "webscrapingapi", fetchHtml: wsaFetch },
       ]);
       vi.mocked(orderedProvidersForBank).mockReturnValue([
-        { name: "zenrows", fetchHtml: zenrowsFetch },
+        { name: "brightdata-unlocker", fetchHtml: primaryFetchHtml },
         { name: "webscrapingapi", fetchHtml: wsaFetch },
       ]);
 
@@ -297,17 +297,17 @@ describe("ntb scraper", () => {
 
       const offers = await scrape();
 
-      expect(zenrowsFetch).toHaveBeenCalled();
+      expect(primaryFetchHtml).toHaveBeenCalled();
       expect(wsaFetch).toHaveBeenCalled();
       expect(offers.length).toBeGreaterThan(0);
       expect(offers[0]).toMatchObject({ bank: "nations_trust_bank", merchant: "Pizza Hut" });
       expect(PlaywrightCrawler).not.toHaveBeenCalled();
     });
 
-    it("surfaces zero offers (falls through to Crawlee) when ZenRows REQS001 and no secondary provider is configured", async () => {
-      const zenrowsFetch = vi.fn().mockRejectedValue(new Error("REQS001: Requests to this domain are forbidden"));
-      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
-      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
+    it("surfaces zero offers (falls through to Crawlee) when Bright Data REQS001 and no secondary provider is configured", async () => {
+      const primaryFetchHtml = vi.fn().mockRejectedValue(new Error("REQS001: Requests to this domain are forbidden"));
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: primaryFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: primaryFetchHtml }]);
       vi.mocked(fetchHtmlSessioned).mockRejectedValue(new Error("HTTP 403 fetching listing page"));
 
       setupCrawlerMock(() => ({
@@ -318,7 +318,7 @@ describe("ntb scraper", () => {
 
       const offers = await scrape();
 
-      expect(zenrowsFetch).toHaveBeenCalled();
+      expect(primaryFetchHtml).toHaveBeenCalled();
       expect(offers).toHaveLength(0);
     });
   });
