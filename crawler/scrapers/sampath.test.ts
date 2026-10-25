@@ -261,11 +261,11 @@ describe("sampath scraper", () => {
   });
 
   // 065 AC2: zero-result proxy fallback
-  it("falls back to ZenRows proxy when direct returns 0 and proxy returns data (065 AC2)", async () => {
+  it("falls back to Bright Data proxy when direct returns 0 and proxy returns data (065 AC2)", async () => {
     vi.mocked(fetchJson).mockResolvedValue({ data: [] });
     const proxyData = { data: [VALID_PROMOTION] };
     const mockProvider = {
-      name: "zenrows",
+      name: "brightdata-unlocker",
       fetchHtml: vi.fn().mockResolvedValue(JSON.stringify(proxyData)),
     };
     vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
@@ -279,7 +279,7 @@ describe("sampath scraper", () => {
     vi.mocked(fetchJson).mockRejectedValue(new Error("network down"));
     const proxyData = { data: [VALID_PROMOTION] };
     const mockProvider = {
-      name: "zenrows",
+      name: "brightdata-unlocker",
       fetchHtml: vi.fn().mockResolvedValue(JSON.stringify(proxyData)),
     };
     vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
@@ -309,7 +309,7 @@ describe("sampath scraper", () => {
   it("proxy also returning 0 still surfaces as 0 not swallowed (065 edge)", async () => {
     vi.mocked(fetchJson).mockResolvedValue({ data: [] });
     const mockProvider = {
-      name: "zenrows",
+      name: "brightdata-unlocker",
       fetchHtml: vi.fn().mockResolvedValue(JSON.stringify({ data: [] })),
     };
     vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);

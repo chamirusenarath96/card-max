@@ -171,8 +171,8 @@ describe("boc scraper", () => {
 
   it("recovers a category whose direct fetch rejects but proxy fetch succeeds, and skips a category where both reject (AC14)", async () => {
     const proxyFetchHtml = vi.fn().mockResolvedValue(CATEGORY_HTML);
-    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
-    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: proxyFetchHtml }]);
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
 
     // First category: direct fetch fails, proxy recovers. Remaining categories: both fail (skipped).
     vi.mocked(fetchHtml)
@@ -187,38 +187,38 @@ describe("boc scraper", () => {
     expect(merchants).toContain("Pizza Hut");
   });
 
-  it("falls back to webscrapingapi when ZenRows returns REQS001 and succeeds via second provider (067 AC1)", async () => {
-    const zenrowsFetch = vi.fn().mockRejectedValue(new Error("ZenRows HTTP 403 fetching https://www.boc.lk/personal-banking/card-offers/online: REQS001: Requests to this domain are forbidden"));
+  it("falls back to webscrapingapi when Bright Data returns REQS001 and succeeds via second provider (067 AC1)", async () => {
+    const primaryFetchHtml = vi.fn().mockRejectedValue(new Error("Provider HTTP 403 fetching https://www.boc.lk/personal-banking/card-offers/online: REQS001: Requests to this domain are forbidden"));
     const wsaFetch = vi.fn().mockResolvedValue(CATEGORY_HTML);
     vi.mocked(getConfiguredProviders).mockReturnValue([
-      { name: "zenrows", fetchHtml: zenrowsFetch },
+      { name: "brightdata-unlocker", fetchHtml: primaryFetchHtml },
       { name: "webscrapingapi", fetchHtml: wsaFetch },
     ]);
     vi.mocked(orderedProvidersForBank).mockReturnValue([
-      { name: "zenrows", fetchHtml: zenrowsFetch },
+      { name: "brightdata-unlocker", fetchHtml: primaryFetchHtml },
       { name: "webscrapingapi", fetchHtml: wsaFetch },
     ]);
 
-    // Direct fetch fails for first category, then proxy retries zenrows (REQS001) then wsa succeeds
+    // Direct fetch fails for first category, then proxy retries primary provider (REQS001) then wsa succeeds
     vi.mocked(fetchHtml).mockRejectedValue(new Error("HTTP 403"));
     // For remaining categories, both direct and proxy fail to keep test isolated to one success
-    // The proxy loop will try zenrows (fail) then wsa (success) for first category
+    // The proxy loop will try primary provider (fail) then wsa (success) for first category
     const offers = await scrape();
-    expect(zenrowsFetch).toHaveBeenCalled();
+    expect(primaryFetchHtml).toHaveBeenCalled();
     expect(wsaFetch).toHaveBeenCalled();
     expect(offers.length).toBeGreaterThan(0);
     expect(offers[0].merchant).toBe("Pizza Hut");
   });
 
-  it("surfaces error when ZenRows REQS001 and no secondary provider is configured (067 AC4)", async () => {
-    const zenrowsFetch = vi.fn().mockRejectedValue(new Error("REQS001: Requests to this domain are forbidden"));
-    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
-    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: zenrowsFetch }]);
+  it("surfaces error when Bright Data REQS001 and no secondary provider is configured (067 AC4)", async () => {
+    const primaryFetchHtml = vi.fn().mockRejectedValue(new Error("REQS001: Requests to this domain are forbidden"));
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: primaryFetchHtml }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: primaryFetchHtml }]);
     vi.mocked(fetchHtml).mockRejectedValue(new Error("HTTP 403"));
 
     const offers = await scrape();
     // All categories fail, so 0 offers - surfaced as empty, not thrown, and will trigger zero_offers via failureAlerts
     expect(offers).toHaveLength(0);
-    expect(zenrowsFetch).toHaveBeenCalled();
+    expect(primaryFetchHtml).toHaveBeenCalled();
   });
 });

@@ -1,7 +1,6 @@
 ﻿/**
  * fetchHtmlWithProxyFallback â€” unit tests
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC7-AC10),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3-AC5)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC7-AC10)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -38,9 +37,9 @@ describe("fetchHtmlWithProxyFallback", () => {
   it("calls the bank's selected provider's fetchHtml() and returns its result when the direct fetch rejects and a provider is configured (AC8)", async () => {
     const directFetch = vi.fn().mockRejectedValue(new Error("HTTP 403"));
     const providerFetchHtml = vi.fn().mockResolvedValue("<html>proxied</html>");
-    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetchHtml }]);
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: providerFetchHtml }]);
     vi.mocked(getBankProviderMap).mockReturnValue({});
-    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetchHtml }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: providerFetchHtml }]);
 
     const html = await fetchHtmlWithProxyFallback("https://example.com", "commercial_bank", directFetch);
 
@@ -61,28 +60,28 @@ describe("fetchHtmlWithProxyFallback", () => {
 
   it("rejects with the provider's error when both the direct fetch and the single configured provider's fetch reject (AC4, AC10)", async () => {
     const directFetch = vi.fn().mockRejectedValue(new Error("HTTP 403"));
-    const providerError = new Error("ZenRows HTTP 500");
+    const providerError = new Error("Provider HTTP 500");
     const providerFetchHtml = vi.fn().mockRejectedValue(providerError);
-    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetchHtml }]);
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: providerFetchHtml }]);
     vi.mocked(getBankProviderMap).mockReturnValue({});
-    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetchHtml }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: providerFetchHtml }]);
 
     await expect(
       fetchHtmlWithProxyFallback("https://example.com", "commercial_bank", directFetch)
-    ).rejects.toThrow("ZenRows HTTP 500");
+    ).rejects.toThrow("Provider HTTP 500");
   });
 
   it("falls through to the second provider when the first configured provider throws (AC3)", async () => {
     const directFetch = vi.fn().mockRejectedValue(new Error("HTTP 403"));
-    const firstFetchHtml = vi.fn().mockRejectedValue(new Error("ZenRows HTTP 422"));
+    const firstFetchHtml = vi.fn().mockRejectedValue(new Error("Provider HTTP 422"));
     const secondFetchHtml = vi.fn().mockResolvedValue("<html>from second provider</html>");
     vi.mocked(getConfiguredProviders).mockReturnValue([
-      { name: "zenrows", fetchHtml: firstFetchHtml },
+      { name: "brightdata-unlocker", fetchHtml: firstFetchHtml },
       { name: "webscrapingapi", fetchHtml: secondFetchHtml },
     ]);
     vi.mocked(getBankProviderMap).mockReturnValue({});
     vi.mocked(orderedProvidersForBank).mockReturnValue([
-      { name: "zenrows", fetchHtml: firstFetchHtml },
+      { name: "brightdata-unlocker", fetchHtml: firstFetchHtml },
       { name: "webscrapingapi", fetchHtml: secondFetchHtml },
     ]);
 
@@ -95,15 +94,15 @@ describe("fetchHtmlWithProxyFallback", () => {
 
   it("rejects with the last provider's error when every configured provider fails (AC3)", async () => {
     const directFetch = vi.fn().mockRejectedValue(new Error("HTTP 403"));
-    const firstFetchHtml = vi.fn().mockRejectedValue(new Error("ZenRows HTTP 422"));
+    const firstFetchHtml = vi.fn().mockRejectedValue(new Error("Provider HTTP 422"));
     const secondFetchHtml = vi.fn().mockRejectedValue(new Error("WebScrapingAPI HTTP 500"));
     vi.mocked(getConfiguredProviders).mockReturnValue([
-      { name: "zenrows", fetchHtml: firstFetchHtml },
+      { name: "brightdata-unlocker", fetchHtml: firstFetchHtml },
       { name: "webscrapingapi", fetchHtml: secondFetchHtml },
     ]);
     vi.mocked(getBankProviderMap).mockReturnValue({});
     vi.mocked(orderedProvidersForBank).mockReturnValue([
-      { name: "zenrows", fetchHtml: firstFetchHtml },
+      { name: "brightdata-unlocker", fetchHtml: firstFetchHtml },
       { name: "webscrapingapi", fetchHtml: secondFetchHtml },
     ]);
 
@@ -117,9 +116,9 @@ describe("fetchHtmlWithProxyFallback", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (err as any).cause = new Error("ConnectTimeoutError: Connect Timeout Error");
     const directFetch = vi.fn().mockRejectedValueOnce(err).mockResolvedValueOnce("<html>retry success</html>");
-    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: vi.fn() }]);
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: vi.fn() }]);
     vi.mocked(getBankProviderMap).mockReturnValue({});
-    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: vi.fn() }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: vi.fn() }]);
 
     const html = await fetchHtmlWithProxyFallback("https://www.combank.lk/test", "commercial_bank", directFetch);
 
@@ -132,9 +131,9 @@ describe("fetchHtmlWithProxyFallback", () => {
     const err = new Error("UND_ERR_CONNECT_TIMEOUT");
     const directFetch = vi.fn().mockRejectedValue(err);
     const providerFetch = vi.fn().mockResolvedValue("<html>proxied after timeout</html>");
-    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetch }]);
+    vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: providerFetch }]);
     vi.mocked(getBankProviderMap).mockReturnValue({});
-    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "zenrows", fetchHtml: providerFetch }]);
+    vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: providerFetch }]);
 
     const html = await fetchHtmlWithProxyFallback("https://www.combank.lk/test", "commercial_bank", directFetch);
 

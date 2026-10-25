@@ -1095,7 +1095,7 @@ All workflows live in `.github/workflows/`. This table is the authoritative list
 | `enrich.yml` | Offer Enrichment | `workflow_run` after Daily Crawler completes + manual | AI-enriches `pending`/`failed` offers via Gemini (`npm run enrich`) — semantic summary + resolved applicable dates; never sweeps the full collection (spec 044) | ✅ |
 | `atlas-warmup.yml` | Atlas Warmup | every 4 min + manual | Pings `/api/health` to keep the MongoDB Atlas M0 connection warm — the sole warmup cron (spec 056 removed the duplicate `warmup.yml`) | N/A (no npm ci) |
 | `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ✅ |
-| `zenrows-verify.yml` | ZenRows Verify | manual (`workflow_dispatch` `bank: all|sampath_bank|nations_trust_bank|bank_of_ceylon`) | Verifies ZenRows proxy per bank via `npx tsx scripts/verify-zenrows.ts --bank <bank>` (checks `ZENROWS_API_KEY` + `WEBSCRAPINGAPI_API_KEY` + `PROXY_BANK_MAP`); 10-min timeout | ✅ |
+| `brightdata-verify.yml` | Bright Data Verify | manual (`workflow_dispatch` `bank: all|<bank>`) | Verifies the Bright Data Web Unlocker/Residential proxy per bank via `npx tsx scripts/verify-brightdata.ts --bank <bank>` (checks geo-lock + `BRIGHTDATA_*` secrets); 30-min timeout | ✅ |
 
 **Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist, now created with `['bug', 'urgent', <category>]` so a broken pipeline jumps the spec-writing queue automatically (see [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)). This requires the workflow to declare `permissions: issues: write` — both `enrich.yml` (#98) and `crawler.yml` (#105) were found missing this and silently failing to report their own failures; both are now fixed.
 
@@ -1567,6 +1567,7 @@ sequenceDiagram
 - [x] **Daily scrape failure hardening (spec 063)** - `ConnectTimeout` catch + per-bank summary logging, prevents silent `0` success
 - [x] **Zero-offers follow-ups (specs 065-067)** - Sampath/NTB/BOC each wired to `orderedProvidersForBank` for both thrown and zero-result paths; regression fixtures captured from live `REQS001`/`403` bodies
 - [x] **Verify ZenRows fallbacks (specs 068-070)** - `scripts/verify-zenrows.ts` (`--bank all|sampath_bank|nations_trust_bank|bank_of_ceylon`) + `.github/workflows/zenrows-verify.yml` (`workflow_dispatch`) manual verification; `WEBSCRAPINGAPI_API_KEY` secondary fallback verified (BOC `REQS001` -> `webscrapingapi` `OK ... chars`); `PROXY_BANK_MAP`/`PROXY_BANK_JS_RENDER_MAP` vars documented
+- [x] **ZenRows retired (spec 078 follow-up)** - `zenrows.ts`, `scripts/verify-zenrows.ts`, `zenrows-verify.yml`, and the `ZENROWS_API_KEY`/`ZENROWS_PREMIUM_PROXY`/`PROXY_BANK_JS_RENDER_MAP` env vars removed from code now that Bright Data Web Unlocker (spec 078) is the main fetcher; WebScrapingAPI remains as the sole legacy fallback provider
 
 ---
 
