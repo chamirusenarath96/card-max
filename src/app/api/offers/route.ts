@@ -92,27 +92,20 @@ export async function GET(request: NextRequest) {
       if (maxDiscount !== undefined) filter.discountPercentage.$lte = maxDiscount;
     }
 
-    // Date filtering: activeOn (single date — offer must span it)
-    if (activeOn) {
-      filter.validFrom = { $lte: activeOn };
-      filter.$or = [
-        { validUntil: { $gte: activeOn } },
-        { validUntil: { $exists: false } },
-      ];
-    }
+    // Date filtering. A missing validFrom means "valid from the start" and a
+    // missing validUntil means "no end date" — many banks only publish one of them.
+    const startsBy = (d: Date) => ({ $or: [{ validFrom: { $lte: d } }, { validFrom: null }] });
+    const endsOnOrAfter = (d: Date) => ({ $or: [{ validUntil: { $gte: d } }, { validUntil: { $exists: false } }] });
+    const dateConditions: Record<string, unknown>[] = [];
 
-    // Date filtering: activeFrom / activeTo (overlap with window)
-    if (activeFrom || activeTo) {
-      if (activeTo) {
-        filter.validFrom = { ...(filter.validFrom ?? {}), $lte: activeTo };
-      }
-      if (activeFrom) {
-        filter.$or = [
-          { validUntil: { $gte: activeFrom } },
-          { validUntil: { $exists: false } },
-        ];
-      }
-    }
+    // activeOn (single date — offer must span it)
+    if (activeOn) dateConditions.push(startsBy(activeOn), endsOnOrAfter(activeOn));
+
+    // activeFrom / activeTo (overlap with window)
+    if (activeTo) dateConditions.push(startsBy(activeTo));
+    if (activeFrom) dateConditions.push(endsOnOrAfter(activeFrom));
+
+    if (dateConditions.length) filter.$and = dateConditions;
 
     // "Expiring Soon" sort: restrict to offers expiring within 3 days
     if (sort === "expiringSoon") {

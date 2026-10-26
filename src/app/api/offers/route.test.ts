@@ -220,36 +220,43 @@ describe("GET /api/offers", () => {
 
   // ── Filter: activeOn ──────────────────────────────────────────────────────
 
+  const STARTS_BY = expect.objectContaining({
+    $or: [{ validFrom: { $lte: expect.any(Date) } }, { validFrom: null }],
+  });
+  const ENDS_ON_OR_AFTER = expect.objectContaining({
+    $or: [{ validUntil: { $gte: expect.any(Date) } }, { validUntil: { $exists: false } }],
+  });
+
   it("builds date filter for activeOn", async () => {
     await GET(makeRequest({ activeOn: "2026-06-15" }));
     const filterArg = lastFindFilter();
-    expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
-    expect(filterArg.$or).toBeDefined();
+    expect(filterArg.$and).toEqual([STARTS_BY, ENDS_ON_OR_AFTER]);
+    expect(filterArg.validFrom).toBeUndefined();
+  });
+
+  it("activeOn treats a missing validFrom as already started (offers with only an end date count)", async () => {
+    await GET(makeRequest({ activeOn: "2026-06-15" }));
+    const startClause = lastFindFilter().$and[0].$or;
+    expect(startClause).toContainEqual({ validFrom: null });
   });
 
   // ── Filter: activeFrom / activeTo ─────────────────────────────────────────
 
   it("builds overlap filter for activeFrom", async () => {
     await GET(makeRequest({ activeFrom: "2026-03-01" }));
-    const filterArg = lastFindFilter();
-    expect(filterArg.$or).toBeDefined();
+    expect(lastFindFilter().$and).toEqual([ENDS_ON_OR_AFTER]);
   });
 
-  it("builds validFrom.$lte filter for activeTo", async () => {
+  it("builds validFrom.$lte filter for activeTo, keeping offers with no validFrom", async () => {
     await GET(makeRequest({ activeTo: "2026-12-31" }));
-    const filterArg = lastFindFilter();
-    expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
+    expect(lastFindFilter().$and).toEqual([STARTS_BY]);
   });
 
   it("builds combined overlap filter for activeFrom + activeTo", async () => {
     await GET(makeRequest({ activeFrom: "2026-03-01", activeTo: "2026-06-30" }));
     const filterArg = lastFindFilter();
-    expect(filterArg.validFrom).toMatchObject({ $lte: expect.any(Date) });
-    expect(filterArg.$or).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ validUntil: { $gte: expect.any(Date) } }),
-      ])
-    );
+    expect(filterArg.$and).toEqual([STARTS_BY, ENDS_ON_OR_AFTER]);
+    expect(filterArg.$or).toBeUndefined();
   });
 
   it("returns 200 when activeFrom and activeTo are valid ISO dates", async () => {
