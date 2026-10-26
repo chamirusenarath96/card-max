@@ -7,7 +7,7 @@
  *   1. HTTP (fast, works from residential IPs)
  *   2. Crawlee/Playwright fallback (when HTTP is blocked by Incapsula)
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../utils/http", () => ({
   fetchHtmlSessioned: vi.fn(),
@@ -320,6 +320,109 @@ describe("ntb scraper", () => {
 
       expect(primaryFetchHtml).toHaveBeenCalled();
       expect(offers).toHaveLength(0);
+    });
+  });
+
+  describe("listing promo cards (spec 079)", () => {
+    const CARD_URL_1 = "https://www.nationstrust.com/promotions/30-off-with-mastercard-credit-debit-cards-2";
+    const CARD_URL_2 = "https://www.nationstrust.com/promotions/20-off-with-mastercard-credit-cards-47";
+
+    afterEach(() => {
+      vi.mocked(getConfiguredProviders).mockReturnValue([]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([]);
+    });
+
+    function card(opts: { href?: string; merchant?: string; offer: string; tag: string; validity?: string; img?: string }) {
+      return `
+        <div class="col-lg-3 col-md-6 col-sm-12 grid-item hotels-resorts">
+          <div class="promo-box">
+            <div class="promo-image">
+              ${opts.img ? `<img src="${opts.img}" alt="${opts.offer}">` : ""}
+              <div class="tag">${opts.tag}</div>
+            </div>
+            <div class="info">
+              ${opts.merchant ? `<h6>${opts.merchant}</h6>` : ""}
+              <h5>${opts.offer}</h5>
+            </div>
+            <div class="promo-footer">
+              ${opts.validity ? `<small>${opts.validity}</small>` : ""}
+              ${opts.href ? `<a href="${opts.href}" class="btn btn-theme-outline with-left-arrow-icon">Learn More</a>` : ""}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const CARD_LISTING_HTML = `<html><body>
+      <a href="https://www.nationstrust.com/promotions/general-terms-and-condition-for-offers">T&amp;C</a>
+      ${card({
+        href: CARD_URL_1,
+        merchant: "Aavya Cove Villas",
+        offer: "30% off with Mastercard Credit &amp; Debit Cards",
+        tag: "Hotels &amp; Resorts",
+        validity: "Valid till 31 October 2026",
+        img: "https://assets.nationstrust.com/2875/Avya-Cove@2x-100.jpg",
+      })}
+      ${card({ href: CARD_URL_2, merchant: "Pizza Hut", offer: "20% off with Mastercard Credit Cards", tag: "Dining" })}
+    </body></html>`;
+
+    it("parses promo-box cards from the listing into offers without fetching detail pages (AC1)", async () => {
+      vi.mocked(fetchHtmlSessioned).mockResolvedValueOnce(CARD_LISTING_HTML);
+
+      const offers = await scrape();
+
+      expect(offers).toHaveLength(2);
+      expect(offers[0]).toMatchObject({
+        bank: "nations_trust_bank",
+        merchant: "Aavya Cove Villas",
+        title: "30% off with Mastercard Credit & Debit Cards",
+        description: "30% off with Mastercard Credit & Debit Cards",
+        sourceUrl: CARD_URL_1,
+        merchantLogoUrl: "https://assets.nationstrust.com/2875/Avya-Cove@2x-100.jpg",
+        offerType: "percentage",
+        discountPercentage: 30,
+      });
+      expect(offers[0]!.validUntil).toEqual(new Date(2026, 9, 31));
+      expect(fetchHtmlSessioned).toHaveBeenCalledTimes(1);
+      expect(PlaywrightCrawler).not.toHaveBeenCalled();
+    });
+
+    it("maps the card tag to a category (AC2)", async () => {
+      vi.mocked(fetchHtmlSessioned).mockResolvedValueOnce(CARD_LISTING_HTML);
+
+      const offers = await scrape();
+
+      expect(offers[0]!.category).toBe("travel");
+      expect(offers[1]!.category).toBe("dining");
+    });
+
+    it("skips cards without a merchant or link and dedupes repeated links (AC3)", async () => {
+      const html = `<html><body>
+        ${card({ href: CARD_URL_1, merchant: "Aavya Cove Villas", offer: "30% off", tag: "Hotels" })}
+        ${card({ href: CARD_URL_1, merchant: "Aavya Cove Villas", offer: "30% off", tag: "Hotels" })}
+        ${card({ href: CARD_URL_2, offer: "20% off", tag: "Dining" })}
+        ${card({ merchant: "No Link Cafe", offer: "10% off", tag: "Dining" })}
+      </body></html>`;
+      vi.mocked(fetchHtmlSessioned).mockResolvedValueOnce(html);
+
+      const offers = await scrape();
+
+      expect(offers).toHaveLength(1);
+      expect(offers[0]).toMatchObject({ merchant: "Aavya Cove Villas", sourceUrl: CARD_URL_1 });
+    });
+
+    it("parses cards from a proxy-fetched listing when the direct fetch throws a CloudFront 403 (AC5)", async () => {
+      const proxyFetchHtml = vi.fn().mockResolvedValue(CARD_LISTING_HTML);
+      vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(orderedProvidersForBank).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);
+      vi.mocked(fetchHtmlSessioned).mockRejectedValueOnce(
+        new Error("HTTP 403 fetching https://www.nationstrust.com/promotions/what-s-new")
+      );
+
+      const offers = await scrape();
+
+      expect(proxyFetchHtml).toHaveBeenCalledTimes(1);
+      expect(offers).toHaveLength(2);
+      expect(PlaywrightCrawler).not.toHaveBeenCalled();
     });
   });
 

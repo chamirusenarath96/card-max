@@ -102,6 +102,13 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
       return null;
     }
 
+    // Spec 079: the listing page now renders every offer as a promo card.
+    const cardOffers = parsePromoCards(listingHtml);
+    if (cardOffers.length > 0) {
+      console.log(`[ntb] HTTP: parsed ${cardOffers.length} offers from listing promo cards`);
+      return cardOffers;
+    }
+
     const campaignLinks = extractCampaignLinks(listingHtml);
     console.log(`[ntb] HTTP: found ${campaignLinks.length} campaign links`);
 
@@ -374,6 +381,49 @@ function isBlockPage(html: string): boolean {
     html.includes("Incapsula incident ID") ||
     html.includes("Request unsuccessful. Incapsula incident ID")
   );
+}
+
+/** Parse offers from the listing page's `promo-box` cards (spec 079). */
+function parsePromoCards(html: string): OfferInput[] {
+  const offers: OfferInput[] = [];
+  const seen = new Set<string>();
+  const chunks = html.split(/class=["']promo-box["']/i).slice(1);
+
+  for (const chunk of chunks) {
+    const merchant = cleanText(chunk.match(/<h6[^>]*>([\s\S]*?)<\/h6>/i)?.[1] ?? "");
+    const offerText = cleanText(chunk.match(/<h5[^>]*>([\s\S]*?)<\/h5>/i)?.[1] ?? "");
+    const tag = cleanText(chunk.match(/<div[^>]*class=["']tag["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "");
+    const validity = cleanText(chunk.match(/<small[^>]*>([\s\S]*?)<\/small>/i)?.[1] ?? "");
+    const image = chunk.match(/<img\b[^>]*src=["'](https?:\/\/[^"']+)["']/i)?.[1];
+    const href = chunk.match(/<a\b[^>]*href=["']((?:https?:\/\/(?:www\.)?nationstrust\.com)?\/promotions\/[^"'#?]+)["']/i)?.[1];
+
+    if (merchant.length < 2 || !href) continue;
+    const sourceUrl = href.startsWith("http") ? href : `${BASE_URL}${href}`;
+    if (seen.has(sourceUrl)) continue;
+    seen.add(sourceUrl);
+
+    const { validFrom, validUntil } = extractDates(validity);
+    const raw: Partial<OfferInput> = {
+      bank: "nations_trust_bank",
+      bankDisplayName: "Nations Trust Bank",
+      title: (offerText || merchant).substring(0, 80),
+      merchant,
+      description: offerText.substring(0, 300) || undefined,
+      merchantLogoUrl: image,
+      ...parseDiscount(extractDiscount(offerText) ?? (offerText || undefined)),
+      category: detectCategory(merchant, `${tag} ${offerText}`),
+      validFrom,
+      validUntil,
+      sourceUrl,
+      scrapedAt: new Date(),
+    };
+
+    const result = OfferInputSchema.safeParse(raw);
+    if (result.success) offers.push(result.data);
+    else console.warn("[ntb] Promo card failed validation:", result.error.flatten());
+  }
+
+  return offers;
 }
 
 /** Extract campaign detail-page links from listing page HTML */
