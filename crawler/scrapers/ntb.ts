@@ -410,7 +410,7 @@ function parsePromoCards(html: string): OfferInput[] {
       merchant,
       description: offerText.substring(0, 300) || undefined,
       merchantLogoUrl: image,
-      ...parseDiscount(extractDiscount(offerText) ?? (offerText || undefined)),
+      ...parseDiscount(extractDiscount(offerText) ?? (offerText.substring(0, 100) || undefined)),
       category: detectCategory(merchant, `${tag} ${offerText}`),
       validFrom,
       validUntil,

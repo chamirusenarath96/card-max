@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - name: Probe Sampath + NTB
-        run: npx tsx scripts/debug-sampath-ntb.ts
+        run: npx tsx scripts/debug-sampath-ntb.ts --sampath-source
         env:
           BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
           BRIGHTDATA_ZONE: ${{ secrets.BRIGHTDATA_ZONE }}

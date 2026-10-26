@@ -121,6 +121,40 @@ async function probeSampath(): Promise<void> {
   }
 }
 
+/** Find where the Nuxt-rendered offer page actually gets its offers from. */
+async function probeSampathSource(): Promise<void> {
+  console.log("\n########## SAMPATH SOURCE ##########");
+  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+  const { body } = await rawFetch("https://www.sampath.lk/sampath-cards/credit-card-offer", { Accept: "text/html", "User-Agent": ua });
+
+  const nuxtIdx = body.indexOf("window.__NUXT__");
+  console.log(`window.__NUXT__ at char ${nuxtIdx}${nuxtIdx >= 0 ? `; state length ~${body.length - nuxtIdx}` : ""}`);
+  if (nuxtIdx >= 0) console.log(`__NUXT__ head (2000 chars): ${body.slice(nuxtIdx, nuxtIdx + 2000)}`);
+
+  for (const field of ["company_name", "short_discount", "expire_on", "cards_new", "card-promotions", "promotion"]) {
+    const count = body.split(field).length - 1;
+    const idx = body.indexOf(field);
+    console.log(`field "${field}": ${count} occurrences${idx >= 0 ? `; first context: ${body.slice(Math.max(0, idx - 400), idx + 800)}` : ""}`);
+  }
+
+  const bundles = [...new Set([...body.matchAll(/["'](\/_nuxt\/[A-Za-z0-9_.-]+\.js)["']/g)].map((m) => m[1]!))];
+  console.log(`Nuxt bundles: ${bundles.length}`);
+  for (const b of bundles) {
+    try {
+      const { status, body: js } = await rawFetch(`https://www.sampath.lk${b}`, { Accept: "*/*", "User-Agent": ua });
+      const hits = [...js.matchAll(/card-promotions|card_promotions|cardPromotions|promotions\?/g)];
+      if (hits.length === 0) continue;
+      console.log(`\n${b} (status ${status}, ${js.length} chars): ${hits.length} hit(s)`);
+      for (const h of hits.slice(0, 6)) {
+        const i = h.index ?? 0;
+        console.log(`  …${js.slice(Math.max(0, i - 600), i + 600)}…`);
+      }
+    } catch (err) {
+      console.log(`${b}: FAILED ${(err as Error).message}`);
+    }
+  }
+}
+
 async function probeNtb(): Promise<void> {
   console.log("\n########## NTB ##########");
 
@@ -182,6 +216,10 @@ async function main() {
   const providers = getConfiguredProviders();
   console.log(`Configured providers: ${providers.map((p) => p.name).join(", ") || "(none)"}`);
 
+  if (args.includes("--sampath-source")) {
+    await probeSampathSource();
+    return;
+  }
   if (runSampath) await probeSampath();
   if (runNtb) await probeNtb();
 }
