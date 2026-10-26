@@ -65,9 +65,13 @@ graph TD
 
     subgraph CR["Crawler — Node.js / tsx"]
         BANKS["combank · sampath · hnb · ntb\namex · peoples_bank · bank_of_ceylon"]
+        PROXY["proxyFetch + proxyProviders/registry\nfallback when a direct fetch is blocked\n(combank · sampath · ntb · boc)"]
         PARSE["parseDiscount.ts\nclassify: percentage · cashback · bogo · ..."]
         DBU["db.ts — upsert + expire stale offers\nnew/changed offers marked enrichmentStatus: pending"]
     end
+
+    BD[("Bright Data Web Unlocker\ncountry: lk · exit-country check\nevery 50 requests")]
+    BANKSITES(["Bank websites / APIs"])
 
     GEMINI[("Google Gemini API\ngemini-flash-latest — generateContent (text + vision)")]
 
@@ -89,6 +93,8 @@ graph TD
     BROWSER(["Browser"])
 
     CRON -->|"scrapes 7 banks"| BANKS
+    BANKS -->|"direct fetch"| BANKSITES
+    BANKS -->|"403 / block page / empty"| PROXY -->|"POST api.brightdata.com/request"| BD --> BANKSITES
     BANKS --> PARSE --> DBU -->|"upsert"| DB
     DBU -->|"POST /api/revalidate"| EDGE
     CRON -.->|"workflow_run: completed"| ENRICH
@@ -107,6 +113,46 @@ graph TD
 > visible on the next natural ISR revalidation rather than busting the cache immediately,
 > since enrichment is best-effort and decoupled from the user-facing scrape/cache-bust path
 > (see [Architecture Decision in spec 044](specs/features/044-ai-offer-enrichment.md)).
+
+### Crawler fetch architecture (scraping proxy)
+
+Bank sites increasingly block GitHub Actions' datacenter IPs, so every scraper tries a
+**direct fetch first** and only escalates when it is blocked. The proxy layer is
+provider-agnostic (`crawler/utils/proxyProviders/`), with **Bright Data** as the main
+provider (spec 078):
+
+```mermaid
+flowchart LR
+    S["scraper.ts"] -->|"1. direct fetch"| B(["bank site / API"])
+    S -->|"2. on 403, block page,\nor empty result"| PF["proxyFetch /\norderedProvidersForBank"]
+    PF --> REG{"registry.ts\ngetConfiguredProviders()"}
+    REG -->|"BRIGHTDATA_API_KEY set"| U["brightDataUnlocker.ts\nWeb Unlocker API · country: lk"]
+    REG -.->|"optional BRIGHTDATA_RESIDENTIAL_*"| R["brightDataResidential.ts\nbrd.superproxy.io · -country-lk"]
+    REG -.->|"no Bright Data vars (local dev)"| W["webscrapingapi.ts\n(legacy)"]
+    U --> B
+    R --> B
+    W --> B
+    S -->|"3. last resort (NTB only)"| C["Crawlee PlaywrightCrawler"] --> B
+```
+
+- **Geo-lock:** every Web Unlocker request sends `country: "lk"`, and the exit country is
+  checked against `geo.brdtest.com/mygeo.json` on the first request and every 50 after.
+  A non-`lk` result throws. It never falls back to another country or provider.
+- **No mixing:** when any Bright Data provider is configured, the legacy WebScrapingAPI
+  provider is not used at all, so the Sri Lanka lock can't be bypassed by a fallback.
+- **Verification:** `brightdata-verify.yml` (manual `workflow_dispatch`, `bank: all|<bank>`)
+  runs each bank's real `scrape()` through Bright Data without writing to MongoDB, and
+  reports the exit country and per-bank offer counts.
+
+| Bank | Direct source | Proxy fallback | Notes |
+|---|---|---|---|
+| Commercial Bank | HTML pages | ✅ | Direct requests get `403`; detail pages go through Bright Data |
+| Sampath | JSON `GET /api/card-promotions` | ✅ | Requires a `locale: en` header or the API returns `data: []` (spec 080) |
+| HNB | JSON API (`venus.hnb.lk`) | — | Direct works; retry-with-backoff on empty responses (spec 038) |
+| Nations Trust Bank | HTML listing page | ✅ | CloudFront `403` direct; offers parsed from listing-page `promo-box` cards (spec 079); Crawlee as last resort |
+| American Express (NTB) | HTML category pages | — | Direct works; no per-offer images (generic stock photos) |
+| People's Bank | HTML pages | — | Direct works but slow (~15 min, site rate limits) |
+| Bank of Ceylon | HTML category pages | ✅ | Direct requests get `403`; every category page goes through Bright Data |
 
 ---
 
@@ -1497,6 +1543,12 @@ sequenceDiagram
 | Daily crawler `ConnectTimeout` / silent per-bank success with `0` offers hid failures | All banks | ✅ Fixed (spec 063, follow-ups 065-067) | `crawler/run.ts` surfaces per-bank summaries and `detectFailures` (`zero_offers` when active>0 but scraped 0); job-level failure issue kept as safety net (spec 052) |
 
 ### Roadmap
+
+#### 🧭 Next up (open issues)
+
+- [ ] **Merchant-based placeholder images + why scraped offers lack images ([#187](https://github.com/chamirusenarath96/card-max/issues/187))** — many offers fall back to a generic category icon. Find out why first: the crawler never calls `resolveMerchantImage()` in `crawler/utils/logo.ts`, AmEx stores no image by design, the favicon fallback only covers ~40 curated merchants, and bank image URLs can be hotlink-blocked or go stale. Then generate a placeholder specific to each shop (e.g. a deterministic monogram plus category badge) when no real image exists
+- [ ] **Vector embeddings, similarity search and RAG for offers ([#188](https://github.com/chamirusenarath96/card-max/issues/188))** — research then build: populate the `embedding` field reserved by spec 044, index it with Atlas Vector Search, upgrade `/api/offers/:id/similar` from category-only to semantic nearest-neighbour, add hybrid keyword + vector search to `/api/offers?q=`, and a RAG "ask about offers" endpoint that answers only from retrieved, non-expired offers with citations
+- [ ] **AI agent-based search in the web app ([#190](https://github.com/chamirusenarath96/card-max/issues/190))** — *after #188*. A conversational agent that takes several steps to answer a request (clarifying questions, multiple searches, bank/date/discount filters, comparing offers across a user's cards) using #188's retrieval and the existing `/api/offers` filters as tools. Every answer cites real, non-expired offers shown as offer cards; rate- and step-limited; falls back to normal search
 
 #### ✅ Recently completed
 
