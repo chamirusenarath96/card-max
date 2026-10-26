@@ -53,6 +53,11 @@ Next.js 16 (App Router) on Vercel
 Crawler (GitHub Actions daily cron)
   └── /crawler/scrapers/    → one scraper file per bank
   └── /crawler/utils/       → shared helpers (http, parse, db)
+  └── /crawler/utils/proxyFetch.ts      → direct fetch first, proxy on 403/block
+  └── /crawler/utils/proxyProviders/    → provider registry + Bright Data
+                                          (Unlocker, Residential) and legacy
+                                          WebScrapingAPI — spec 078
+  └── /crawler/enrichment/  → AI enrichment (Gemini/Groq), separate workflow
   └── /crawler/run.ts       → entrypoint
 
 Specs (source of truth before code)
