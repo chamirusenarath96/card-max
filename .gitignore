@@ -52,3 +52,6 @@ next-env.d.ts
 .vercel
 .env*.local
 dashboard/
+
+# crawler run artifact (spec 063) — written by crawler/run.ts, consumed by crawler.yml
+crawler-summary.json

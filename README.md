@@ -1095,8 +1095,7 @@ All workflows live in `.github/workflows/`. This table is the authoritative list
 | `enrich.yml` | Offer Enrichment | `workflow_run` after Daily Crawler completes + manual | AI-enriches `pending`/`failed` offers via Gemini (`npm run enrich`) — semantic summary + resolved applicable dates; never sweeps the full collection (spec 044) | ✅ |
 | `atlas-warmup.yml` | Atlas Warmup | every 4 min + manual | Pings `/api/health` to keep the MongoDB Atlas M0 connection warm — the sole warmup cron (spec 056 removed the duplicate `warmup.yml`) | N/A (no npm ci) |
 | `scraper-smoke.yml` | Scraper Smoke Test | manual only | Runs all scrapers against live bank sites to verify each still returns ≥1 offer; does not block CI or deploy | ✅ |
-| `zenrows-verify.yml` | ZenRows Verify | manual (`workflow_dispatch` `bank: all|sampath_bank|nations_trust_bank|bank_of_ceylon`) | Verifies ZenRows proxy per bank via `npx tsx scripts/verify-zenrows.ts --bank <bank>` (checks `ZENROWS_API_KEY` + `WEBSCRAPINGAPI_API_KEY` + `PROXY_BANK_MAP`); 10-min timeout | ✅ |
-| `brightdata-verify.yml` | Bright Data Verify | manual (`workflow_dispatch` `bank: all|<bank>`) | Runs each bank's real scraper with Bright Data (Web Unlocker + optional Residential, spec 078) configured, checks the Sri-Lanka exit-country geo-lock, reports per-bank offer counts; 15-min timeout | ✅ |
+| `brightdata-verify.yml` | Bright Data Verify | manual (`workflow_dispatch` `bank: all|<bank>`) | Verifies the Bright Data Web Unlocker/Residential proxy per bank via `npx tsx scripts/verify-brightdata.ts --bank <bank>` (checks geo-lock + `BRIGHTDATA_*` secrets); 30-min timeout | ✅ |
 
 **Failure handling:** `crawler.yml`, `enrich.yml`, and `ci.yml`'s `migrate`/`deploy` jobs each open a labeled GitHub Issue on failure via `actions/github-script`, with a pre-filled troubleshooting checklist, now created with `['bug', 'urgent', <category>]` so a broken pipeline jumps the spec-writing queue automatically (see [Issue → Spec → Implementation lifecycle](#issue--spec--implementation-lifecycle)). This requires the workflow to declare `permissions: issues: write` — both `enrich.yml` (#98) and `crawler.yml` (#105) were found missing this and silently failing to report their own failures; both are now fixed.
 
@@ -1491,7 +1490,9 @@ sequenceDiagram
 | Scraped description/discountLabel contained a leftover "See more" UI-chrome fragment from the source page | People's Bank | ✅ Fixed (spec 050) | Shared `stripUiChrome()` helper applied across all three parsing paths; `migrate-strip-peoples-bank-see-more.ts` backfilled already-stored offers |
 | Offer cards on the main grid had no clickable link at all | All banks | ✅ Fixed (spec 049) | `OfferCardDefault`/`Compact`/`Expanded` now link to the internal `/offers/:id` detail page (spec 046) |
 | Sampath API returns 0 promotions with no error (`200 OK` + empty body) - crawler silently succeeded | Sampath | ✅ Fixed (spec 062, hardened 065/068) | `sampath.ts` now logs truncated 2KB raw response on empty, retries via `orderedProvidersForBank` (ZenRows -> WebScrapingAPI) when direct returns 0/throws; `failureAlerts` emits `zero_offers` when `previousActiveCounts>0` but scraped 0 |
+| Sampath API returned `data: []` for every request: the API started requiring a `locale` request header (its own site sends `locale: en`), so header-less requests got an empty list | Sampath | ✅ Fixed (spec 080) | `sampath.ts` sends `locale: en` + `platform: web` on `GET /api/card-promotions` (no paging params, as the site does) and skips `enable: false` items |
 | NTB scraper blocked by HTTP 403 / Incapsula - proxy fallback never triggered on thrown errors | NTB | ✅ Fixed (spec 059, hardened 066/069) | `ntb.ts` now retries via `orderedProvidersForBank` on thrown `403`; ZenRows `js_render=true` per `PROXY_BANK_JS_RENDER_MAP` (spec 061) and `shouldUseJsRender` default for `nations_trust_bank` |
+| NTB scraper returned 0 offers after a site redesign: offers moved onto the listing page as `promo-box` cards with single-segment `/promotions/<slug>` links, so the old two-segment link regex matched nothing | NTB | ✅ Fixed (spec 079) | `ntb.ts` `parsePromoCards()` reads merchant/offer/category/validity/image/link from each listing card; old campaign-link → table flow kept as a fallback |
 | BOC ZenRows 422/429 and `REQS001: Requests to this domain are forbidden` - 4 categories `0` offers (52000ms) | BOC | ✅ Fixed (spec 060/061, hardened 067/070) | `boc.ts` falls back to secondary provider (`webscrapingapi`) on ZenRows `400/REQS001` via `orderedProvidersForBank`; `zenrows.ts` adds `js_render=true` + `premium_proxy` handling; `failureAlerts` surfaces `zero_offers` |
 | Daily crawler `ConnectTimeout` / silent per-bank success with `0` offers hid failures | All banks | ✅ Fixed (spec 063, follow-ups 065-067) | `crawler/run.ts` surfaces per-bank summaries and `detectFailures` (`zero_offers` when active>0 but scraped 0); job-level failure issue kept as safety net (spec 052) |
 
@@ -1568,6 +1569,7 @@ sequenceDiagram
 - [x] **Daily scrape failure hardening (spec 063)** - `ConnectTimeout` catch + per-bank summary logging, prevents silent `0` success
 - [x] **Zero-offers follow-ups (specs 065-067)** - Sampath/NTB/BOC each wired to `orderedProvidersForBank` for both thrown and zero-result paths; regression fixtures captured from live `REQS001`/`403` bodies
 - [x] **Verify ZenRows fallbacks (specs 068-070)** - `scripts/verify-zenrows.ts` (`--bank all|sampath_bank|nations_trust_bank|bank_of_ceylon`) + `.github/workflows/zenrows-verify.yml` (`workflow_dispatch`) manual verification; `WEBSCRAPINGAPI_API_KEY` secondary fallback verified (BOC `REQS001` -> `webscrapingapi` `OK ... chars`); `PROXY_BANK_MAP`/`PROXY_BANK_JS_RENDER_MAP` vars documented
+- [x] **ZenRows retired (spec 078 follow-up)** - `zenrows.ts`, `scripts/verify-zenrows.ts`, `zenrows-verify.yml`, and the `ZENROWS_API_KEY`/`ZENROWS_PREMIUM_PROXY`/`PROXY_BANK_JS_RENDER_MAP` env vars removed from code now that Bright Data Web Unlocker (spec 078) is the main fetcher; WebScrapingAPI remains as the sole legacy fallback provider
 
 ---
 
@@ -1649,7 +1651,6 @@ All feature specs live in `specs/`:
 | `specs/features/068-verify-sampath-bank-zenrows-fallback.md` | Verify Sampath ZenRows fallback |
 | `specs/features/069-verify-nations-trust-bank-zenrows-js-render.md` | Verify NTB ZenRows js_render |
 | `specs/features/070-verify-bank-of-ceylon-zenrows-reqs001.md` | Verify BOC ZenRows REQS001 |
-| `specs/features/078-brightdata-web-unlocker.md` | Bright Data Web Unlocker (primary) + Residential (secondary), Sri-Lanka geo-locked, replaces ZenRows/WebScrapingAPI as the default fetcher |
 
 ---
 

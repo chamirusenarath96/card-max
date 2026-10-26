@@ -39,18 +39,8 @@ jobs:
           GITHUB_FEEDBACK_TOKEN: ${{ secrets.GITHUB_FEEDBACK_TOKEN }}
           GITHUB_REPO_OWNER: ${{ secrets.GITHUB_REPO_OWNER }}
           GITHUB_REPO_NAME: ${{ secrets.GITHUB_REPO_NAME }}
-          # Scraping-proxy fallback — all optional; only used by combank/boc/
-          # ntb/sampath when a direct fetch fails or is blocked.
-          # Bright Data (spec 078) is the main fetcher; when configured it
-          # supersedes the legacy ZenRows/WebScrapingAPI vars below (see
-          # crawler/utils/proxyProviders/registry.ts).
-          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
-          BRIGHTDATA_ZONE: ${{ secrets.BRIGHTDATA_ZONE }}
-          BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID: ${{ secrets.BRIGHTDATA_RESIDENTIAL_CUSTOMER_ID }}
-          BRIGHTDATA_RESIDENTIAL_ZONE: ${{ secrets.BRIGHTDATA_RESIDENTIAL_ZONE }}
-          BRIGHTDATA_RESIDENTIAL_PASSWORD: ${{ secrets.BRIGHTDATA_RESIDENTIAL_PASSWORD }}
-          # Legacy (spec 053/060) — only used as a fallback if Bright Data isn't configured
-          ZENROWS_API_KEY: ${{ secrets.ZENROWS_API_KEY }}
+          # Scraping-proxy fallback (spec 053) — optional; only used by
+          # combank/boc/ntb when a direct fetch fails or is blocked
           WEBSCRAPINGAPI_API_KEY: ${{ secrets.WEBSCRAPINGAPI_API_KEY }}
           PROXY_BANK_MAP: ${{ vars.PROXY_BANK_MAP }}
 

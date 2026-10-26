@@ -70,8 +70,8 @@ async function main() {
   console.log(`Configured providers (priority order): ${providers.map((p) => p.name).join(", ") || "(none)"}`);
   if (providers.length === 0 || !providers.some((p) => p.name.startsWith("brightdata"))) {
     console.log(
-      "WARNING: no Bright Data provider is configured — this run will test direct fetches (and legacy " +
-        "ZenRows/WebScrapingAPI if set), not Bright Data. Set BRIGHTDATA_API_KEY + BRIGHTDATA_ZONE first."
+      "WARNING: no Bright Data provider is configured — this run will test direct fetches (and the legacy " +
+        "WebScrapingAPI provider if set), not Bright Data. Set BRIGHTDATA_API_KEY + BRIGHTDATA_ZONE first."
     );
   }
 

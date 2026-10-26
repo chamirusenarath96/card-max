@@ -13,7 +13,8 @@ jobs:
   verify:
     name: Verify Bright Data per bank
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    environment: Production  # required to access BRIGHTDATA_*/MONGODB_URI secrets (environment-scoped)
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
