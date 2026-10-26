@@ -410,6 +410,19 @@ describe("ntb scraper", () => {
       expect(offers[0]).toMatchObject({ merchant: "Aavya Cove Villas", sourceUrl: CARD_URL_1 });
     });
 
+    it("keeps a card whose offer text has no percentage and is over 100 chars (discountLabel capped)", async () => {
+      const longOffer =
+        "Enjoy installment plans at a range of merchant partners with Nations Trust Bank Mastercard Credit Cards this season";
+      vi.mocked(fetchHtmlSessioned).mockResolvedValueOnce(
+        `<html><body>${card({ href: CARD_URL_1, merchant: "Merchant Partners", offer: longOffer, tag: "Shopping" })}</body></html>`
+      );
+
+      const offers = await scrape();
+
+      expect(offers).toHaveLength(1);
+      expect(offers[0]!.discountLabel!.length).toBeLessThanOrEqual(100);
+    });
+
     it("parses cards from a proxy-fetched listing when the direct fetch throws a CloudFront 403 (AC5)", async () => {
       const proxyFetchHtml = vi.fn().mockResolvedValue(CARD_LISTING_HTML);
       vi.mocked(getConfiguredProviders).mockReturnValue([{ name: "brightdata-unlocker", fetchHtml: proxyFetchHtml }]);

@@ -2,16 +2,18 @@
  * Sampath Bank (sampath.lk) offer scraper
  * Spec: specs/features/002-crawler.md
  * Spec: specs/features/062-sampath-api-empty-response-fix.md
+ * Spec: specs/features/080-sampath-locale-header.md
  */
 import { OfferInputSchema, type OfferInput } from "../../specs/data/offer.schema";
 import { fetchJson } from "../utils/http";
 import { parseDiscount } from "../utils/parseDiscount";
 import { getConfiguredProviders, getBankProviderMap, orderedProvidersForBank } from "../utils/proxyProviders/registry";
 
-const API_URL = "https://www.sampath.lk/api/card-promotions?page_number=1&size=200";
+const API_URL = "https://www.sampath.lk/api/card-promotions";
 const SOURCE_URL = "https://www.sampath.lk/sampath-cards/credit-card-offer";
 const DETAIL_BASE = "https://www.sampath.lk/sampath-cards/credit-card-offer";
-const EXTRA_HEADERS = { Referer: "https://www.sampath.lk/sampath-cards/credit-card-offer" };
+// Spec 080: without `locale` the API returns `data: []` for every request.
+const EXTRA_HEADERS = { Referer: SOURCE_URL, locale: "en", platform: "web" };
 const CATEGORY_MAP: Record<string, OfferInput["category"]> = {
   dining: "dining", food: "dining", restaurant: "dining", "food & beverage": "dining",
   shopping: "shopping", fashion: "shopping", retail: "shopping", electronics_and_furniture: "shopping",
@@ -24,7 +26,7 @@ const CATEGORY_MAP: Record<string, OfferInput["category"]> = {
 };
 const JUNK_NAME_PATTERNS = [/^exclusive offers for/i, /^offers for (visa|mastercard|sampath)/i];
 interface SampathCardEntry { title?: string; description?: string; icon_url?: string; order_id?: number; }
-interface SampathPromotion { id?: number; company_name?: string; short_discount?: string; description?: string; category?: string; expire_on?: number; display_on?: number; image_url?: string; cards_new?: SampathCardEntry[]; }
+interface SampathPromotion { id?: number; enable?: boolean; company_name?: string; short_discount?: string; description?: string; category?: string; expire_on?: number; display_on?: number; image_url?: string; cards_new?: SampathCardEntry[]; }
 function buildDetailUrl(id: number | undefined): string | undefined { if (!id || isNaN(id)) return undefined; return `${DETAIL_BASE}/${id}`; }
 type SampathApiResponse = SampathPromotion[] | { data: SampathPromotion[] } | Record<string, unknown>;
 export async function scrape(): Promise<OfferInput[]> {
@@ -74,6 +76,7 @@ export async function scrape(): Promise<OfferInput[]> {
     }
     let skipped = 0;
     for (const item of promotions) {
+      if (item.enable === false) { skipped++; continue; }
       const name = item.company_name?.trim() ?? "";
       if (JUNK_NAME_PATTERNS.some((re) => re.test(name))) { skipped++; continue; }
       const mapped = mapPromotion(item);
@@ -81,7 +84,7 @@ export async function scrape(): Promise<OfferInput[]> {
       if (result.success) offers.push(result.data);
       else console.warn(`[sampath] Offer "${name}" failed validation:`, result.error.flatten());
     }
-    if (skipped > 0) console.log(`[sampath] Skipped ${skipped} generic/junk entries`);
+    if (skipped > 0) console.log(`[sampath] Skipped ${skipped} disabled/generic/junk entries`);
   } catch (err) { console.error("[sampath] Scrape failed:", err); throw err; }
   console.log(`[sampath] Scraped ${offers.length} valid offers`);
   return offers;

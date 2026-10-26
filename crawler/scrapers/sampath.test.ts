@@ -2,6 +2,7 @@
  * Sampath Bank scraper — unit tests
  * Spec: specs/features/002-crawler.md (AC1, AC2)
  * Spec: specs/features/036-sampath-per-offer-detail-url.md (AC1, AC2)
+ * Spec: specs/features/080-sampath-locale-header.md (AC1, AC2)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -270,7 +271,7 @@ describe("sampath scraper", () => {
     };
     vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
     const offers = await scrape();
-    expect(mockProvider.fetchHtml).toHaveBeenCalledWith("https://www.sampath.lk/api/card-promotions?page_number=1&size=200", "sampath_bank");
+    expect(mockProvider.fetchHtml).toHaveBeenCalledWith("https://www.sampath.lk/api/card-promotions", "sampath_bank");
     expect(offers).toHaveLength(1);
     expect(offers[0].merchant).toBe("Pizza Hut");
   });
@@ -315,5 +316,29 @@ describe("sampath scraper", () => {
     vi.mocked(orderedProvidersForBank).mockReturnValue([mockProvider as unknown as ReturnType<typeof orderedProvidersForBank>[number]]);
     const offers = await scrape();
     expect(offers).toHaveLength(0);
+  });
+
+  it("requests /api/card-promotions with a locale: en header (080 AC1)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ data: [VALID_PROMOTION] });
+
+    await scrape();
+
+    const [url, , , headers] = vi.mocked(fetchJson).mock.calls[0]!;
+    expect(url).toBe("https://www.sampath.lk/api/card-promotions");
+    expect(headers).toMatchObject({ locale: "en" });
+  });
+
+  it("skips enable:false promotions and keeps enable:true or missing (080 AC2)", async () => {
+    vi.mocked(fetchJson).mockResolvedValue({
+      data: [
+        { ...VALID_PROMOTION, id: 1, enable: true },
+        { ...TRAVEL_PROMOTION, id: 2, enable: false },
+        { ...ELECTRONICS_PROMOTION, id: 3 },
+      ],
+    });
+
+    const offers = await scrape();
+
+    expect(offers.map((o) => o.merchant)).toEqual(["Pizza Hut", "Singhagiri Plaza"]);
   });
 });
