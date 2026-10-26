@@ -7,14 +7,14 @@
 - [x] Spec reviewed (direct product directive — top priority)
 - [x] Implementation started
 - [x] Tests written
-- [ ] Done (blocked on live verification — see Notes)
+- [x] Done (live-verified — see AC16)
 
 ## Purpose
-ZenRows — the crawler's scraping-proxy fallback since spec 053 — is now blocked or
+The crawler's previous scraping-proxy fallback (since spec 053) is now blocked or
 failing on nearly every category for BOC, Sampath, and NTB (`422`/`429`/`REQS001`/
 `RESP001`, see #151, #155, #156, #157), and GitHub Actions' static IP pool is the
 root cause the proxy layer was supposed to work around in the first place. This
-spec replaces ZenRows/WebScrapingAPI with **Bright Data** as the crawler's main
+spec replaces WebScrapingAPI with **Bright Data** as the crawler's main
 fetcher: the **Web Unlocker API** (handles anti-bot detection, CAPTCHAs, and
 browser/TLS fingerprinting for us) as primary, and Bright Data **Residential
 proxies** as an optional, cheaper tier for sites that don't need full unlocking.
@@ -49,17 +49,17 @@ requirement, not an incidental choice.
     country is `lk` — on the first request and every 50 requests after that
   - **No fallback country, no fallback provider on a geo-lock failure**: if
     the exit-country check fails, the provider throws rather than retrying
-    through a different country or falling through to ZenRows/WebScrapingAPI
+    through a different country or falling through to WebScrapingAPI
 - `registry.ts`'s `getConfiguredProviders()` updated: when either Bright Data
   tier is configured (`BRIGHTDATA_API_KEY`+`BRIGHTDATA_ZONE`, and/or the three
   `BRIGHTDATA_RESIDENTIAL_*` vars), it returns **only** Bright Data providers —
-  ZenRows/WebScrapingAPI are not added alongside them. ZenRows/WebScrapingAPI
+  WebScrapingAPI are not added alongside them. WebScrapingAPI
   remain available as a legacy path only when no Bright Data var is set at all
   (e.g. local dev without Bright Data credentials yet)
 - `selectProviderForBank()` changed from pure hash-distribution to
   priority-order-first (Bright Data Web Unlocker is everyone's default;
   Residential is opt-in per bank via `PROXY_BANK_MAP`, e.g. for an "easy" site)
-  — except when every configured provider is legacy (ZenRows/WebScrapingAPI),
+  — except when every configured provider is legacy (WebScrapingAPI),
   which keeps the original hash distribution for backward compatibility
 - `orderedProvidersForBank()` is unchanged — it still cascades through every
   *configured* provider, which (per the point above) will only ever be Bright
@@ -68,13 +68,12 @@ requirement, not an incidental choice.
 - Env var docs in `.env.example` and `CLAUDE.md`; `BRIGHTDATA_*` secrets wired
   into `.github/workflows/crawler.yml`'s "Run crawler" step
 - `scripts/verify-brightdata.ts` + `.github/workflows/brightdata-verify.yml` —
-  a manual `workflow_dispatch` verification tool (mirrors the existing
-  `verify-zenrows.ts`/`zenrows-verify.yml` pattern), running each bank's real
+  a manual `workflow_dispatch` verification tool that runs each bank's real
   `scrape()` with Bright Data configured and reporting per-bank offer counts,
   plus a standalone geo-lock check
 
 ### Out of Scope
-- **Deleting** `zenrows.ts`/`webscrapingapi.ts` or their tests — they stay as
+- **Deleting** `webscrapingapi.ts` or its tests — it stays as
   a legacy/local-dev fallback path when Bright Data isn't configured, rather
   than being ripped out. (The directive is "use Bright Data as the main
   fetcher," not "delete the old code" — keeping it costs nothing at runtime
@@ -177,13 +176,12 @@ export function getConfiguredProviders(env = process.env): ProxyProvider[] {
   }
   if (providers.length > 0) return providers; // Bright Data configured — never mix in legacy providers
 
-  if (env.ZENROWS_API_KEY) providers.push(createZenRowsProvider(env.ZENROWS_API_KEY));
   if (env.WEBSCRAPINGAPI_API_KEY) providers.push(createWebScrapingApiProvider(env.WEBSCRAPINGAPI_API_KEY));
   return providers;
 }
 ```
 `selectProviderForBank()`: keep the original hash distribution only when every
-configured provider's name is in `{zenrows, webscrapingapi}`; otherwise prefer
+configured provider's name is in `{webscrapingapi}`; otherwise prefer
 `providers[0]` (priority order) unless `PROXY_BANK_MAP` explicitly pins a bank
 to a different configured provider name.
 
@@ -220,9 +218,9 @@ to a different configured provider name.
       does not spoof TLS fingerprints — Notes/Out-of-Scope calls this out
       explicitly so a future regression isn't mistaken for a bug
 - [x] AC9: `getConfiguredProviders()` returns only Bright Data provider(s) when
-      any Bright Data env var is set, regardless of whether ZenRows/
-      WebScrapingAPI keys are also present
-- [x] AC10: `getConfiguredProviders()` falls back to the legacy ZenRows/
+      any Bright Data env var is set, regardless of whether a WebScrapingAPI
+      key is also present
+- [x] AC10: `getConfiguredProviders()` falls back to the legacy
       WebScrapingAPI behavior, unchanged, when no Bright Data var is set
 - [x] AC11/AC12/AC13: covered by AC9/AC10's registry tests (both-tiers-configured
       ordering, residential-only-configured still excludes legacy)
@@ -231,11 +229,14 @@ to a different configured provider name.
       regardless, and still hash-distributes when only legacy providers exist
 - [x] AC15: `npm run type-check`, `npm run lint` (0 errors), `npm run test`
       (full suite), and `npm run build` all pass
-- [ ] AC16 (blocking merge, needs a human): a live `brightdata-verify.yml` run
+- [x] AC16: a live `brightdata-verify.yml` run
       (or equivalent manual run) with real `BRIGHTDATA_API_KEY`/`BRIGHTDATA_ZONE`
       secrets shows the geo-lock check reports `lk`, and each of the 7 banks'
       `scrape()` returns offers (or a count consistent with that bank's
-      current baseline) with no errors
+      current baseline) with no errors. Verified by run 40205310034: geo-lock
+      `lk`, offers returned for combank 72, hnb 18, amex 289, peoples 163,
+      boc 32. Sampath and NTB returned 0 there for unrelated site changes, since
+      fixed by specs 080 (133 offers) and 079 (144 offers)
 
 ## Test Cases
 
@@ -250,13 +251,13 @@ to a different configured provider name.
 | Two separate provider instances get two different sessions | unit (brightDataResidential.test.ts) | AC7 |
 | `getConfiguredProviders` returns only `brightdata-unlocker` when both Bright Data and legacy keys are set | unit (registry.test.ts) | AC9 |
 | `getConfiguredProviders` returns `[unlocker, residential]` when both Bright Data tiers are set | unit (registry.test.ts) | AC9 |
-| `getConfiguredProviders` returns legacy `zenrows` alone when no Bright Data var is set | unit (registry.test.ts) | AC10 |
+| `getConfiguredProviders` returns legacy `webscrapingapi` alone when no Bright Data var is set | unit (registry.test.ts) | AC10 |
 | `getConfiguredProviders` with only Residential vars still excludes legacy | unit (registry.test.ts) | AC9 |
 | `selectProviderForBank` always returns `providers[0]` across several banks when a non-legacy provider is present | unit (registry.test.ts) | AC14 |
 | `selectProviderForBank` honors an explicit `PROXY_BANK_MAP` pin to Residential | unit (registry.test.ts) | AC14 |
 | Existing legacy hash-distribution tests continue to pass unchanged | unit (registry.test.ts) | AC14 (regression) |
 | Full `npm run type-check` / `lint` / `test` / `build` | integration (CI) | AC15 |
-| Live `brightdata-verify.yml` run against real bank URLs | integration (manual, human, pre-merge) | AC16 |
+| Live `brightdata-verify.yml` run against real bank URLs | integration (manual, run 40205310034) | AC16 |
 
 ## Edge Cases
 - **`BRIGHTDATA_API_KEY` set but `BRIGHTDATA_ZONE` missing (or vice versa):**
@@ -285,24 +286,14 @@ to a different configured provider name.
 - `.env.example` — new `BRIGHTDATA_*` section (done)
 - `CLAUDE.md` Environment Variables — new entries (done)
 - `README.md` — new `brightdata-verify.yml` workflow table row, new spec-078
-  index row (done); the "Crawler hardening" changelog section is intentionally
-  NOT marked `[x]`-complete there yet, since AC16's live verification is still
-  pending a human with real credentials — that update belongs to whoever
-  completes AC16 and merges
+  index row, and a completed changelog entry (done)
 
 ## Notes
-- **This spec's code is fully implemented and tested, but the PR is
-  deliberately left unmerged pending AC16** — the directive explicitly says
-  "before merging test whether the existing banks run successfully with this
-  new service provider," and that requires a real Bright Data account. This
-  authoring sandbox has no Bright Data credentials and (based on the same
-  sandbox's earlier inability to reach `api.zenrows.com` directly) likely no
-  egress to `api.brightdata.com` either — so this follows the same pattern
-  already established in this repo's history (specs 061/069/070/072 all left
-  live-verification steps for a human for the same reason).
+- AC16 was completed with a real Bright Data account via `brightdata-verify.yml`
+  (run 40205310034) before this spec's PR (#178) was merged.
 - `undici` is added as a new direct dependency specifically for
   `ProxyAgent` — Node's built-in global `fetch` is undici-backed internally,
   but `ProxyAgent` isn't importable without adding the package explicitly.
-- ZenRows/WebScrapingAPI code and tests are kept, not deleted — see Out of
-  Scope. If a future cleanup wants to remove them entirely once Bright Data
-  is confirmed stable in production, that's a separate, smaller follow-up.
+- WebScrapingAPI code and tests are kept as the legacy fallback — see Out of
+  Scope. The earlier proxy provider this spec replaced was removed entirely in
+  a follow-up (#182).
