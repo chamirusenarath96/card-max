@@ -1,8 +1,6 @@
 ﻿/**
  * Scraping-proxy fallback wrapper for direct-fetch call sites.
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC7-AC10),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC3-AC5),
- *       specs/features/061-boc-ntb-zenrows-js-render.md (AC1-AC5)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC7-AC10)
  */
 import { getConfiguredProviders, getBankProviderMap, orderedProvidersForBank } from "./proxyProviders/registry";
 import { sleep } from "./http";

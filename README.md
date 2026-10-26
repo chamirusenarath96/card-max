@@ -1489,11 +1489,11 @@ sequenceDiagram
 | Applicable dates not extracted — only outer validity period captured | AmEx (NTB) | ✅ Fixed (spec 041) | `parseOfferCards()` now extracts the full conditions block into `description`; e.g. Domino's offer shows validity till Dec 2026 and `description` states it's only valid on specific days of the week |
 | Scraped description/discountLabel contained a leftover "See more" UI-chrome fragment from the source page | People's Bank | ✅ Fixed (spec 050) | Shared `stripUiChrome()` helper applied across all three parsing paths; `migrate-strip-peoples-bank-see-more.ts` backfilled already-stored offers |
 | Offer cards on the main grid had no clickable link at all | All banks | ✅ Fixed (spec 049) | `OfferCardDefault`/`Compact`/`Expanded` now link to the internal `/offers/:id` detail page (spec 046) |
-| Sampath API returns 0 promotions with no error (`200 OK` + empty body) - crawler silently succeeded | Sampath | ✅ Fixed (spec 062, hardened 065/068) | `sampath.ts` now logs truncated 2KB raw response on empty, retries via `orderedProvidersForBank` (ZenRows -> WebScrapingAPI) when direct returns 0/throws; `failureAlerts` emits `zero_offers` when `previousActiveCounts>0` but scraped 0 |
+| Sampath API returns 0 promotions with no error (`200 OK` + empty body) - crawler silently succeeded | Sampath | ✅ Fixed (spec 062, hardened 065) | `sampath.ts` now logs truncated 2KB raw response on empty, retries via `orderedProvidersForBank` when direct returns 0/throws; `failureAlerts` emits `zero_offers` when `previousActiveCounts>0` but scraped 0 |
 | Sampath API returned `data: []` for every request: the API started requiring a `locale` request header (its own site sends `locale: en`), so header-less requests got an empty list | Sampath | ✅ Fixed (spec 080) | `sampath.ts` sends `locale: en` + `platform: web` on `GET /api/card-promotions` (no paging params, as the site does) and skips `enable: false` items |
-| NTB scraper blocked by HTTP 403 / Incapsula - proxy fallback never triggered on thrown errors | NTB | ✅ Fixed (spec 059, hardened 066/069) | `ntb.ts` now retries via `orderedProvidersForBank` on thrown `403`; ZenRows `js_render=true` per `PROXY_BANK_JS_RENDER_MAP` (spec 061) and `shouldUseJsRender` default for `nations_trust_bank` |
+| NTB scraper blocked by HTTP 403 / Incapsula - proxy fallback never triggered on thrown errors | NTB | ✅ Fixed (spec 059, hardened 066/071) | `ntb.ts` now retries via `orderedProvidersForBank` on a thrown `403` or a block page, looping over every configured provider |
 | NTB scraper returned 0 offers after a site redesign: offers moved onto the listing page as `promo-box` cards with single-segment `/promotions/<slug>` links, so the old two-segment link regex matched nothing | NTB | ✅ Fixed (spec 079) | `ntb.ts` `parsePromoCards()` reads merchant/offer/category/validity/image/link from each listing card; old campaign-link → table flow kept as a fallback |
-| BOC ZenRows 422/429 and `REQS001: Requests to this domain are forbidden` - 4 categories `0` offers (52000ms) | BOC | ✅ Fixed (spec 060/061, hardened 067/070) | `boc.ts` falls back to secondary provider (`webscrapingapi`) on ZenRows `400/REQS001` via `orderedProvidersForBank`; `zenrows.ts` adds `js_render=true` + `premium_proxy` handling; `failureAlerts` surfaces `zero_offers` |
+| BOC proxy `422/429` and `REQS001: Requests to this domain are forbidden` - 4 categories `0` offers (52000ms) | BOC | ✅ Fixed (spec 067) | `boc.ts` falls back to the next configured provider via `orderedProvidersForBank` when one fails; `failureAlerts` surfaces `zero_offers` |
 | Daily crawler `ConnectTimeout` / silent per-bank success with `0` offers hid failures | All banks | ✅ Fixed (spec 063, follow-ups 065-067) | `crawler/run.ts` surfaces per-bank summaries and `detectFailures` (`zero_offers` when active>0 but scraped 0); job-level failure issue kept as safety net (spec 052) |
 
 ### Roadmap
@@ -1558,18 +1558,20 @@ sequenceDiagram
 
 - [x] **AmEx (NTB) scraper — extract applicable dates into `description` field** — The current `amex.ts` scraper captures the outer offer validity period (`validFrom` / `validUntil`) from text matching "Valid till / Valid from … to …", but many AmEx offers are only redeemable on specific days within that window (e.g. "Every Tuesday", "1st to 7th of each month", "Weekends only"). These conditions are present in the offer card text on `americanexpress.lk` but are discarded because `parseOfferCards()` only extracts the first "Valid…" sentence. Reported example: Domino's offer shows `validUntil` = end of promotion period but the discount is only applicable on a particular day each week — a user reading the card has no way to know this. Fix: (1) widen the text extraction in `parseOfferCards()` to capture the full conditions block (`.alloffer-text` or the paragraph following the validity line); (2) populate the `description` field (already in `OfferInputSchema`) with the cleaned conditions text; (3) surface `description` in the offer card expanded view and the "View Offer Details" tooltip. No schema migration needed — `description` is already optional in the Zod schema and the Mongoose model.
 
-#### ✅ Crawler hardening & scraping proxy fallback (specs 052-070, 2026-08)
+#### ✅ Crawler hardening & scraping proxy (specs 052-080, 2026-08 → 2026-10)
 - [x] **Crawler failure monitoring (spec 052)** - per-bank success/failure table, `zero_offers` detection (`previousActiveCounts>0` but scraped 0), `Promise.allSettled` + `ConnectTimeout` hardening (spec 063)
-- [x] **Scraping proxy fallback (spec 053)** - `crawler/utils/proxyProviders/` with `zenrows.ts` + `webscrapingapi.ts`, `registry.ts:getConfiguredProviders()` / `orderedProvidersForBank()`, `proxyFetch` retry loop; `failureAlerts` integration
+- [x] **Scraping proxy fallback (spec 053)** - `crawler/utils/proxyProviders/` with `webscrapingapi.ts`, `registry.ts:getConfiguredProviders()` / `orderedProvidersForBank()`, `proxyFetch` retry loop; `failureAlerts` integration
 - [x] **Offer image referrer fix (spec 055)** - `referrerPolicy="no-referrer"` on `OfferImage` to avoid bank hotlink blocking
 - [x] **Dedup warmup workflows (spec 056)** - removed duplicate `warmup.yml`; Atlas warmup is sole `atlas-warmup.yml` (`/api/health` every 4 min)
 - [x] **Enrichment multi-provider LLM (spec 057)** - Gemini primary + Groq spillover for `semanticSummary`; zero-behavior-change when `GROQ_API_KEY` omitted
-- [x] **NTB/BOC ZenRows fixes (specs 059-061)** - NTB thrown-`403` fallback, BOC `422/429` handling, `js_render=true` for `bank_of_ceylon` + `nations_trust_bank` via `PROXY_BANK_JS_RENDER_MAP` / `shouldUseJsRender` default
+- [x] **NTB proxy fallback on thrown errors (spec 059)** - NTB retries via the proxy chain on a thrown `403`, not just on a block page
 - [x] **Sampath empty-response fix (spec 062)** - handles `200 OK` + empty `data`/`[]`, 2KB truncated raw warn, retry with backoff (`venus.hnb.lk`-style)
 - [x] **Daily scrape failure hardening (spec 063)** - `ConnectTimeout` catch + per-bank summary logging, prevents silent `0` success
 - [x] **Zero-offers follow-ups (specs 065-067)** - Sampath/NTB/BOC each wired to `orderedProvidersForBank` for both thrown and zero-result paths; regression fixtures captured from live `REQS001`/`403` bodies
-- [x] **Verify ZenRows fallbacks (specs 068-070)** - `scripts/verify-zenrows.ts` (`--bank all|sampath_bank|nations_trust_bank|bank_of_ceylon`) + `.github/workflows/zenrows-verify.yml` (`workflow_dispatch`) manual verification; `WEBSCRAPINGAPI_API_KEY` secondary fallback verified (BOC `REQS001` -> `webscrapingapi` `OK ... chars`); `PROXY_BANK_MAP`/`PROXY_BANK_JS_RENDER_MAP` vars documented
-- [x] **ZenRows retired (spec 078 follow-up)** - `zenrows.ts`, `scripts/verify-zenrows.ts`, `zenrows-verify.yml`, and the `ZENROWS_API_KEY`/`ZENROWS_PREMIUM_PROXY`/`PROXY_BANK_JS_RENDER_MAP` env vars removed from code now that Bright Data Web Unlocker (spec 078) is the main fetcher; WebScrapingAPI remains as the sole legacy fallback provider
+- [x] **Bright Data as main scraping fetcher (spec 078)** - `brightDataUnlocker.ts` (Web Unlocker, `country: "lk"` on every request, exit-country check via `geo.brdtest.com` on first use and every 50 requests, never falls back to another country/provider) + optional `brightDataResidential.ts`; `BRIGHTDATA_*` secrets wired into `crawler.yml`; live-verified with `brightdata-verify.yml` (run 40205310034)
+- [x] **Legacy proxy provider removed (spec 078 follow-up)** - the provider Bright Data replaced was deleted along with its verify script/workflow, env vars and the js-render map; WebScrapingAPI is the only legacy fallback left
+- [x] **NTB promo-card listing (spec 079)** - NTB moved offers onto listing-page cards; `parsePromoCards()` reads them in one fetch (144 offers live)
+- [x] **Sampath `locale` header (spec 080)** - Sampath's API returns an empty list without a `locale` header; `sampath.ts` now sends `locale: en` (133 offers live)
 
 ---
 
@@ -1633,24 +1635,25 @@ All feature specs live in `specs/`:
 | `specs/features/050-peoples-bank-see-more-cleanup.md` | People's Bank See-more cleanup |
 | `specs/features/051-announce-ai-offer-extraction.md` | Announce AI offer extraction |
 | `specs/features/052-crawler-failure-monitoring.md` | Crawler failure monitoring (per-bank + zero_offers) |
-| `specs/features/053-scraping-proxy-fallback.md` | Scraping proxy fallback (ZenRows -> WebScrapingAPI) |
+| `specs/features/053-scraping-proxy-fallback.md` | Scraping proxy fallback (provider abstraction + WebScrapingAPI) |
 | `specs/features/054-peoples-bank-detail-page-validity.md` | People's Bank detail page validity |
 | `specs/features/055-offer-image-referrer-fix.md` | Offer image referrer fix |
 | `specs/features/056-dedup-warmup-workflows.md` | Dedup warmup workflows |
 | `specs/features/057-enrichment-multi-provider-llm-strategy.md` | Enrichment multi-provider LLM (Gemini+Groq) |
 | `specs/features/058-fix-gemini-thinking-budget-regression.md` | Fix Gemini thinking budget |
 | `specs/features/059-ntb-proxy-fallback-on-thrown-errors.md` | NTB proxy fallback on thrown errors (403) |
-| `specs/features/060-fix-zenrows-boc-provider-errors.md` | Fix ZenRows BOC provider errors (422/429) |
-| `specs/features/061-boc-ntb-zenrows-js-render.md` | BOC/NTB ZenRows js_render |
 | `specs/features/062-sampath-api-empty-response-fix.md` | Sampath API empty-response fix |
 | `specs/features/063-crawler-daily-scrape-failure-2026-08-05.md` | Crawler daily scrape failure 2026-08-05 |
 | `specs/features/064-ai-offer-enrichment-v2-architecture-decision.md` | AI enrichment v2 architecture decision |
 | `specs/features/065-sampath-scraper-zero-offers-followup.md` | Sampath scraper zero-offers followup |
 | `specs/features/066-ntb-scraper-zero-offers-followup.md` | NTB scraper zero-offers followup |
 | `specs/features/067-boc-reject-requirements-fix.md` | BOC REQS001 forbidden fix |
-| `specs/features/068-verify-sampath-bank-zenrows-fallback.md` | Verify Sampath ZenRows fallback |
-| `specs/features/069-verify-nations-trust-bank-zenrows-js-render.md` | Verify NTB ZenRows js_render |
-| `specs/features/070-verify-bank-of-ceylon-zenrows-reqs001.md` | Verify BOC ZenRows REQS001 |
+| `specs/features/071-ntb-crawler-403-reqs001.md` | NTB crawler 403 / REQS001 |
+| `specs/features/072-cloudflare-workers-scraping.md` | Cloudflare Workers scraping evaluation |
+| `specs/features/076-crawler-host-relocation-dynamic-ip.md` | Crawler host relocation / dynamic IP |
+| `specs/features/078-brightdata-web-unlocker.md` | Bright Data Web Unlocker as main fetcher (Sri Lanka geo-locked) |
+| `specs/features/079-ntb-promo-card-listing.md` | NTB: parse offers from listing-page promo cards |
+| `specs/features/080-sampath-locale-header.md` | Sampath: send the `locale` header the API requires |
 
 ---
 

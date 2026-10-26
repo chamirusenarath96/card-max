@@ -44,7 +44,7 @@ No new UI. Sampath offers reappear in listing when fix lands.
 
 ## Acceptance Criteria
 - [ ] AC1: When extractPromotionList returns empty for sampath, a warn log containing truncated raw response (max 2KB) is emitted — verified by checking run 31745190572 logs or a unit test that asserts the warn
-- [ ] AC2: When direct fetch returns 0 offers or throws, sampath is retried via proxy provider (ZenRows orderedProvidersForBank) if configured, and succeeds when provider returns valid data — unit test with mocked proxyFetch
+- [ ] AC2: When direct fetch returns 0 offers or throws, sampath is retried via the configured proxy providers (orderedProvidersForBank), and succeeds when provider returns valid data — unit test with mocked proxyFetch
 - [ ] AC3: Regression fixture captured from the actual current API response shape (the one seen on 2026-08-13) is added and parses into expected promotions
 - [ ] AC4: Zero-offer detection does not silently succeed: when baseline active count >0 and scraped 0, a warn is logged and failureAlerts would produce zero_offers (no silent success)
 - [ ] AC5: npm run type-check and npm run lint pass with no new errors
@@ -54,7 +54,7 @@ No new UI. Sampath offers reappear in listing when fix lands.
 | Test | Type | AC |
 |------|------|----|
 | sampath scraper logs truncated raw response when API returns 0 | unit (crawler/scrapers/sampath.test.ts) | AC1 |
-| sampath scraper falls back to ZenRows proxy when direct returns 0 and proxy returns data | unit (crawler/scrapers/sampath.test.ts) | AC2 |
+| sampath scraper falls back to the proxy when direct returns 0 and proxy returns data | unit (crawler/scrapers/sampath.test.ts) | AC2 |
 | sampath scraper falls back to proxy when direct throws | unit (crawler/scrapers/sampath.test.ts) | AC2 |
 | fixture of current real API shape parses into promotions | unit (crawler/scrapers/sampath.test.ts) | AC3 |
 | bare array and {data:[]} shapes still parse | unit (crawler/scrapers/sampath.test.ts) | AC3 |

@@ -39,9 +39,9 @@ just 200-with-challenge-page responses.
   `crawler/scrapers/ntb.test.ts`
 
 ### Out of Scope
-- Changes to `crawler/utils/proxyProviders/*` (registry, ZenRows, WebScrapingAPI)
+- Changes to `crawler/utils/proxyProviders/*` (registry, WebScrapingAPI)
   themselves — this spec only changes when `ntb.ts` decides to call the already-
-  existing fallback, not how the fallback works. (ZenRows-specific provider bugs
+  existing fallback, not how the fallback works. (Provider-specific provider bugs
   are tracked separately in #121.)
 - Changing `isBlockPage()`'s detection logic for genuine 200-challenge-page
   responses — that path already works and is untouched
@@ -61,7 +61,7 @@ schema changes.
 ## API Contract
 No card-max API changes. This affects only the outbound scrape requests NTB
 makes to `nationstrust.com` and, on fallback, to the configured proxy provider
-(ZenRows/WebScrapingAPI).
+(WebScrapingAPI).
 
 ## Technical Approach
 
@@ -165,7 +165,7 @@ async function scrapeViaHttp(): Promise<OfferInput[] | null> {
 
 If no provider is configured (`selectProviderForBank` returns `null`), the
 original error re-throws and is caught by the existing outer handler — behavior
-degrades to today's status quo when no `ZENROWS_API_KEY`/`WEBSCRAPINGAPI_API_KEY`
+degrades to today's status quo when no `WEBSCRAPINGAPI_API_KEY`
 is set, so this is a safe, additive change.
 
 ### Files to modify
@@ -209,7 +209,7 @@ is set, so this is a safe, additive change.
   than triggering the Crawlee fallback — this matches existing behavior for the
   no-campaign-links case and is intentional (an HTTP-path attempt that partially
   worked shouldn't also incur a second, expensive full Crawlee run)
-- **`ZENROWS_API_KEY` configured but returns 422/429 (see #121):** this spec's
+- **The primary proxy configured but returning 422/429 (see #121):** this spec's
   fix will correctly *attempt* the fallback per AC1/AC2, but the fallback fetch
   will itself fail until #121 is resolved — that's expected and out of scope here
 
@@ -221,7 +221,7 @@ None — no architecture, endpoint, workflow, or SDLC process changes.
   `combank.ts`/`boc.ts`, just adapted for `ntb.ts`'s cookie-jar-based session
   fetch and its extra 200-challenge-page detection layer that the other banks
   don't need.
-- Once this ships, BOC's #121 (ZenRows 422/429) becomes the more likely blocker
+- Once this ships, BOC's #121 (proxy 422/429) becomes the more likely blocker
   for actually getting non-zero NTB offers if both banks share the same
   misconfigured provider — worth sequencing #121 alongside or before this if the
   goal is "NTB actually scrapes offers again," not just "the fallback code path
