@@ -45,6 +45,11 @@ async function probeSampath(): Promise<void> {
       headers: { Accept: "application/json, */*;q=0.8", Referer: "https://www.sampath.lk/sampath-cards/credit-card-offer" },
     },
     {
+      label: "zero-indexed page (page_number=0&size=200)",
+      url: "https://www.sampath.lk/api/card-promotions?page_number=0&size=200",
+      headers: { Accept: "application/json, */*;q=0.8", Referer: "https://www.sampath.lk/sampath-cards/credit-card-offer" },
+    },
+    {
       label: "full browser-like headers incl. Origin + Sec-Fetch-*",
       url: "https://www.sampath.lk/api/card-promotions?page_number=1&size=200",
       headers: {
@@ -105,6 +110,12 @@ async function probeSampath(): Promise<void> {
     } else {
       console.log("No obvious __NEXT_DATA__/window.__*__ embedded JSON found.");
     }
+    const apiRefs = [...new Set([...body.matchAll(/["'`](\/?api\/[A-Za-z0-9_\-/]+[^"'`\s]*)["'`]/g)].map((m) => m[1]))];
+    console.log(`API path references in page (${apiRefs.length}): ${JSON.stringify(apiRefs.slice(0, 40))}`);
+    const scriptSrcs = [...new Set([...body.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map((m) => m[1]))];
+    console.log(`Script srcs (${scriptSrcs.length}): ${JSON.stringify(scriptSrcs.slice(0, 30))}`);
+    const offerIdx = body.search(/promotion|card-offer|offer-card/i);
+    console.log(`First "promotion/offer" marker at char ${offerIdx}${offerIdx >= 0 ? `: ${truncate(body.slice(Math.max(0, offerIdx - 300), offerIdx + 1500), 1800)}` : ""}`);
   } catch (err) {
     console.log(`FAILED: ${(err as Error).message}`);
   }
