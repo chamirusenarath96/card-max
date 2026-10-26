@@ -1,7 +1,6 @@
 ﻿/**
  * WebScrapingAPI scraping-proxy provider
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC12),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC2)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC12)
  */
 import type { ProxyProvider } from "./types";
 

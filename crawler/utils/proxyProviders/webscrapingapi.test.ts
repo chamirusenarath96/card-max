@@ -1,7 +1,6 @@
 /**
  * WebScrapingAPI provider — unit tests
- * Spec: specs/features/053-scraping-proxy-fallback.md (AC12),
- *       specs/features/060-fix-zenrows-boc-provider-errors.md (AC2)
+ * Spec: specs/features/053-scraping-proxy-fallback.md (AC12)
  */
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { createWebScrapingApiProvider } from "./webscrapingapi";

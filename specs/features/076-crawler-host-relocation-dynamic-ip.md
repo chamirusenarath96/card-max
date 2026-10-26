@@ -10,7 +10,7 @@
 - [ ] Done
 
 ## Purpose
-GitHub Actions hosted runners egress from a small, well-known pool of Azure IP ranges that BOC, NTB, Sampath and intermittently ComBank now WAF/IP-reputation block (#106, #151, #155, #156). The ZenRows/WebScrapingAPI fallbacks are also failing (`REQS001`, `RESP001`, `AUTH006`) and cost paid quota — and in late August 2026 the ZenRows account hit its usage limit entirely (`AUTH004`, #159–#174 / spec 075). This spec evaluates moving **where** the existing crawler runs — unchanged `crawler/run.ts` + `crawler/scrapers/*.ts` — to a free-tier host with non-blocklisted, preferably varying egress IPs, and defines a one-week pilot with a go/no-go decision. It is the lower-risk alternative to the Cloudflare Workers rewrite in #153 / spec 072, and must end with a recommendation between the two (or a hybrid).
+GitHub Actions hosted runners egress from a small, well-known pool of Azure IP ranges that BOC, NTB, Sampath and intermittently ComBank now WAF/IP-reputation block (#106, #151, #155, #156). The WebScrapingAPI fallbacks are also failing (`REQS001`, `RESP001`, `AUTH006`) and cost paid quota — and in late August 2026 the primary proxy account hit its usage limit entirely (`AUTH004`, #159–#174 / spec 075). This spec evaluates moving **where** the existing crawler runs — unchanged `crawler/run.ts` + `crawler/scrapers/*.ts` — to a free-tier host with non-blocklisted, preferably varying egress IPs, and defines a one-week pilot with a go/no-go decision. It is the lower-risk alternative to the Cloudflare Workers rewrite in #153 / spec 072, and must end with a recommendation between the two (or a hybrid).
 
 ## Scope
 
@@ -20,7 +20,7 @@ GitHub Actions hosted runners egress from a small, well-known pool of Azure IP r
   - Egress IP behaviour (static / per-deploy / per-region / rotating) and whether it's in a known cloud range likely to be flagged
   - Scheduling mechanism (native cron vs GH Actions webhook trigger)
   - Free-tier limits vs current run profile (≈20 min wall-clock per run — People's Bank alone is ~18 min; ~1 run/day; memory for Chromium)
-  - Secret store for `MONGODB_URI`, `GEMINI_API_KEY`, `ZENROWS_API_KEY`, `WEBSCRAPINGAPI_API_KEY`, `GITHUB_FEEDBACK_TOKEN`, `VERCEL_REVALIDATION_SECRET`
+  - Secret store for `MONGODB_URI`, `GEMINI_API_KEY`, `WEBSCRAPINGAPI_API_KEY`, `GITHUB_FEEDBACK_TOKEN`, `VERCEL_REVALIDATION_SECRET`
 - **Trigger model decision** — (a) host-native cron writing directly to Atlas, or (b) GH Actions keeps the schedule and calls an authenticated webhook on the host. Must preserve the existing failure pipeline: `crawler-summary.json` → `crawler/utils/failureAlerts.ts` `detectFailures` → GitHub Issue with `bug`+`urgent`+`crawler` labels, and the post-run `/api/revalidate` ISR call.
 - **Per-bank execution target** — support running only a subset of banks on the new host (e.g. an env var like `CRAWLER_BANKS=bank_of_ceylon,nations_trust_bank` read by `crawler/run.ts`) so the pilot can run blocked banks remotely while GH Actions keeps running the healthy ones, without double-writing the same bank.
 - **Pilot** — run BOC and NTB (plus Sampath if feasible) from the chosen host daily for 7 days; record per-bank `scraped` counts against the GH Actions baseline in a results table inside this spec.
@@ -31,7 +31,7 @@ GitHub Actions hosted runners egress from a small, well-known pool of Azure IP r
 - Rewriting scraper logic or changing any scraper's parsing
 - Cloudflare Workers implementation (#153 / spec 072) — only compared against
 - Paid hosts or anything whose free tier doesn't cover the daily run
-- Removing ZenRows/WebScrapingAPI fallbacks (they stay as a last resort)
+- Removing WebScrapingAPI fallbacks (they stay as a last resort)
 - Schema changes — writes go to the same Atlas collections via existing Mongoose models / `crawler/utils/db.ts`
 - Full cutover of all banks (only after a "go" decision, as a follow-up issue)
 
@@ -89,7 +89,7 @@ None. Success shows up as BOC/NTB/Sampath offers returning to the grid.
 
 ## Notes
 - Issue #157 explicitly asks the spec to weigh this against #153 / spec 072 and recommend one or a hybrid — that recommendation is AC6's deliverable, not something to decide before the pilot data exists.
-- ZenRows quota exhaustion (#159–#174, spec 075) strengthens the case: proxy fallback is no longer a dependable safety net.
+- Proxy quota exhaustion (#159–#174, spec 075) strengthens the case: proxy fallback is no longer a dependable safety net.
 - Pilot results table (to be filled during implementation):
 
 | Date | BOC (GH) | BOC (new host) | NTB (GH) | NTB (new host) |

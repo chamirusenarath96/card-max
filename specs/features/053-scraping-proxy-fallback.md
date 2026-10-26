@@ -23,11 +23,10 @@ People's Bank) keep using plain `fetchHtml()`/`fetchHtmlSessioned()` unchanged.
 ## Scope
 
 ### In Scope
-- A provider-agnostic interface (`ProxyProvider`) with two initial implementations:
-  ZenRows and WebScrapingAPI (both free-tier, recurring-monthly-credit providers)
+- A provider-agnostic interface (`ProxyProvider`) with an initial implementation:
+  WebScrapingAPI (a free-tier, recurring-monthly-credit provider)
 - Config-driven provider selection: which provider(s) are "configured" is derived
-  purely from which API-key env vars are set (`ZENROWS_API_KEY`,
-  `WEBSCRAPINGAPI_API_KEY`) — no code change needed to add/remove a provider from
+  purely from which API-key env vars are set (`WEBSCRAPINGAPI_API_KEY`) — no code change needed to add/remove a provider from
   rotation, only an env var
 - An optional explicit per-bank → provider mapping (`PROXY_BANK_MAP`, a JSON env
   var) for pinning a specific bank to a specific provider; banks not explicitly
@@ -52,7 +51,7 @@ People's Bank) keep using plain `fetchHtml()`/`fetchHtmlSessioned()` unchanged.
   `fetchHtmlWithProxyFallback()`
 
 ### Out of Scope
-- Any provider beyond ZenRows and WebScrapingAPI (ScraperAPI, Scrapfly,
+- Any provider beyond WebScrapingAPI (ScraperAPI, Scrapfly,
   ScrapingBee, self-hosted runner, bank IP-allowlisting outreach) — the
   abstraction must not preclude adding one later, but none of them ship in this
   spec
@@ -76,7 +75,6 @@ No new card-max API endpoints. This feature calls two **external** scraping-prox
 APIs directly from the affected scrapers:
 
 ```
-GET https://api.zenrows.com/v1/?apikey={ZENROWS_API_KEY}&url={encoded target url}&premium_proxy=true
 GET https://api.webscrapingapi.com/v2?api_key={WEBSCRAPINGAPI_API_KEY}&url={encoded target url}
 ```
 
@@ -90,30 +88,14 @@ non-2xx status on failure (bad key, quota exhausted, provider itself blocked).
 `crawler/utils/proxyProviders/types.ts`:
 ```typescript
 export interface ProxyProvider {
-  name: "zenrows" | "webscrapingapi";
+  name: "webscrapingapi";
   fetchHtml(url: string): Promise<string>;
 }
 ```
 
-`crawler/utils/proxyProviders/zenrows.ts`:
-```typescript
-export function createZenRowsProvider(apiKey: string): ProxyProvider {
-  return {
-    name: "zenrows",
-    async fetchHtml(url) {
-      const endpoint = `https://api.zenrows.com/v1/?apikey=${apiKey}&url=${encodeURIComponent(url)}&premium_proxy=true`;
-      const response = await fetch(endpoint);
-      if (!response.ok) {
-        throw new Error(`ZenRows HTTP ${response.status} fetching ${url}`);
-      }
-      return response.text();
-    },
-  };
-}
-```
-
-`crawler/utils/proxyProviders/webscrapingapi.ts` follows the identical shape
-against WebScrapingAPI's endpoint.
+`crawler/utils/proxyProviders/webscrapingapi.ts` builds the WebScrapingAPI
+request URL from the API key and the URL-encoded target URL, and rejects on a
+non-2xx response.
 
 ### 2 — Provider registry + selection (pure, unit-testable)
 
@@ -121,7 +103,6 @@ against WebScrapingAPI's endpoint.
 ```typescript
 export function getConfiguredProviders(env: NodeJS.ProcessEnv = process.env): ProxyProvider[] {
   const providers: ProxyProvider[] = [];
-  if (env.ZENROWS_API_KEY) providers.push(createZenRowsProvider(env.ZENROWS_API_KEY));
   if (env.WEBSCRAPINGAPI_API_KEY) providers.push(createWebScrapingApiProvider(env.WEBSCRAPINGAPI_API_KEY));
   return providers;
 }
@@ -223,7 +204,6 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
 
 ### Files to modify
 - `crawler/utils/proxyProviders/types.ts` — new: `ProxyProvider` interface
-- `crawler/utils/proxyProviders/zenrows.ts` — new: `createZenRowsProvider()`
 - `crawler/utils/proxyProviders/webscrapingapi.ts` — new: `createWebScrapingApiProvider()`
 - `crawler/utils/proxyProviders/registry.ts` — new: `getConfiguredProviders()`, `getBankProviderMap()`, `selectProviderForBank()`
 - `crawler/utils/proxyProviders/registry.test.ts` — new
@@ -235,12 +215,12 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
 - `crawler/scrapers/boc.test.ts` — add proxy-fallback cases
 - `crawler/scrapers/ntb.ts` — wire listing + campaign fetches inside `scrapeViaHttp()`
 - `crawler/scrapers/ntb.test.ts` — add proxy-fallback cases
-- `.github/workflows/crawler.yml` — add `ZENROWS_API_KEY`, `WEBSCRAPINGAPI_API_KEY`, `PROXY_BANK_MAP` (all optional) to the "Run crawler" step's `env:` block, sourced from repo secrets
-- `.env.example` — document the three new optional env vars
+- `.github/workflows/crawler.yml` — add `WEBSCRAPINGAPI_API_KEY`, `PROXY_BANK_MAP` (both optional) to the "Run crawler" step's `env:` block, sourced from repo secrets
+- `.env.example` — document the two new optional env vars
 
 ## Acceptance Criteria
-- [ ] AC1: `getConfiguredProviders()` returns `[]` when neither `ZENROWS_API_KEY` nor `WEBSCRAPINGAPI_API_KEY` is set
-- [ ] AC2: `getConfiguredProviders()` returns a single provider named `"zenrows"` when only `ZENROWS_API_KEY` is set, and returns both (in a stable order) when both keys are set
+- [ ] AC1: `getConfiguredProviders()` returns `[]` when `WEBSCRAPINGAPI_API_KEY` is not set
+- [ ] AC2: `getConfiguredProviders()` returns a single provider named `"webscrapingapi"` when `WEBSCRAPINGAPI_API_KEY` is set
 - [ ] AC3: `selectProviderForBank()` returns `null` when `providers` is `[]`, regardless of `bankMap` contents
 - [ ] AC4: `selectProviderForBank()` returns the provider whose `name` matches `bankMap[bank]` when both an explicit mapping and multiple configured providers are present
 - [ ] AC5: `selectProviderForBank()` returns the same provider for the same `(bank, providers)` pair across repeated calls with no mapping (deterministic distribution, not random/stateful)
@@ -249,8 +229,7 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
 - [ ] AC8: `fetchHtmlWithProxyFallback()` calls the bank's selected provider's `fetchHtml()` and returns its result when the direct fetch rejects and a provider is configured for that bank
 - [ ] AC9: `fetchHtmlWithProxyFallback()` rejects (does not swallow) when the direct fetch rejects and no provider is configured for that bank
 - [ ] AC10: `fetchHtmlWithProxyFallback()` rejects with the provider's error when both the direct fetch and the selected provider's fetch reject
-- [ ] AC11: `createZenRowsProvider(key).fetchHtml(url)` issues a request containing both the API key and the URL-encoded target URL as query parameters, and rejects on a non-2xx response
-- [ ] AC12: `createWebScrapingApiProvider(key).fetchHtml(url)` — same shape as AC11 for WebScrapingAPI's endpoint
+- [ ] AC12: `createWebScrapingApiProvider(key).fetchHtml(url)` issues a request containing both the API key and the URL-encoded target URL as query parameters, and rejects on a non-2xx response
 - [ ] AC13: `combank.ts`'s `scrape()` still returns parsed offers when the listing-page direct fetch is mocked to reject but the (mocked, configured) proxy provider succeeds
 - [ ] AC14: `boc.ts`'s `scrape()` returns offers for a category whose direct fetch is mocked to reject but whose proxy fetch succeeds, and skips (logs, continues) a category where both are mocked to reject — identical to today's per-category skip behavior
 - [ ] AC15: `ntb.ts`'s `scrapeViaHttp()` retries via the assigned provider when the listing page is mocked to return a blocked (Incapsula) page, and returns the proxy-fetched offers when that retry succeeds
@@ -272,7 +251,6 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
 | Direct fetch rejects, provider configured → provider's result returned | unit (proxyFetch.test.ts) | AC8 |
 | Direct fetch rejects, no provider configured → rejects | unit (proxyFetch.test.ts) | AC9 |
 | Direct + provider both reject → rejects with provider's error | unit (proxyFetch.test.ts) | AC10 |
-| ZenRows provider builds correct query params; non-2xx rejects | unit (zenrows.test.ts) | AC11 |
 | WebScrapingAPI provider builds correct query params; non-2xx rejects | unit (webscrapingapi.test.ts) | AC12 |
 | ComBank listing 403 + mocked proxy success → offers still parsed | unit (combank.test.ts) | AC13 |
 | BOC one category proxy-recovers, another category fully fails and is skipped | unit (boc.test.ts) | AC14 |
@@ -286,7 +264,7 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
   `fetchHtmlWithProxyFallback` to the caller's existing catch; no special
   handling, no retry-the-retry
 - **`PROXY_BANK_MAP` maps a bank to a provider name that isn't actually
-  configured** (e.g. maps to `"webscrapingapi"` but only `ZENROWS_API_KEY` is
+  configured** (e.g. maps to `"webscrapingapi"` but `WEBSCRAPINGAPI_API_KEY` isn't
   set): `selectProviderForBank` finds no match in `providers`, falls through to
   the deterministic hash-based selection among whatever *is* configured, rather
   than returning `null`
@@ -295,7 +273,7 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
   `scrapeViaHttp()` run, matching the existing per-campaign try/catch
 - **Zero providers configured (fresh clone, no secrets set):** every affected
   scraper behaves exactly as it does today — this is the default state until
-  someone adds a `ZENROWS_API_KEY`/`WEBSCRAPINGAPI_API_KEY` secret, verified by
+  someone adds a `WEBSCRAPINGAPI_API_KEY` secret, verified by
   AC17
 - **Both providers configured, one bank explicitly mapped and two banks left to
   auto-distribute:** the two auto-distributed banks may or may not land on
@@ -313,8 +291,8 @@ The same pattern applies to the per-campaign-page fetch inside the loop.
   the issue (a single bank's thrown error currently fails the whole job's exit
   code), and is coordinated instead through
   `specs/features/052-crawler-failure-monitoring.md` / issue #102.
-- `ZENROWS_API_KEY`, `WEBSCRAPINGAPI_API_KEY`, and `PROXY_BANK_MAP` are all
-  **optional** — omitting all three is a fully supported, zero-behavior-change
+- `WEBSCRAPINGAPI_API_KEY` and `PROXY_BANK_MAP` are both
+  **optional** — omitting both is a fully supported, zero-behavior-change
   configuration (AC17), so this can ship and be code-reviewed before any actual
   provider account/API key is provisioned.
 - Deterministic hash-based distribution was chosen over stateful round-robin

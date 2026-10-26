@@ -108,7 +108,7 @@ describe("selectProviderForBank", () => {
   });
 
   it("falls through to deterministic hash-based selection among legacy-only providers when bankMap names a provider that isn't configured", () => {
-    const result = selectProviderForBank("commercial_bank", [webscrapingapi], { commercial_bank: "zenrows" });
+    const result = selectProviderForBank("commercial_bank", [webscrapingapi], { commercial_bank: "unconfigured-provider" });
     expect(result).toBe(webscrapingapi);
   });
 

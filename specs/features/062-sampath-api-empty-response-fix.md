@@ -42,7 +42,7 @@ No new UI. Sampath offers reappear in listing.
 ## Acceptance Criteria
 - [ ] AC1: When extractPromotionList returns empty, raw response (truncated to 2KB) is logged at warn level
 - [ ] AC2: extractPromotionList handles discovered third shape or blocking error body and returns promotions
-- [ ] AC3: If blocked by WAF, Sampath is routed through proxy-provider abstraction (zenrows/webscrapingapi) like combank/boc/ntb
+- [ ] AC3: If blocked by WAF, Sampath is routed through proxy-provider abstraction (webscrapingapi) like combank/boc/ntb
 - [ ] AC4: Regression test with fixture of corrected real shape passes
 - [ ] AC5: Existing shapes (bare array, {data:[]}) still parse correctly (no regression)
 
@@ -52,7 +52,7 @@ No new UI. Sampath offers reappear in listing.
 |------|------|----|
 | logs truncated raw body when extractPromotionList empty | unit | AC1 |
 | parses new third shape fixture into promotions | unit | AC2 |
-| proxies Sampath fetch via zenrows when configured | unit | AC3 |
+| proxies Sampath fetch via the configured proxy provider | unit | AC3 |
 | fixture of real corrected shape returns expected offers | unit | AC4 |
 | existing bare array shape still works | unit | AC5 |
 | existing {data:[]} shape still works | unit | AC5 |
