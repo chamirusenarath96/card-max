@@ -143,27 +143,45 @@ async function probeSampathSource(): Promise<void> {
     console.log(`bundle marker "${marker}" at ${i}${i >= 0 ? `: ${main.body.slice(i, i + 700)}` : ""}`);
   }
 
-  const cfgIdx = body.search(/browserBaseURL|baseURL:/);
-  console.log(`page runtime config baseURL at ${cfgIdx}${cfgIdx >= 0 ? `: ${body.slice(Math.max(0, cfgIdx - 200), cfgIdx + 400)}` : ""}`);
-  console.log(`__NUXT__ tail (1500 chars): ${body.slice(Math.max(0, body.lastIndexOf("</script>") - 1500), body.lastIndexOf("</script>"))}`);
-
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ userAgent: ua });
-    const calls: string[] = [];
+    const context = await browser.newContext({ userAgent: ua });
+    const page = await context.newPage();
+    let captured: { url: string; headers: Record<string, string> } | undefined;
+    page.on("request", async (req) => {
+      if (/\/api\/card-promotions$/.test(req.url()) && !captured) {
+        captured = { url: req.url(), headers: await req.allHeaders() };
+      }
+    });
     page.on("response", async (res) => {
-      const u = res.url();
-      if (!/promotion|catergor|categor|card-offer/i.test(u)) return;
-      const text = await res.text().catch(() => "<unreadable>");
-      calls.push(`${res.status()} ${u} -> ${text.slice(0, 400)}`);
+      if (/\/api\/card-promotions$/.test(res.url())) {
+        const j = (await res.json().catch(() => null)) as { data?: unknown[]; total?: number } | null;
+        console.log(`browser card-promotions: status=${res.status()} data=${j?.data?.length} total=${j?.total}`);
+      }
     });
     await page.goto("https://www.sampath.lk/sampath-cards/credit-card-offer", { waitUntil: "networkidle", timeout: 60000 });
-    await page.waitForTimeout(5000);
-    console.log(`browser API calls (${calls.length}):\n${calls.join("\n")}`);
-    const text = await page.evaluate(() => document.body.innerText);
-    const offIdx = text.search(/off|discount|savings/i);
-    console.log(`rendered text length=${text.length}; first offer-ish text: ${offIdx >= 0 ? text.slice(Math.max(0, offIdx - 300), offIdx + 600) : "none"}`);
+    await page.waitForTimeout(3000);
+    const cookies = await context.cookies();
+    console.log(`cookies (${cookies.length}): ${cookies.map((c) => `${c.name}=${c.value.slice(0, 40)} [${c.domain}]`).join("; ")}`);
+    if (!captured) { console.log("no card-promotions request captured"); return; }
+    const h = captured.headers;
+    console.log(`browser request headers: ${JSON.stringify(h)}`);
+
+    const variants: Record<string, Record<string, string>> = {
+      "all browser headers": h,
+      "all minus cookie": Object.fromEntries(Object.entries(h).filter(([k]) => k !== "cookie")),
+    };
+    for (const k of Object.keys(h)) {
+      if (k.startsWith(":")) continue;
+      variants[`only ${k}`] = { [k]: h[k]!, "user-agent": ua };
+    }
+    for (const [label, headers] of Object.entries(variants)) {
+      const clean = Object.fromEntries(Object.entries(headers).filter(([k]) => !k.startsWith(":")));
+      const r = await fetch(captured.url, { headers: clean });
+      const j = (await r.json().catch(() => null)) as { data?: unknown[]; total?: number } | null;
+      console.log(`replay [${label}]: status=${r.status} data=${j?.data?.length} total=${j?.total}`);
+    }
   } finally {
     await browser.close();
   }
