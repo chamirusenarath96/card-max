@@ -1,7 +1,9 @@
 import { dbConnect } from "@/lib/db/connect";
 import { OfferModel } from "@/lib/models/offer.model";
+import { CrawlerRunModel, type ICrawlerRun } from "@/lib/models/crawlerRun.model";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
 import { OffersTrendChart, type DailyPoint } from "./OffersTrendChart";
+import { latestBankResults, indexRunsByGithubId } from "./runStats";
 
 const REPO = "chamirusenarath96/card-max";
 const GH_HEADERS: HeadersInit = {
@@ -46,6 +48,18 @@ async function fetchCrawlerRuns(): Promise<CrawlerRun[]> {
   } catch {
     return [];
   }
+}
+
+async function fetchPersistedRuns(): Promise<ICrawlerRun[]> {
+  try {
+    return await CrawlerRunModel.find().sort({ startedAt: -1 }).limit(30).lean<ICrawlerRun[]>();
+  } catch {
+    return [];
+  }
+}
+
+function fmt(n: number | undefined) {
+  return n === undefined ? "—" : String(n);
 }
 
 interface RawDailyRow { date: string; bank: string; count: number }
@@ -105,10 +119,14 @@ function timeAgo(iso: string) {
 
 export default async function CrawlerPage() {
   await dbConnect();
-  const [crawlerRuns, dailyRows] = await Promise.all([
+  const [crawlerRuns, dailyRows, persistedRuns] = await Promise.all([
     fetchCrawlerRuns(),
     fetchDailyOfferCounts(),
+    fetchPersistedRuns(),
   ]);
+  const latestRun = persistedRuns[0] ?? null;
+  const bankResults = latestBankResults(latestRun, BANK_LABELS);
+  const persistedByGithubId = indexRunsByGithubId(persistedRuns);
 
   const chartData = buildChartData(dailyRows);
   const banksInData = ALL_BANKS.filter((b) =>
@@ -159,6 +177,60 @@ export default async function CrawlerPage() {
         <OffersTrendChart data={chartData} banks={banksInData} />
       </section>
 
+      {/* ── Latest run by bank (spec 082) ──────────────────────────── */}
+      <section data-testid="crawler-latest-run" className="mb-8 rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="font-semibold text-foreground">Latest Run by Bank</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {latestRun
+              ? `${latestRun.githubRunNumber ? `Run #${latestRun.githubRunNumber} · ` : ""}${timeAgo(new Date(latestRun.startedAt).toISOString())} · ${latestRun.totals.scraped} scraped`
+              : "No persisted runs yet — results appear after the next crawl."}
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="px-5 py-3 font-medium">Bank</th>
+                <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 text-right font-medium">Scraped</th>
+                <th className="hidden px-5 py-3 text-right font-medium sm:table-cell">New</th>
+                <th className="hidden px-5 py-3 text-right font-medium sm:table-cell">Updated</th>
+                <th className="hidden px-5 py-3 text-right font-medium sm:table-cell">Expired</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bankResults.map(({ bank, label, summary }) => (
+                <tr key={bank} data-testid={`crawler-bank-row-${bank}`} className="border-b border-border/50">
+                  <td className="px-5 py-3 text-foreground">{label}</td>
+                  <td className="px-5 py-3">
+                    {!summary ? (
+                      <span className="text-muted-foreground">{latestRun ? "not run" : "—"}</span>
+                    ) : summary.status === "error" ? (
+                      <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400" title={summary.error}>
+                        <XCircle className="h-3.5 w-3.5" /> error
+                      </span>
+                    ) : summary.scraped === 0 ? (
+                      <span className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-400">
+                        <Clock className="h-3.5 w-3.5" /> 0 offers
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                        <CheckCircle className="h-3.5 w-3.5" /> ok
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-right text-foreground">{fmt(summary?.scraped)}</td>
+                  <td className="hidden px-5 py-3 text-right text-muted-foreground sm:table-cell">{fmt(summary?.inserted)}</td>
+                  <td className="hidden px-5 py-3 text-right text-muted-foreground sm:table-cell">{fmt(summary?.updated)}</td>
+                  <td className="hidden px-5 py-3 text-right text-muted-foreground sm:table-cell">{fmt(summary?.expired)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* ── Run history table ───────────────────────────────────────── */}
       <section className="rounded-xl border border-border bg-card">
         <div className="border-b border-border px-5 py-4">
@@ -174,6 +246,7 @@ export default async function CrawlerPage() {
                   <th className="px-5 py-3 font-medium">#</th>
                   <th className="px-5 py-3 font-medium">Result</th>
                   <th className="hidden px-5 py-3 font-medium sm:table-cell">Duration</th>
+                  <th className="px-5 py-3 text-right font-medium">Scraped</th>
                   <th className="px-5 py-3 font-medium">When</th>
                 </tr>
               </thead>
@@ -202,6 +275,9 @@ export default async function CrawlerPage() {
                     </td>
                     <td className="hidden px-5 py-3 text-muted-foreground sm:table-cell">
                       {duration(run.created_at, run.updated_at)}
+                    </td>
+                    <td className="px-5 py-3 text-right text-muted-foreground">
+                      {fmt(persistedByGithubId.get(run.id)?.totals.scraped)}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
                       {timeAgo(run.created_at)}
