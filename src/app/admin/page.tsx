@@ -1,6 +1,7 @@
 import { dbConnect } from "@/lib/db/connect";
 import { FeedbackModel } from "@/lib/models/feedback.model";
 import { OfferModel } from "@/lib/models/offer.model";
+import { bankStatusPipeline } from "./bankStatus";
 import { CheckCircle, XCircle, Clock, MessageSquare, GitBranch, Rocket, Database, FlaskConical } from "lucide-react";
 import Link from "next/link";
 
@@ -156,10 +157,7 @@ async function fetchTestSuiteResults(): Promise<TestSuiteResult | null> {
 }
 
 async function fetchBankStatusMap(): Promise<BankStatusItem[]> {
-  const stats = await OfferModel.aggregate<BankStat>([
-    { $group: { _id: "$bank", lastScraped: { $max: "$scrapedAt" }, count: { $sum: 1 } } },
-    { $sort: { _id: 1 } },
-  ]);
+  const stats = await OfferModel.aggregate<BankStat>(bankStatusPipeline());
   const now = Date.now();
   return Object.entries(BANK_LABELS).map(([bankKey, label]) => {
     const stat = stats.find((s) => s._id === bankKey);
@@ -251,7 +249,7 @@ export default async function AdminOverviewPage() {
             <Database className="h-4 w-4 text-muted-foreground" />
             Bank Crawler Status
           </h2>
-          <Link href="/admin/ci" className="text-xs text-primary hover:underline">
+          <Link href="/admin/crawler" className="text-xs text-primary hover:underline">
             Crawler history →
           </Link>
         </div>
@@ -267,7 +265,7 @@ export default async function AdminOverviewPage() {
               <p className="mt-1 text-[10px] text-muted-foreground">
                 {stat ? timeAgo(new Date(stat.lastScraped).toISOString()) : "never"}
               </p>
-              <p className="text-[10px] text-muted-foreground">{stat?.count ?? 0} offers</p>
+              <p className="text-[10px] text-muted-foreground">{stat?.count ?? 0} active</p>
             </div>
           ))}
         </div>

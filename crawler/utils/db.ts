@@ -3,6 +3,8 @@
  */
 import mongoose from "mongoose";
 import { OfferModel } from "../../src/lib/models/offer.model";
+import { CrawlerRunModel } from "../../src/lib/models/crawlerRun.model";
+import type { ICrawlerRun, ICrawlerBankSummary, ICrawlerRunFailure } from "../../src/lib/models/crawlerRun.model";
 import type { OfferInput } from "../../specs/data/offer.schema";
 
 export async function connectDb(uri: string): Promise<void> {
@@ -151,4 +153,58 @@ export async function getActiveOfferCountsByBank(): Promise<Record<string, numbe
     { $group: { _id: "$bank", count: { $sum: 1 } } },
   ]);
   return Object.fromEntries(rows.map((r) => [r._id, r.count]));
+}
+
+export interface CrawlerRunInput {
+  startedAt: Date;
+  finishedAt: Date;
+  summaries: ICrawlerBankSummary[];
+  failures: ICrawlerRunFailure[];
+  env?: NodeJS.ProcessEnv;
+}
+
+function envNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Shape one crawler run into a `CrawlerRun` document (spec 082 AC1). */
+export function buildCrawlerRunRecord({
+  startedAt,
+  finishedAt,
+  summaries,
+  failures,
+  env = process.env,
+}: CrawlerRunInput): ICrawlerRun {
+  const sum = (key: "scraped" | "inserted" | "updated" | "expired") =>
+    summaries.reduce((s, r) => s + (r[key] ?? 0), 0);
+  return {
+    githubRunId: envNumber(env.GITHUB_RUN_ID),
+    githubRunNumber: envNumber(env.GITHUB_RUN_NUMBER),
+    startedAt,
+    finishedAt,
+    summaries,
+    failures,
+    totals: {
+      scraped: sum("scraped"),
+      inserted: sum("inserted"),
+      updated: sum("updated"),
+      expired: sum("expired"),
+      errors: summaries.filter((r) => r.status === "error").length,
+    },
+  };
+}
+
+/**
+ * Persist the run's per-bank results for the admin dashboard (spec 082).
+ * Advisory — logs and swallows any error so it never affects the exit code (AC2).
+ */
+export async function saveCrawlerRun(input: CrawlerRunInput): Promise<void> {
+  try {
+    await CrawlerRunModel.create(buildCrawlerRunRecord(input));
+    console.log("[db] Saved crawler run record");
+  } catch (err) {
+    console.warn("[db] Failed to save crawler run record:", err instanceof Error ? err.message : err);
+  }
 }

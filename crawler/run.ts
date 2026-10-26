@@ -9,7 +9,7 @@ import fs from "node:fs";
 // Load .env.local first (Next.js convention for local secrets), fall back to .env
 dotenv.config({ path: ".env.local" });
 dotenv.config();
-import { connectDb, disconnectDb, upsertOffers, expireStaleOffers, getActiveOfferCountsByBank } from "./utils/db";
+import { connectDb, disconnectDb, upsertOffers, expireStaleOffers, getActiveOfferCountsByBank, saveCrawlerRun } from "./utils/db";
 import { detectFailures, reportFailures } from "./utils/failureAlerts";
 import type { RunSummary } from "./utils/failureAlerts";
 import * as combank from "./scrapers/combank";
@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const startedAt = new Date();
   await connectDb(mongoUri);
   const previousActiveCounts = await getActiveOfferCountsByBank();
 
@@ -105,6 +106,9 @@ async function main(): Promise<void> {
   try {
     fs.writeFileSync("./crawler-summary.json", JSON.stringify({ summaries, failures }, null, 2));
   } catch {}
+
+  // Persist per-bank results for the admin dashboard (spec 082) — never throws
+  await saveCrawlerRun({ startedAt, finishedAt: new Date(), summaries, failures });
 
   await disconnectDb();
 

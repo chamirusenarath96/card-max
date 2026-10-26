@@ -5,7 +5,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OfferInput } from "../../specs/data/offer.schema";
 
-const { mockFindOneAndUpdate, mockUpdateMany, mockFindOne, mockAggregate } = vi.hoisted(() => ({
+const { mockFindOneAndUpdate, mockUpdateMany, mockFindOne, mockAggregate, mockCreateRun } = vi.hoisted(() => ({
+  mockCreateRun: vi.fn(),
   mockFindOneAndUpdate: vi.fn(),
   mockUpdateMany: vi.fn(),
   mockFindOne: vi.fn(),
@@ -21,6 +22,10 @@ vi.mock("../../src/lib/models/offer.model", () => ({
   },
 }));
 
+vi.mock("../../src/lib/models/crawlerRun.model", () => ({
+  CrawlerRunModel: { create: mockCreateRun },
+}));
+
 // mongoose mock is needed so db.ts can import it without errors
 vi.mock("mongoose", () => ({
   default: {
@@ -30,7 +35,7 @@ vi.mock("mongoose", () => ({
   },
 }));
 
-import { upsertOffers, expireStaleOffers, getActiveOfferCountsByBank } from "./db";
+import { upsertOffers, expireStaleOffers, getActiveOfferCountsByBank, buildCrawlerRunRecord, saveCrawlerRun } from "./db";
 
 const MOCK_OFFER: OfferInput = {
   bank: "sampath_bank",
@@ -235,5 +240,53 @@ describe("getActiveOfferCountsByBank", () => {
     const counts = await getActiveOfferCountsByBank();
 
     expect(counts).toEqual({});
+  });
+});
+
+describe("crawler run history (spec 082)", () => {
+  const startedAt = new Date("2026-10-26T20:30:00Z");
+  const finishedAt = new Date("2026-10-26T20:35:00Z");
+  const summaries = [
+    { bank: "sampath_bank", status: "success" as const, scraped: 133, inserted: 5, updated: 128, expired: 2, durationMs: 1000 },
+    { bank: "hnb", status: "success" as const, scraped: 18, inserted: 0, updated: 18, expired: 0, durationMs: 500 },
+    { bank: "commercial_bank", status: "error" as const, error: "boom", durationMs: 10 },
+  ];
+  const failures = [{ bank: "commercial_bank", kind: "error", detail: "boom" }];
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("buildCrawlerRunRecord reads GitHub run id/number and sums totals (TC1)", () => {
+    const rec = buildCrawlerRunRecord({
+      startedAt, finishedAt, summaries, failures,
+      env: { GITHUB_RUN_ID: "40294448079", GITHUB_RUN_NUMBER: "214" } as unknown as NodeJS.ProcessEnv,
+    });
+    expect(rec.githubRunId).toBe(40294448079);
+    expect(rec.githubRunNumber).toBe(214);
+    expect(rec.totals).toEqual({ scraped: 151, inserted: 5, updated: 146, expired: 2, errors: 1 });
+    expect(rec.summaries).toHaveLength(3);
+    expect(rec.failures).toEqual(failures);
+  });
+
+  it("buildCrawlerRunRecord leaves run id/number undefined outside GitHub Actions (TC2)", () => {
+    const rec = buildCrawlerRunRecord({ startedAt, finishedAt, summaries: [], failures: [], env: {} as unknown as NodeJS.ProcessEnv });
+    expect(rec.githubRunId).toBeUndefined();
+    expect(rec.githubRunNumber).toBeUndefined();
+    expect(rec.totals.scraped).toBe(0);
+  });
+
+  it("saveCrawlerRun writes one CrawlerRun document", async () => {
+    mockCreateRun.mockResolvedValue({});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await saveCrawlerRun({ startedAt, finishedAt, summaries, failures });
+    expect(mockCreateRun).toHaveBeenCalledTimes(1);
+    expect(mockCreateRun.mock.calls[0]![0].totals.scraped).toBe(151);
+  });
+
+  it("saveCrawlerRun swallows DB errors and logs a warning (TC3, AC2)", async () => {
+    mockCreateRun.mockRejectedValue(new Error("db down"));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(saveCrawlerRun({ startedAt, finishedAt, summaries, failures })).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to save crawler run"), "db down");
+    warnSpy.mockRestore();
   });
 });

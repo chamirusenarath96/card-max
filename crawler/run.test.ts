@@ -42,6 +42,7 @@ describe("crawler run pipeline", () => {
       upsertOffers: upsertMock,
       expireStaleOffers: expireMock,
       getActiveOfferCountsByBank: vi.fn().mockResolvedValue({}),
+      saveCrawlerRun: vi.fn().mockResolvedValue(undefined),
     }));
 
     vi.doMock("./scrapers/combank", () => ({
@@ -122,6 +123,7 @@ describe("crawler run pipeline", () => {
       upsertOffers: vi.fn().mockResolvedValue({ inserted: 1, updated: 0, skipped: 0 }),
       expireStaleOffers: vi.fn().mockResolvedValue(0),
       getActiveOfferCountsByBank: vi.fn().mockResolvedValue({}),
+      saveCrawlerRun: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock("./scrapers/combank", () => ({
       scrape: vi.fn().mockResolvedValue([]),
@@ -175,6 +177,7 @@ describe("crawler run pipeline", () => {
       upsertOffers: vi.fn().mockResolvedValue({ inserted: 0, updated: 0, skipped: 0 }),
       expireStaleOffers: vi.fn().mockResolvedValue(0),
       getActiveOfferCountsByBank: vi.fn().mockResolvedValue({ sampath_bank: 12 }),
+      saveCrawlerRun: vi.fn().mockResolvedValue(undefined),
     }));
     vi.doMock("./utils/failureAlerts", async () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -195,5 +198,40 @@ describe("crawler run pipeline", () => {
 
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("sampath_bank scraped 0"));
+  });
+  it("persists the run's per-bank summaries before disconnecting (spec 082 AC1)", async () => {
+    process.env.MONGODB_URI = "mongodb://localhost:27017/test";
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const order: string[] = [];
+    const saveMock = vi.fn().mockImplementation(async () => { order.push("save"); });
+    const disconnectMock = vi.fn().mockImplementation(async () => { order.push("disconnect"); });
+
+    vi.doMock("dotenv", () => ({ default: { config: vi.fn() }, config: vi.fn() }));
+    vi.doMock("./utils/db", () => ({
+      connectDb: vi.fn().mockResolvedValue(undefined),
+      disconnectDb: disconnectMock,
+      upsertOffers: vi.fn().mockResolvedValue({ inserted: 0, updated: 0, skipped: 0 }),
+      expireStaleOffers: vi.fn().mockResolvedValue(0),
+      getActiveOfferCountsByBank: vi.fn().mockResolvedValue({}),
+      saveCrawlerRun: saveMock,
+    }));
+    for (const mod of ["combank", "sampath", "hnb", "ntb", "amex", "peoples_bank", "boc"]) {
+      vi.doMock(`./scrapers/${mod}`, () => ({ scrape: vi.fn().mockResolvedValue([]) }));
+    }
+
+    await import("./run");
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled(), { timeout: 5000 });
+
+    expect(saveMock).toHaveBeenCalledTimes(1);
+    const arg = saveMock.mock.calls[0]![0] as { summaries: unknown[]; startedAt: Date; finishedAt: Date };
+    expect(arg.summaries).toHaveLength(7);
+    expect(arg.startedAt).toBeInstanceOf(Date);
+    expect(arg.finishedAt.getTime()).toBeGreaterThanOrEqual(arg.startedAt.getTime());
+    expect(order).toEqual(["save", "disconnect"]);
   });
 });
