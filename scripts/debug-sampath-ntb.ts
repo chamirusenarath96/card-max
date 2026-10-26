@@ -137,6 +137,32 @@ async function probeSampathSource(): Promise<void> {
     console.log(`field "${field}": ${count} occurrences${idx >= 0 ? `; first context: ${body.slice(Math.max(0, idx - 400), idx + 800)}` : ""}`);
   }
 
+  const main = await rawFetch("https://www.sampath.lk/_nuxt/c3cb5cf.js", { Accept: "*/*", "User-Agent": ua });
+  for (const marker of ["getCategory:", "getcardofferslider:", "getcardPromoById:", "baseURL"]) {
+    const i = main.body.indexOf(marker);
+    console.log(`bundle marker "${marker}" at ${i}${i >= 0 ? `: ${main.body.slice(i, i + 700)}` : ""}`);
+  }
+
+  const categories = ["hotels", "super_markets", "online", "shopping", "health_and_insurance", "travel_and_leisure", "furniture", "dining", "fuel", "education", "electronics_and_furniture"];
+  for (const cat of categories) {
+    const url = `https://www.sampath.lk/api/card-promotions?category=${cat}&page_number=1&size=200`;
+    try {
+      const { status, body: json } = await rawFetch(url, { Accept: "application/json", Referer: "https://www.sampath.lk/sampath-cards/credit-card-offer", "User-Agent": ua });
+      let summary = json.slice(0, 200);
+      try {
+        const parsed = JSON.parse(json) as { data?: Record<string, unknown>[]; total?: number };
+        const first = parsed.data?.[0];
+        const enabled = parsed.data?.filter((d) => d["enable"] === true).length;
+        summary = `total=${parsed.total} returned=${parsed.data?.length} enabled=${enabled} firstKeys=${first ? Object.keys(first).join(",") : "-"}`;
+        if (cat === "hotels" && first) console.log(`hotels first item: ${JSON.stringify(first).slice(0, 1500)}`);
+      } catch { /* non-JSON */ }
+      console.log(`category=${cat}: status=${status} ${summary}`);
+    } catch (err) {
+      console.log(`category=${cat}: FAILED ${(err as Error).message}`);
+    }
+  }
+  return;
+
   const bundles = [...new Set([...body.matchAll(/["'](\/_nuxt\/[A-Za-z0-9_.-]+\.js)["']/g)].map((m) => m[1]!))];
   console.log(`Nuxt bundles: ${bundles.length}`);
   for (const b of bundles) {
