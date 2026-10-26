@@ -11,6 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
       - name: Probe Sampath + NTB
         run: npx tsx scripts/debug-sampath-ntb.ts --sampath-source
         env:

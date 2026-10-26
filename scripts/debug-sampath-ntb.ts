@@ -143,23 +143,29 @@ async function probeSampathSource(): Promise<void> {
     console.log(`bundle marker "${marker}" at ${i}${i >= 0 ? `: ${main.body.slice(i, i + 700)}` : ""}`);
   }
 
-  const cats = await rawFetch("https://www.sampath.lk/api/offer-catergories", { Accept: "application/json", "User-Agent": ua });
-  console.log(`offer-catergories: status=${cats.status} body=${cats.body.slice(0, 2500)}`);
+  const cfgIdx = body.search(/browserBaseURL|baseURL:/);
+  console.log(`page runtime config baseURL at ${cfgIdx}${cfgIdx >= 0 ? `: ${body.slice(Math.max(0, cfgIdx - 200), cfgIdx + 400)}` : ""}`);
+  console.log(`__NUXT__ tail (1500 chars): ${body.slice(Math.max(0, body.lastIndexOf("</script>") - 1500), body.lastIndexOf("</script>"))}`);
 
-  for (const size of [4, 8, 10, 20, 24, 25, 50, 100]) {
-    const url = `https://www.sampath.lk/api/card-promotions?category=dining&page_number=1&size=${size}`;
-    const { status, body: json } = await rawFetch(url, { Accept: "application/json", Referer: "https://www.sampath.lk/sampath-cards/credit-card-offer", "User-Agent": ua });
-    try {
-      const parsed = JSON.parse(json) as { data?: Record<string, unknown>[]; total?: number };
-      console.log(`dining size=${size}: status=${status} total=${parsed.total} returned=${parsed.data?.length} keys=${parsed.data?.[0] ? Object.keys(parsed.data[0]).join(",") : "-"}`);
-      if (size === 8 && parsed.data?.[0]) console.log(`dining first item: ${JSON.stringify(parsed.data[0]).slice(0, 2000)}`);
-    } catch {
-      console.log(`dining size=${size}: status=${status} non-JSON ${json.slice(0, 200)}`);
-    }
-  }
-  for (const page of [2, 6]) {
-    const { body: json } = await rawFetch(`https://www.sampath.lk/api/card-promotions?category=dining&page_number=${page}&size=8`, { Accept: "application/json", "User-Agent": ua });
-    console.log(`dining page=${page} size=8: ${json.slice(0, 300)}`);
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ userAgent: ua });
+    const calls: string[] = [];
+    page.on("response", async (res) => {
+      const u = res.url();
+      if (!/promotion|catergor|categor|card-offer/i.test(u)) return;
+      const text = await res.text().catch(() => "<unreadable>");
+      calls.push(`${res.status()} ${u} -> ${text.slice(0, 400)}`);
+    });
+    await page.goto("https://www.sampath.lk/sampath-cards/credit-card-offer", { waitUntil: "networkidle", timeout: 60000 });
+    await page.waitForTimeout(5000);
+    console.log(`browser API calls (${calls.length}):\n${calls.join("\n")}`);
+    const text = await page.evaluate(() => document.body.innerText);
+    const offIdx = text.search(/off|discount|savings/i);
+    console.log(`rendered text length=${text.length}; first offer-ish text: ${offIdx >= 0 ? text.slice(Math.max(0, offIdx - 300), offIdx + 600) : "none"}`);
+  } finally {
+    await browser.close();
   }
   return;
 
