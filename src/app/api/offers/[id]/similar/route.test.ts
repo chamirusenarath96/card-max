@@ -113,11 +113,16 @@ describe("GET /api/offers/[id]/similar", () => {
   it("applies a validity-window overlap filter when the source has validity dates", async () => {
     await GET(makeRequest(SOURCE_ID), makeParams(SOURCE_ID));
     const filterArg = mockFind.mock.calls[0]![0] as Record<string, unknown>;
-    expect(filterArg.validFrom).toEqual({ $lte: new Date("2026-12-31") });
-    expect(filterArg.$or).toEqual([
-      { validUntil: { $gte: new Date("2026-01-01") } },
-      { validUntil: { $exists: false } },
+    expect(filterArg.$and).toEqual([
+      { $or: [{ validFrom: { $lte: new Date("2026-12-31") } }, { validFrom: null }] },
+      { $or: [{ validUntil: { $gte: new Date("2026-01-01") } }, { validUntil: { $exists: false } }] },
     ]);
+  });
+
+  it("keeps candidate offers that have no validFrom (only an end date)", async () => {
+    await GET(makeRequest(SOURCE_ID), makeParams(SOURCE_ID));
+    const filterArg = mockFind.mock.calls[0]![0] as { $and: { $or: unknown[] }[] };
+    expect(filterArg.$and[0]!.$or).toContainEqual({ validFrom: null });
   });
 
   it("serialises _id and date fields", async () => {
@@ -135,8 +140,7 @@ describe("GET /api/offers/[id]/similar", () => {
     );
     await GET(makeRequest(SOURCE_ID), makeParams(SOURCE_ID));
     const filterArg = mockFind.mock.calls[0]![0] as Record<string, unknown>;
-    expect(filterArg).not.toHaveProperty("validFrom");
-    expect(filterArg).not.toHaveProperty("$or");
+    expect(filterArg).not.toHaveProperty("$and");
     expect(filterArg).toEqual({ _id: { $ne: SOURCE_ID }, category: "dining", isExpired: false });
   });
 

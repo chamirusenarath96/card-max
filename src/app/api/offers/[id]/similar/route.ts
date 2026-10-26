@@ -58,10 +58,10 @@ export async function GET(
     // Overlap-window pattern mirrors activeFrom/activeTo in /api/offers/route.ts.
     // Falls back to category-only matching when the source offer has no validity dates.
     if (source.validFrom || source.validUntil) {
-      filter.validFrom = { $lte: source.validUntil ?? new Date(8640000000000000) };
-      filter.$or = [
-        { validUntil: { $gte: source.validFrom ?? new Date(0) } },
-        { validUntil: { $exists: false } },
+      // A candidate with no validFrom/validUntil is treated as open-ended on that side.
+      filter.$and = [
+        { $or: [{ validFrom: { $lte: source.validUntil ?? new Date(8640000000000000) } }, { validFrom: null }] },
+        { $or: [{ validUntil: { $gte: source.validFrom ?? new Date(0) } }, { validUntil: { $exists: false } }] },
       ];
     }
 
