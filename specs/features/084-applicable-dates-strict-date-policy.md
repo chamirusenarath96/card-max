@@ -58,8 +58,8 @@ Actions), so stored dates are UTC midnight of the calendar day.
 The DB was **not** sampled for this spec: `MONGODB_URI` is not available in the spec-writer
 environment, so there are no per-bank counts of offers missing `validFrom`/`validUntil` or of offers
 whose text mentions weekdays. The only known figure is from #191: 81 offers had no `validFrom`.
-**Before choosing the fallback rule (Open Questions), the reviewer should run the read-only count
-script in Notes against production.** The migration's `--dry-run` (AC14) prints the same counts.
+The read-only count script in Notes, or the migration's `--dry-run` (AC14), gives these counts
+before the backfill writes anything.
 
 ## Scope
 
@@ -75,8 +75,8 @@ script in Notes against production.** The migration's `--dry-run` (AC14) prints 
 - **B. Strict date policy:**
   - `validFrom` and `validUntil` required in `OfferSchema`/`OfferInputSchema` and the Mongoose model.
     Scrapers return a new `ScrapedOffer` type with optional dates.
-  - Documented fallback order: listing/API → detail-page text → fallback rule (see Open Questions).
-  - Per-bank `datesInferred` / `skippedNoDates` / `weekdayRules` counts in `RunSummary` and the
+  - Documented fallback order: listing/API → detail-page text → fallback rule (see Decisions: infer, rolling 7 days).
+  - Per-bank `datesInferred` / `datesFromText` / `skippedInvalid` / `weekdayRules` counts in `RunSummary` and the
     `CrawlerRun` record (spec 082), shown on `/admin/crawler`.
   - Migration `scripts/migrate-084-offer-dates.ts` (via `/run-migration`) that backfills existing
     documents.
@@ -135,10 +135,10 @@ export type ScrapedOffer = z.infer<typeof ScrapedOfferSchema>;
   ```ts
   datesInferred?: { validFrom: number; validUntil: number };
   datesFromText?: number;      // offers where a missing date was found by parseDateRange
-  skippedNoDates?: number;     // only non-zero under fallback option B
+  skippedInvalid?: number;     // failed OfferInputSchema after normalisation (step 6); never a missing date
   weekdayRules?: number;       // offers stored with applicableWeekdays
   ```
-  `ICrawlerRunTotals` gains `datesInferred` (both fields summed into one number) and `skippedNoDates`.
+  `ICrawlerRunTotals` gains `datesInferred` (both fields summed into one number) and `skippedInvalid`.
 
 ## API Contract
 
@@ -186,8 +186,9 @@ is pure (no I/O). For each offer:
 2. **Detail/text dates.** For each date still missing, run `parseDateRange` over
    `description`, then `title`. After spec 083 the description holds the detail-page terms. A text
    result only fills a missing field and never overwrites a scraper date. Counted in `datesFromText`.
-3. **Fallback rule** for anything still missing: see Open Questions. Inferred values set
-   `validFromInferred`/`validUntilInferred: true`.
+3. **Fallback rule** for anything still missing (see Decisions): `validFrom` = first-seen date,
+   `validUntil` = `scrapedAt + 7 days`, recomputed on every crawl. Inferred values set
+   `validFromInferred`/`validUntilInferred: true`. No offer is rejected for missing dates.
 4. **Weekday rule.** `parseWeekdayRule(title + " " + description)`. The `merchant` field is never
    scanned. If a rule is found, set `applicableWeekdays`.
 5. **Expansion.** `resolveApplicableDates` expands the weekdays over the offer's range, narrowed by
@@ -195,7 +196,7 @@ is pure (no I/O). For each offer:
    `min(validUntil, now + 365 days)`. Because the crawler runs daily, the window rolls forward.
    If the expansion is empty (e.g. "every Sunday" over a Mon–Fri range), drop the weekday rule and
    log a warning rather than storing an offer that never matches.
-6. Validate with `OfferInputSchema.safeParse`. A failure is counted as skipped and logged, never thrown.
+6. Validate with `OfferInputSchema.safeParse`. A failure is counted in `skippedInvalid` and logged, never thrown.
 
 ### `parseDateRange(text, { now })` → `{ validFrom?: Date; validUntil?: Date }`
 | Pattern | Example | Result |
@@ -243,7 +244,7 @@ abbreviations, case-insensitive. A bare "August 2026" without one of the month-o
     `[1,2,3,4]` → "Mon–Thu"; `[0,5,6]` → "Fri–Sun" (contiguous runs are detected across the Sat→Sun wrap); `[1,3]` → "Mon & Wed"; `[1,3,5]` → "Mon, Wed & Fri".
   - Combined with the validity text: "Every Tuesday · until 31 Oct", "Weekends · 1–21 Aug 2026".
   - `data-testid="offer-weekday-rule"` on cards, `data-testid="offer-detail-weekday-rule"` on the detail page.
-- `validUntilInferred: true` (fallback option A only): show "Ongoing" instead of a date, and no
+- `validUntilInferred: true`: show "Ongoing" instead of a date, and no
   "Expires in N days" badge (`getExpiryInfo` returns `null`). The inferred date is a crawler
   heartbeat, not a bank promise. `validFromInferred: true`: omit the start date ("Until 31 Oct",
   as today).
@@ -273,24 +274,24 @@ abbreviations, case-insensitive. A bare "August 2026" without one of the month-o
 **B. Strict date policy**
 - [ ] AC9: `OfferSchema`, `OfferInputSchema` and the Mongoose model require `validFrom` and
       `validUntil`. Every scraper's `scrape()` returns `ScrapedOffer[]`.
-- [ ] AC10: Fallback order is listing/API → text (`parseDateRange`) → the fallback rule chosen in
-      Open Questions. No offer reaches `upsertOffers` without both dates.
-- [ ] AC11: Inferred dates set `validFromInferred` / `validUntilInferred: true`. (Option A only:)
-      an inferred `validFrom` is the first-seen date and is not moved by later crawls, and an inferred
-      `validUntil` is re-computed as `scrapedAt + N days` on every crawl that still lists the offer.
+- [ ] AC10: Fallback order is listing/API → text (`parseDateRange`) → the fallback rule (first-seen /
+      `scrapedAt + 7 days`). No offer is rejected for a missing date, and no offer reaches `upsertOffers` without both dates.
+- [ ] AC11: Inferred dates set `validFromInferred` / `validUntilInferred: true`.
+      An inferred `validFrom` is the first-seen date and is not moved by later crawls, and an inferred
+      `validUntil` is re-computed as `scrapedAt + 7 days` on every crawl that still lists the offer.
 - [ ] AC12: Each bank's `RunSummary` and the persisted `CrawlerRun.summaries[]` contain
-      `datesInferred.{validFrom,validUntil}`, `datesFromText`, `skippedNoDates` and `weekdayRules`.
-      `CrawlerRun.totals` sums `datesInferred` and `skippedNoDates`.
+      `datesInferred.{validFrom,validUntil}`, `datesFromText`, `skippedInvalid` and `weekdayRules`.
+      `CrawlerRun.totals` sums `datesInferred` and `skippedInvalid`.
 - [ ] AC13: `/admin/crawler`'s "Latest run by bank" table shows "Dates inferred" and
-      "Skipped (no dates)" columns, with "—" for runs recorded before this spec.
+      "Skipped (invalid)" columns, with "—" for runs recorded before this spec.
 - [ ] AC14: `scripts/migrate-084-offer-dates.ts` (idempotent, supports `--dry-run`, which prints
       per-bank counts without writing) runs `normalizeOfferDates` logic over every stored offer. It
-      fills missing dates from text first, then from the fallback rule, using `createdAt` as first-seen
-      and `updatedAt` as last-seen. It also sets `applicableWeekdays`/`applicableDates`. After it runs,
+      fills missing dates from text first, then from the fallback rule: `validFrom = createdAt`
+      (first-seen); `validUntil = now + 7 days` for active offers and `updatedAt` (last-seen) for
+      `isExpired: true` offers. It also sets `applicableWeekdays`/`applicableDates`. After it runs,
       `countDocuments({ $or: [{ validFrom: null }, { validUntil: null }] })` is 0.
-- [ ] AC15: Offer-identity expiry (`expireStaleOffers`) uses the accepted offers. A bank whose
-      offers were all rejected (option B) is reported as a failure (`kind: "all_rejected_no_dates"`)
-      instead of silently expiring everything.
+- [ ] AC15: Offer-identity expiry (`expireStaleOffers`) and zero-offer detection keep using the
+      scraped offer list, so `skippedInvalid` offers never cause mass expiry.
 
 **C. App usage**
 - [ ] AC16: `GET /api/offers?activeOn=D` returns an offer with `applicableDates` only when D is one
@@ -304,7 +305,7 @@ abbreviations, case-insensitive. A bare "August 2026" without one of the month-o
       new filter semantics.
 - [ ] AC20: Offer cards and the detail page show the weekday rule ("Every Tuesday · until 31 Oct")
       when `applicableWeekdays` is set, and nothing extra when it isn't.
-- [ ] AC21: (Option A only) an inferred `validUntil` shows as "Ongoing" with no expiry badge.
+- [ ] AC21: An inferred `validUntil` shows as "Ongoing" with no expiry badge.
 
 ## Test Cases
 
@@ -342,13 +343,13 @@ abbreviations, case-insensitive. A bare "August 2026" without one of the month-o
 | normalizeOfferDates: `validUntil < validFrom` drops validFrom and warns | unit | AC6 |
 | normalizeOfferDates: "every Tuesday", 1–31 Oct 2026 → weekdays [2] + 4 Tuesdays | unit | AC7 |
 | normalizeOfferDates: weekday rule with empty expansion is dropped with a warning | unit | AC7 |
-| normalizeOfferDates: no date anywhere → fallback rule applied (A) / rejected (B), flags + stats set | unit | AC10, AC11 |
-| normalizeOfferDates: stats count datesFromText / datesInferred / skippedNoDates / weekdayRules | unit | AC12 |
+| normalizeOfferDates: no date anywhere → validFrom = first-seen, validUntil = scrapedAt + 7 days, both flagged, stats set | unit | AC10, AC11 |
+| normalizeOfferDates: stats count datesFromText / datesInferred / skippedInvalid / weekdayRules | unit | AC12 |
 | run.ts calls normalizeOfferDates before upsertOffers for each bank and puts stats in the summary | unit (`crawler/run.test.ts`) | AC5, AC12 |
 | upsertOffers: inferred validFrom written via `$setOnInsert` only (first-seen kept on re-upsert) | unit (`crawler/utils/db.test.ts`) | AC11 |
 | upsertOffers: rolled inferred validUntil / re-expanded applicableDates don't trigger re-enrichment | unit (`crawler/utils/db.test.ts`) | AC8 |
-| buildCrawlerRunRecord: totals include datesInferred and skippedNoDates | unit (`crawler/utils/db.test.ts`) | AC12 |
-| detectFailures: all offers rejected for a bank → `all_rejected_no_dates` | unit (`crawler/utils/failureAlerts.test.ts`) | AC15 |
+| buildCrawlerRunRecord: totals include datesInferred and skippedInvalid | unit (`crawler/utils/db.test.ts`) | AC12 |
+| run.ts: a bank with `skippedInvalid` offers still passes the full scraped list to `expireStaleOffers` | unit (`crawler/run.test.ts`) | AC15 |
 | OfferSchema rejects an offer without validFrom/validUntil; ScrapedOfferSchema accepts it | unit (new `specs/data/offer.schema.test.ts`) | AC9 |
 | Each scraper's existing fixture tests still pass with the `ScrapedOffer` return type | unit (`crawler/scrapers/*.test.ts`) | AC9 |
 | Migration dry-run reports per-bank counts and writes nothing; real run backfills and is idempotent | unit, mocked models (`scripts/migrate-084-offer-dates.test.ts`) — `// TODO: integration test needs real DB` | AC14 |
@@ -362,7 +363,7 @@ abbreviations, case-insensitive. A bare "August 2026" without one of the month-o
 | Offer cards render `offer-weekday-rule` with "Every Tuesday · until 31 Oct"; absent without weekdays | component (`src/components/cards/OfferCard.test.tsx`) | AC20 |
 | OfferDetailView renders `offer-detail-weekday-rule`; inferred validUntil shows "Ongoing" | component (`src/components/offers/OfferDetailView.test.tsx`) | AC20, AC21 |
 | getExpiryInfo returns null for an inferred validUntil | unit (`offer-card-shared.test.ts`) | AC21 |
-| /admin/crawler latest-run table shows "Dates inferred" and "Skipped (no dates)", "—" for old runs | unit (`src/app/admin/crawler/runStats.test.ts`) | AC13 |
+| /admin/crawler latest-run table shows "Dates inferred" and "Skipped (invalid)", "—" for old runs | unit (`src/app/admin/crawler/runStats.test.ts`) | AC13 |
 | Home page with mocked `/api/offers` returning a weekday offer shows the weekday rule on its card | e2e (`e2e/offer-weekday-rule.spec.ts`, mocked API) | AC20 |
 | Offer detail page shows weekday rule or not-found (resilient SSR pattern) | e2e (`e2e/offer-weekday-rule.spec.ts`) | AC20 |
 
@@ -388,46 +389,36 @@ abbreviations, case-insensitive. A bare "August 2026" without one of the month-o
   before the stricter Zod parse goes live. The spec 081 null-tolerant clauses in the filters stay as
   a cheap guard (see Notes).
 
-## Open Questions
-> **Decision needed from the reviewer before approval.** The spec does not pick an option; the
-> implementer must not start until this section records the decision.
+## Decisions
 
-### Q1. Fallback rule when a date can't be found in the listing, API or detail text
-**Option A — Infer (rolling):**
+### Q1. Fallback rule when a date can't be found in the listing, API or detail text — **Decided: Option A, N = 7**
+Decided by the repo owner on #197 (2026-10-27). The option considered and not chosen is kept below
+for the record.
+
+**Chosen — Option A, infer (rolling):**
 `validFrom = first-seen date` (`$setOnInsert`, so later crawls don't move it).
-`validUntil = scrapedAt + N days`, recomputed on every crawl that still lists the offer.
-Both are flagged `…Inferred: true`. When the bank delists the offer, `expireStaleOffers` marks it
-expired as it does today, and the inferred `validUntil` stops rolling.
+`validUntil = scrapedAt + 7 days`, recomputed on every crawl that still lists the offer.
+Both are flagged `…Inferred: true`, and the UI shows "Ongoing" for an inferred end date. When the
+bank delists the offer, `expireStaleOffers` marks it expired as it does today, and the inferred
+`validUntil` stops rolling. N = 7 was the recommended value. The decision did not name a
+different N, so 7 applies.
 
-**Option B — Reject:**
-Offers missing either date after the text parse are not stored. They are counted per bank as
-`skippedNoDates` and listed in the crawler log.
+**Not chosen — Option B, reject:** do not store offers that still lack a date after the text parse,
+and count them as `skipped_no_dates`. It would have dropped every offer that only publishes an end
+date: all NTB promo cards ("Valid till …"), all BOC offers (only "Expiration date") and many
+Amex/People's Bank offers. The 81 offers from #191 are exactly this group. The middle option B′
+(infer `validFrom`, reject a missing `validUntil`) was not chosen either.
 
-**Recommendation: Option A with N = 7, with the UI showing "Ongoing" for inferred end dates.**
-Reasons:
-- As written, option B rejects **every offer that only publishes an end date**. That includes all NTB
-  promo cards ("Valid till …"), all BOC offers (only "Expiration date") and many Amex/People's Bank
-  offers. These are real, current offers, and the 81 offers from #191 are exactly this group.
-  Option B would remove them from the site, not just from the date filter.
-- A missing `validFrom` has an honest answer: the offer was live when we first saw it. Inferring it
-  loses nothing.
-- For a missing `validUntil`, a short rolling window means a delisted offer never looks valid for
-  more than N days, even if the crawler stops running. `expireStaleOffers` already handles normal
-  delisting the next day, so N only matters when the crawler is broken. 7 days covers a broken
-  weekend plus a fix, without the offer looking live for weeks. "End of month" was considered and not
-  chosen: it ranges from 1 to 31 days depending on the scrape date, and it reads like a real bank
+Why A:
+- A missing `validFrom` has an honest answer: the offer was live when we first saw it.
+- A short rolling `validUntil` means a delisted offer never looks valid for more than 7 days, even
+  if the crawler stops running. `expireStaleOffers` handles normal delisting the next day. "End of
+  month" was considered and not chosen: it ranges from 1 to 31 days and reads like a real bank
   deadline.
 - The `…Inferred` flags let the UI show "Ongoing" instead of a made-up date, and the
   `datesInferred` counts on `/admin/crawler` show which banks need scraper work.
 
-**If the reviewer prefers stricter data:** a middle option **B′** infers `validFrom` (first-seen,
-as in A) but rejects offers with no `validUntil`. It still keeps NTB/BOC offers, which do have an
-end date. Please run the count script in Notes first: if missing-`validUntil` offers are a
-handful, B′ costs little; if they are a large share of a bank, prefer A.
-
-**Please record:** A (and N), B, or B′.
-
-### Q2. (Minor, has a default) Expansion horizon
+### Q2. Expansion horizon (default, no decision needed)
 The default is 365 days ahead of the scrape date. Change it only if offers longer than a year with
 weekday rules are known to exist.
 
@@ -436,7 +427,7 @@ weekday rules are known to exist.
   spec 084) next to the other `crawler/utils/` entries. Offer Type System section unchanged.
 - `README.md` → data-model / "Offer fields" section: document `applicableWeekdays`,
   `applicableDates`, `validFromInferred`, `validUntilInferred`, required `validFrom`/`validUntil`,
-  and the chosen fallback rule. Update the crawler pipeline description (scrape → normalise dates →
+  and the fallback rule (first-seen / rolling 7 days, "Ongoing" in the UI). Update the crawler pipeline description (scrape → normalise dates →
   upsert). Mark the related roadmap item done. Spec index row (added with this spec).
 - `specs/features/044-ai-offer-enrichment.md` → note that `resolveApplicableDates` moved to
   `crawler/utils/` and is shared with the crawler (spec 084).
