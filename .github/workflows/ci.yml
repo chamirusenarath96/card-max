@@ -36,6 +36,8 @@ jobs:
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
+          # Without this, SARIF output ignores `severity` and exit-code fails on MEDIUM too
+          limit-severities-for-sarif: true
           exit-code: "1"
           ignore-unfixed: true
           trivyignores: ".trivyignore"
