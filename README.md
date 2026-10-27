@@ -1707,6 +1707,7 @@ All feature specs live in `specs/`:
 | `specs/features/079-ntb-promo-card-listing.md` | NTB: parse offers from listing-page promo cards |
 | `specs/features/080-sampath-locale-header.md` | Sampath: send the `locale` header the API requires |
 | `specs/features/082-crawler-run-history.md` | Persisted per-run crawler results on /admin/crawler; active-only admin bank counts |
+| `specs/features/083-full-offer-details.md` | Full offer details: NTB detail pages, shared detail-fetch helper, 2000-char descriptions for every bank |
 
 ---
 
