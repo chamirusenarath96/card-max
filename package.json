@@ -71,6 +71,9 @@
           }
         }
       }
+    },
+    "vitest": {
+      "vite": "^8.1.6"
     }
   },
   "devDependencies": {
